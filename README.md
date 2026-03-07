@@ -2,7 +2,7 @@
 
 **Associative Context Memory (ACM): Persistent Experience-Based Memory for LLM Coding Agents Beyond Context Window Dependency**
 
-Yamato Hiroshi — Keio University / Signal Compose Inc.
+Hiroshi Yamato — Keio University / Signal compose Inc.
 
 ---
 
@@ -39,4 +39,4 @@ arXiv submission in progress. Link will be added upon publication.
 
 ---
 
-*Signal Compose Inc. / Keio University*
+*Signal compose Inc. / Keio University*

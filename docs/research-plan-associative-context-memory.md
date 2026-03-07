@@ -1,7 +1,7 @@
 # Associative Context Memory: LLMエージェントにおける連想記憶モデルの提案と評価
 
 **作成日:** 2026-03-07  
-**著者:** Yamato Hiroshi / Signal Compose Inc.
+**著者:** Yamato Hiroshi / Signal compose Inc.
 
 ---
 

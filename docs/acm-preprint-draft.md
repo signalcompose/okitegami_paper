@@ -1,6 +1,6 @@
 # Associative Context Memory: Persistent Experience-Based Memory for LLM Coding Agents Beyond Context Window Dependency
 
-**Yamato Hiroshi**  
+**Hiroshi Yamato**  
 Keio University / Signal compose Inc.  
 yamato@signalcompose.com
 
