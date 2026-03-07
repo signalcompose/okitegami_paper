@@ -434,7 +434,7 @@ The paper draft and supporting documents are available at https://github.com/sig
 
 [CITE: A-MEM] Xu, W., et al. A-MEM: Agentic Memory for LLM Agents. arXiv:2502.12110, 2025.
 
-[CITE: A-MAC] [Authors TBD]. Adaptive Memory Admission Control for LLM Agents. arXiv:2603.04549, 2026.
+[CITE: A-MAC] Zhang, G., Jiang, W., Wang, X., Behr, A., Zhao, K., Friedman, J., Chu, X., and Anoun, A. Adaptive Memory Admission Control for LLM Agents. arXiv:2603.04549, 2026.
 
 [CITE: REMEMBERER] Zhang, Y., et al. REMEMBERER: Equipping Large Language Models with Persistent Memory via Long-Term Interaction. arXiv:2306.07929, NeurIPS 2023.
 
@@ -448,9 +448,9 @@ The paper draft and supporting documents are available at https://github.com/sig
 
 [CITE: Memory Management] Xiong, Z., et al. How Memory Management Impacts LLM Agents: An Empirical Study of Experience-Following Behavior. arXiv:2505.16067, 2025.
 
-[CITE: Implicit Feedback ICML] [Authors TBD]. Implicit User Feedback in Human-LLM Dialogues: Informative to Understand Users yet Noisy as a Learning Signal. ICML 2025. arXiv:2507.23158.
+[CITE: Implicit Feedback ICML] Liu, Y., Zhang, M. J. Q., and Choi, E. User Feedback in Human-LLM Dialogues: A Lens to Understand Users But Noisy as a Learning Signal. ICML 2025. arXiv:2507.23158.
 
-[CITE: Cider Chat] [Authors TBD]. Reading Between the Lines: Scalable User Feedback via Implicit Sentiment in Developer Prompts. arXiv:2509.18361, 2025.
+[CITE: Cider Chat] Nam, D., Salawa, M., and Chandra, S. Reading Between the Lines: Scalable User Feedback via Implicit Sentiment in Developer Prompts. arXiv:2509.18361, 2025.
 
 [CITE: Serena] Oraios AI. Serena: A Coding Agent Toolkit Providing Semantic Code Retrieval and Editing via LSP and MCP. Open-source software, 2025. https://github.com/oraios/serena
 
