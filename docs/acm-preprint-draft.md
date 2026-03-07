@@ -22,7 +22,7 @@ Current approaches to this problem fall into two categories:
 
 **Compression and splitting** approaches (auto-compact, Plan Mode, manual session resets) treat context rot as a session management problem. They mitigate degradation by reducing context size, but provide no mechanism for the agent to carry knowledge across sessions. Each new session begins from zero—what we term the **"amnesiac agent" problem**.
 
-**Retrieval-augmented** approaches (Serena [CITE], RAG-based context augmentation) improve the agent's access to relevant information, but focus on retrieving existing artifacts (code, documentation) rather than capturing experiential knowledge about what worked and what failed.
+**Retrieval-augmented** approaches (Serena [CITE: Serena], RAG-based context augmentation) improve the agent's access to relevant information, but focus on retrieving existing artifacts (code, documentation) rather than capturing experiential knowledge about what worked and what failed.
 
 Neither category addresses a deeper question: **can an agent learn from its own interaction history in a way that persists across context windows and across sessions?**
 
@@ -45,7 +45,7 @@ The remainder of this paper is structured as follows. Section 2 reviews related 
 
 ### 2.1 Context Window Limitations and Context Rot
 
-The Transformer architecture's self-attention mechanism operates over all tokens in the context window, with computational complexity scaling as O(n²) in the number of tokens n. Beyond computational cost, empirical studies have shown that model performance on reasoning and instruction-following tasks degrades as context length increases. Chroma Research [CITE] systematically characterized this as "Context Rot," demonstrating that even state-of-the-art models including Claude Opus 4 and Sonnet 4 exhibit measurable performance degradation as context fills.
+The Transformer architecture's self-attention mechanism operates over all tokens in the context window, with computational complexity scaling as O(n²) in the number of tokens n. Beyond computational cost, empirical studies have shown that model performance on reasoning and instruction-following tasks degrades as context length increases. Chroma Research [CITE: Chroma Research 2025] systematically characterized this as "Context Rot," demonstrating that even state-of-the-art models including Claude Opus 4 and Sonnet 4 exhibit measurable performance degradation as context fills.
 
 Practitioners have observed a rule of thumb: performance is most reliable within approximately the first 40% of the context window (termed the "Smart zone"), with degradation becoming pronounced beyond this threshold [CITE: Geoffrey Huntley].
 
@@ -57,15 +57,15 @@ Existing context management strategies in coding agents include:
 
 **Plan Mode (Claude Code)**: Separates planning and implementation into distinct sessions with clean context windows. Effective but requires manual workflow discipline and provides no cross-session memory.
 
-**CLAUDE.md and persistent instructions**: Static documents loaded at session start. Useful for stable project context but not adaptive to interaction history.
+**CLAUDE.md and persistent instructions** [CITE: Anthropic 2025]: Static documents loaded at session start. Useful for stable project context but not adaptive to interaction history.
 
 ### 2.3 Agent Memory Systems
 
 The landscape of persistent memory for LLM agents has developed rapidly. We situate ACM within this landscape by identifying the key dimensions along which approaches differ.
 
-**MemGPT / Letta** [CITE] introduced a tiered memory architecture treating the context window as "RAM" and external storage as "disk," with the agent autonomously paging information in and out. This is the most influential general-purpose agent memory architecture, but it is designed for conversational agents and does not address outcome-weighted memory selection or coding-specific feedback signals.
+**MemGPT / Letta** [CITE: MemGPT] introduced a tiered memory architecture treating the context window as "RAM" and external storage as "disk," with the agent autonomously paging information in and out. This is the most influential general-purpose agent memory architecture, but it is designed for conversational agents and does not address outcome-weighted memory selection or coding-specific feedback signals.
 
-**Mem0 and A-MEM** [CITE] provide memory layers with semantic search and graph-based organization. A-MEM [CITE: arXiv:2502.12110] improves flexibility through dynamic note construction and link generation. Neither system distinguishes memory entries by outcome quality; all interactions are stored and retrieved without weighting by success or failure.
+**Mem0 and A-MEM** [CITE: Mem0] provide memory layers with semantic search and graph-based organization. A-MEM [CITE: arXiv:2502.12110] improves flexibility through dynamic note construction and link generation. Neither system distinguishes memory entries by outcome quality; all interactions are stored and retrieved without weighting by success or failure.
 
 **A-MAC (Adaptive Memory Admission Control)** [CITE: arXiv:2603.04549, 2026] is the most structurally similar prior work to ACM. A-MAC decomposes memory admission into five value signals: future utility, factual confidence, semantic novelty, temporal recency, and content type prior. However, A-MAC operates on general conversational memory and does not utilize behavioral signals from coding agent interactions (interrupts, rewinds) as admission criteria. Its evaluation targets personal and professional dialogue domains, not software development tasks.
 
@@ -73,7 +73,7 @@ The landscape of persistent memory for LLM agents has developed rapidly. We situ
 
 **Self-Generated In-Context Examples** [CITE: Sarukkai et al., NeurIPS 2025] stores successful task trajectories for use as in-context examples in future tasks, demonstrating significant performance gains (73%→89% on ALFWorld). This validates the core premise of experience-based memory in agents. ACM extends this direction by: (1) including failure experiences alongside successes, (2) introducing a signal strength taxonomy based on behavioral feedback rather than binary task completion, and (3) targeting coding agent interactions specifically.
 
-**Letta Code** is a memory-first coding agent based on the MemGPT/Letta architecture. It achieves strong results on Terminal-Bench but does not expose or exploit PTY-level behavioral signals as memory quality indicators.
+**Letta Code** [CITE: Letta Code] is a memory-first coding agent based on the MemGPT/Letta architecture. It achieves strong results on Terminal-Bench but does not expose or exploit PTY-level behavioral signals as memory quality indicators.
 
 **How Memory Management Impacts LLM Agents** [CITE: arXiv:2505.16067, 2025] empirically demonstrates the "experience-following property" of LLM agents—that agents tend to replicate patterns from their memory, including erroneous ones. This finding directly motivates ACM's distinction between success and failure entries: without outcome-weighted memory selection, failure experiences would propagate errors rather than prevent them.
 
@@ -93,7 +93,7 @@ Neither study examines PTY-level interrupt events as feedback signals. The Cider
 
 ### 2.5 Retrieval-Augmented Code Generation
 
-**Serena** [CITE] uses Language Server Protocol (LSP) to build a semantic index of codebases, enabling agents to retrieve relevant code symbols, definitions, and references. ACM is orthogonal to Serena: Serena improves *what codebase information is available*, while ACM improves *what experiential patterns about working in this codebase are available*. We evaluate their combination in our experimental design.
+**Serena** [CITE: Serena] uses Language Server Protocol (LSP) to build a semantic index of codebases, enabling agents to retrieve relevant code symbols, definitions, and references. ACM is orthogonal to Serena: Serena improves *what codebase information is available*, while ACM improves *what experiential patterns about working in this codebase are available*. We evaluate their combination in our experimental design.
 
 ### 2.6 Positioning ACM
 
@@ -484,7 +484,7 @@ All AI-generated text was reviewed, edited, and approved by the author before in
 
 [CITE: Letta] MemGPT open source project / Letta. https://www.letta.com
 
-[CITE: Letta Code] Letta. Letta Code: Memory-First Coding Agent. https://www.letta.com/letta-code (accessed 2026-03-08)
+[CITE: Letta Code] Letta. Letta Code: Memory-First Coding Agent. https://www.letta.com/blog/letta-code (accessed 2026-03-08)
 
 [CITE: Geoffrey Huntley] Huntley, G. How to Build a Coding Agent. Blog post, 2025. https://ghuntley.com/agent/ (YouTube: https://www.youtube.com/live/fOPvAPdqgPo)
 
