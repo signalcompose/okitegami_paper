@@ -4,7 +4,7 @@
 Keio University / Signal compose Inc.  
 yamato@signalcompose.com
 
-*Preprint — Draft v0.8 — 2026-03-08*
+*Preprint — Draft v0.9 — 2026-03-08*
 
 ---
 
@@ -422,6 +422,32 @@ The paper draft and supporting documents are available at https://github.com/sig
 
 ---
 
+## Author Contributions and AI Use Disclosure
+
+**Intellectual contributions and authorship responsibility**
+
+All research questions, core ideas, architectural concepts, and intellectual contributions in this paper originate from Hiroshi Yamato. The author bears full responsibility for the content, claims, and conclusions presented.
+
+**Use of AI tools in the research and writing process**
+
+This paper was produced through a human-directed AI collaboration workflow. Two AI tools were used in distinct roles:
+
+- **Claude.ai (claude.ai, Anthropic)** served as a *Strategist*: maintaining conversational context across sessions, supporting literature search and synthesis, simulating peer review, and assisting in drafting and revising text. The Strategist did not directly write to files or execute code.
+
+- **Claude Code (Anthropic)** served as an *Implementer*: executing file operations, conducting web searches to retrieve paper metadata, updating draft documents, and managing version control (git commits and pushes). All actions were performed under explicit instruction from the author.
+
+The division of labor reflects the architecture that ACM itself proposes to automate: a context-holding agent (Strategist) coordinating with an execution agent (Implementer), both directed by a human principal investigator.
+
+**What AI did and did not do**
+
+AI tools assisted with: literature search and summarization, drafting and revising prose, simulating reviewer feedback, formatting references, and version management.
+
+AI tools did not: originate research questions, propose the ACM architecture, identify the interrupt-as-signal insight, make decisions about paper scope or claims, or bear any responsibility for the content.
+
+All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation (Sections noted in the session log at https://github.com/signalcompose/okitegami_paper) was conducted by the same AI tools and should be interpreted accordingly—it represents a structured quality check, not independent expert review.
+
+---
+
 ## References
 
 [CITE: Chroma Research 2025] Context Rot: How Increasing Input Tokens Impacts LLM Performance. Chroma Research, 2025. https://research.trychroma.com/context-rot
@@ -464,5 +490,5 @@ The paper draft and supporting documents are available at https://github.com/sig
 
 ---
 
-*Draft v0.8 — 2026-03-08 — Feedback welcome*
+*Draft v0.9 — 2026-03-08 — Feedback welcome*
 *Target venue: arXiv cs.SE / cs.AI*
