@@ -4,7 +4,7 @@
 Keio University / Signal compose Inc.
 yamato@signalcompose.com
 
-*Preprint — Draft v0.9 — 2026-03-08*
+*Preprint — Draft v0.10 — 2026-03-08*
 *本ファイルは日本語翻訳版です。原文は acm-preprint-draft.md を参照。*
 
 ---
@@ -445,7 +445,7 @@ AIツールが支援した事項：文献検索と要約、散文の起草と改
 
 AIツールが行わなかった事項：リサーチクエスチョンの着想、ACMアーキテクチャの提案、インタラプトをシグナルとして活用する着想の発見、論文の範囲や主張に関する意思決定、内容に対する一切の責任の負担。
 
-AIが生成したテキストはすべて、掲載前に著者によるレビュー、編集、承認を経ている。査読シミュレーション（セッションログ https://github.com/signalcompose/okitegami_paper に記録）は同じAIツールによって実施されたものであり、それに応じて解釈されるべきである——これは構造化された品質チェックであり、独立した専門家レビューではない。
+AIが生成したテキストはすべて、掲載前に著者によるレビュー、編集、承認を経ている。査読シミュレーションは同じAIツールによって実施されたものであり、それに応じて解釈されるべきである——これは構造化された品質チェックであり、独立した専門家レビューではない。プロセスの全容は、付随リポジトリ（https://github.com/signalcompose/okitegami_paper）の `docs/session-log.md` に記録されている。
 
 ---
 
@@ -491,5 +491,5 @@ AIが生成したテキストはすべて、掲載前に著者によるレビュ
 
 ---
 
-*Draft v0.9 — 2026-03-08 — Feedback welcome*
+*Draft v0.10 — 2026-03-08 — Feedback welcome*
 *Target venue: arXiv cs.SE / cs.AI*

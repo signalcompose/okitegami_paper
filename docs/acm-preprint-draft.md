@@ -4,7 +4,7 @@
 Keio University / Signal compose Inc.  
 yamato@signalcompose.com
 
-*Preprint — Draft v0.9 — 2026-03-08*
+*Preprint — Draft v0.10 — 2026-03-08*
 
 ---
 
@@ -444,7 +444,7 @@ AI tools assisted with: literature search and summarization, drafting and revisi
 
 AI tools did not: originate research questions, propose the ACM architecture, identify the interrupt-as-signal insight, make decisions about paper scope or claims, or bear any responsibility for the content.
 
-All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation (Sections noted in the session log at https://github.com/signalcompose/okitegami_paper) was conducted by the same AI tools and should be interpreted accordingly—it represents a structured quality check, not independent expert review.
+All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation was conducted by the same AI tools and should be interpreted accordingly—it represents a structured quality check, not independent expert review. The full process is documented in `docs/session-log.md` in the accompanying repository (https://github.com/signalcompose/okitegami_paper).
 
 ---
 
@@ -490,5 +490,5 @@ All AI-generated text was reviewed, edited, and approved by the author before in
 
 ---
 
-*Draft v0.9 — 2026-03-08 — Feedback welcome*
+*Draft v0.10 — 2026-03-08 — Feedback welcome*
 *Target venue: arXiv cs.SE / cs.AI*
