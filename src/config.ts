@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { AcmConfig, ACM_MODES, DEFAULT_CONFIG } from "./store/types.js";
 
 function expandTilde(filePath: string): string {
@@ -7,7 +8,7 @@ function expandTilde(filePath: string): string {
     return homedir();
   }
   if (filePath.startsWith("~/")) {
-    return filePath.replace("~/", homedir() + "/");
+    return join(homedir(), filePath.slice(2));
   }
   return filePath;
 }

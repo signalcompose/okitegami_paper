@@ -7,10 +7,35 @@ import type { ExperienceEntry, AcmConfig } from "./types.js";
 export class ExperienceStore {
   private db: Database.Database;
   private config: AcmConfig;
+  private stmtInsert: Database.Statement;
+  private stmtGetById: Database.Statement;
+  private stmtList: Database.Statement;
+  private stmtListByType: Database.Statement;
+  private stmtDelete: Database.Statement;
 
   constructor(config: AcmConfig) {
     this.config = config;
     this.db = initializeDatabase(config.db_path);
+
+    this.stmtInsert = this.db.prepare(
+      `INSERT INTO experiences
+       (id, type, trigger_text, action_text, outcome_text,
+        retrieval_keys, signal_strength, signal_type,
+        session_id, timestamp, interrupt_context, embedding)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    this.stmtGetById = this.db.prepare(
+      "SELECT * FROM experiences WHERE id = ?"
+    );
+    this.stmtList = this.db.prepare(
+      "SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?"
+    );
+    this.stmtListByType = this.db.prepare(
+      "SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC"
+    );
+    this.stmtDelete = this.db.prepare(
+      "DELETE FROM experiences WHERE id = ?"
+    );
   }
 
   create(
@@ -33,52 +58,39 @@ export class ExperienceStore {
     const id = randomUUID();
     const entry: ExperienceEntry = { id, ...data };
 
-    this.db
-      .prepare(
-        `INSERT INTO experiences
-         (id, type, trigger_text, action_text, outcome_text,
-          retrieval_keys, signal_strength, signal_type,
-          session_id, timestamp, interrupt_context, embedding)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        entry.id,
-        entry.type,
-        entry.trigger,
-        entry.action,
-        entry.outcome,
-        JSON.stringify(entry.retrieval_keys),
-        entry.signal_strength,
-        entry.signal_type,
-        entry.session_id,
-        entry.timestamp,
-        entry.interrupt_context
-          ? JSON.stringify(entry.interrupt_context)
-          : null,
-        null // embedding is NULL in Phase 1
-      );
+    this.stmtInsert.run(
+      entry.id,
+      entry.type,
+      entry.trigger,
+      entry.action,
+      entry.outcome,
+      JSON.stringify(entry.retrieval_keys),
+      entry.signal_strength,
+      entry.signal_type,
+      entry.session_id,
+      entry.timestamp,
+      entry.interrupt_context
+        ? JSON.stringify(entry.interrupt_context)
+        : null,
+      null // embedding is NULL in Phase 1
+    );
 
     return entry;
   }
 
   getById(id: string): ExperienceEntry | null {
-    const row = this.db
-      .prepare("SELECT * FROM experiences WHERE id = ?")
-      .get(id) as Record<string, unknown> | undefined;
+    const row = this.stmtGetById.get(id) as
+      | Record<string, unknown>
+      | undefined;
 
     if (!row) return null;
     return this.rowToEntry(row);
   }
 
   list(options?: { limit?: number }): ExperienceEntry[] {
-    const limit = options?.limit;
-    const sql = limit
-      ? "SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?"
-      : "SELECT * FROM experiences ORDER BY timestamp DESC";
-
-    const rows = limit
-      ? (this.db.prepare(sql).all(limit) as Record<string, unknown>[])
-      : (this.db.prepare(sql).all() as Record<string, unknown>[]);
+    const rows = this.stmtList.all(
+      options?.limit ?? -1
+    ) as Record<string, unknown>[];
 
     return rows.map((row) => this.rowToEntry(row));
   }
@@ -97,9 +109,7 @@ export class ExperienceStore {
   }
 
   delete(id: string): boolean {
-    const result = this.db
-      .prepare("DELETE FROM experiences WHERE id = ?")
-      .run(id);
+    const result = this.stmtDelete.run(id);
     return result.changes > 0;
   }
 
@@ -108,12 +118,7 @@ export class ExperienceStore {
   }
 
   private listByType(type: "success" | "failure"): ExperienceEntry[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC"
-      )
-      .all(type) as Record<string, unknown>[];
-
+    const rows = this.stmtListByType.all(type) as Record<string, unknown>[];
     return rows.map((row) => this.rowToEntry(row));
   }
 
