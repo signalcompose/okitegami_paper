@@ -1,13 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { AcmConfig, AcmMode, DEFAULT_CONFIG } from "./store/types.js";
-
-const VALID_MODES: AcmMode[] = [
-  "disabled",
-  "success_only",
-  "failure_only",
-  "full",
-];
+import { AcmConfig, ACM_MODES, DEFAULT_CONFIG } from "./store/types.js";
 
 function expandTilde(filePath: string): string {
   if (filePath === "~") {
@@ -20,9 +13,9 @@ function expandTilde(filePath: string): string {
 }
 
 function validate(config: AcmConfig): void {
-  if (!VALID_MODES.includes(config.mode)) {
+  if (!ACM_MODES.includes(config.mode)) {
     throw new Error(
-      `Invalid mode "${config.mode}". Must be one of: ${VALID_MODES.join(", ")}`
+      `Invalid mode "${config.mode}". Must be one of: ${ACM_MODES.join(", ")}`
     );
   }
   if (config.promotion_threshold < 0 || config.promotion_threshold > 1) {

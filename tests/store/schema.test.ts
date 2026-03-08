@@ -1,12 +1,22 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { initializeDatabase } from "../../src/store/schema.js";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { unlinkSync } from "node:fs";
 import type Database from "better-sqlite3";
 
 describe("initializeDatabase", () => {
   let db: Database.Database;
+  const cleanupPaths: string[] = [];
 
   afterEach(() => {
     db?.close();
+    for (const p of cleanupPaths) {
+      try { unlinkSync(p); } catch { /* ignore */ }
+      try { unlinkSync(p + "-wal"); } catch { /* ignore */ }
+      try { unlinkSync(p + "-shm"); } catch { /* ignore */ }
+    }
+    cleanupPaths.length = 0;
   });
 
   it("creates experiences table with correct columns", () => {
@@ -46,11 +56,19 @@ describe("initializeDatabase", () => {
     expect(indexNames).toContain("idx_experiences_timestamp");
   });
 
-  it("is idempotent — calling twice does not throw", () => {
-    db = initializeDatabase(":memory:");
-    // Calling initializeDatabase on a fresh :memory: db should also work
-    const db2 = initializeDatabase(":memory:");
-    expect(db2).toBeDefined();
-    db2.close();
+  it("is idempotent — calling twice on same DB does not throw", () => {
+    const dbPath = join(tmpdir(), `acm-idempotent-test-${Date.now()}.db`);
+    cleanupPaths.push(dbPath);
+
+    db = initializeDatabase(dbPath);
+    db.close();
+
+    // Second call on same file should not throw
+    db = initializeDatabase(dbPath);
+
+    const tableInfo = db
+      .prepare("PRAGMA table_info(experiences)")
+      .all() as Array<{ name: string }>;
+    expect(tableInfo.map((c) => c.name)).toContain("id");
   });
 });

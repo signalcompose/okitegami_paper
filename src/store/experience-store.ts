@@ -1,14 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { initializeDatabase } from "./schema.js";
-import type { ExperienceEntry, AcmConfig, SignalType } from "./types.js";
-
-const VALID_SIGNAL_TYPES: SignalType[] = [
-  "interrupt_with_dialogue",
-  "rewind",
-  "corrective_instruction",
-  "uninterrupted_completion",
-];
+import { SIGNAL_TYPES } from "./types.js";
+import type { ExperienceEntry, AcmConfig } from "./types.js";
 
 export class ExperienceStore {
   private db: Database.Database;
@@ -27,9 +21,9 @@ export class ExperienceStore {
         `signal_strength must be between 0 and 1, got ${data.signal_strength}`
       );
     }
-    if (!VALID_SIGNAL_TYPES.includes(data.signal_type)) {
+    if (!SIGNAL_TYPES.includes(data.signal_type)) {
       throw new Error(
-        `Invalid signal_type "${data.signal_type}". Must be one of: ${VALID_SIGNAL_TYPES.join(", ")}`
+        `Invalid signal_type "${data.signal_type}". Must be one of: ${SIGNAL_TYPES.join(", ")}`
       );
     }
     if (data.signal_strength < this.config.promotion_threshold) {

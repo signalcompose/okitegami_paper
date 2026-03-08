@@ -2,11 +2,21 @@
  * ACM type definitions — SPECIFICATION.md Section 2.1, 5.1
  */
 
-export type SignalType =
-  | "interrupt_with_dialogue" // Level 1
-  | "rewind" // Level 2
-  | "corrective_instruction" // Level 3
-  | "uninterrupted_completion"; // Level 4
+export const SIGNAL_TYPES = [
+  "interrupt_with_dialogue", // Level 1
+  "rewind", // Level 2
+  "corrective_instruction", // Level 3
+  "uninterrupted_completion", // Level 4
+] as const;
+export type SignalType = (typeof SIGNAL_TYPES)[number];
+
+export const ACM_MODES = [
+  "disabled",
+  "success_only",
+  "failure_only",
+  "full",
+] as const;
+export type AcmMode = (typeof ACM_MODES)[number];
 
 export interface InterruptContext {
   turns_captured: number; // N=3–5 post-interrupt turns
@@ -26,8 +36,6 @@ export interface ExperienceEntry {
   timestamp: string; // ISO 8601
   interrupt_context?: InterruptContext; // Failure-specific
 }
-
-export type AcmMode = "disabled" | "success_only" | "failure_only" | "full";
 
 export interface AcmConfig {
   mode: AcmMode;
