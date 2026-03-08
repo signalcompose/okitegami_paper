@@ -40,3 +40,8 @@ arXiv submission in progress. Link will be added upon publication.
 ---
 
 *Signal compose Inc. / Keio University*
+
+<!-- Last updated: 2026-03-08 -->
+# hook test 3 (debug)
+# hook test 4 (after restart)
+# hook test 5 (session-log test)

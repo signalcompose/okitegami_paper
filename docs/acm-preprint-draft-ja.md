@@ -4,7 +4,7 @@
 Keio University / Signal compose Inc.
 yamato@signalcompose.com
 
-*Preprint — Draft v0.10 — 2026-03-08*
+*Preprint — Draft v0.11 — 2026-03-08*
 *本ファイルは日本語翻訳版です。原文は acm-preprint-draft.md を参照。*
 
 ---
@@ -447,6 +447,11 @@ AIツールが行わなかった事項：リサーチクエスチョンの着想
 
 AIが生成したテキストはすべて、掲載前に著者によるレビュー、編集、承認を経ている。査読シミュレーションは同じAIツールによって実施されたものであり、それに応じて解釈されるべきである——これは構造化された品質チェックであり、独立した専門家レビューではない。プロセスの全容は、付随リポジトリ（https://github.com/signalcompose/okitegami_paper）の `docs/session-log.md` に記録されている。
 
+**追記 — 2026-03-08：**
+本稿の執筆過程において、セクション1で述べたセッションログ管理の問題が著者自身のワークフローで発現した。本プロジェクト全体で使用したStrategist/Implementer協働パターン——claude.ai（Strategist）がセッションコンテキストを保持し、Claude Code（Implementer）がファイル操作を実行する構造——では、`docs/session-log.md` を最新状態に保つために手動での橋渡しが必要であった。この手動更新ステップは頻繁に漏れ、セッション再開時にコンテキストのギャップが生じた。
+
+この問題は、Claude CodeのStop hook（`.claude/hooks/update_session_log.py`）を実装することで対処した。このhookはClaude Codeが1ターンの応答を完了するたびに自動発火し、編集されたファイルの記録を `session-log.md` に追記する。hookのデバッグ過程では、JSONLトランスクリプトの実際の構造——tool_useブロックがトップレベルではなく `assistant.message.content[]` 配列内にネストされている——を把握する必要があった。「健忘エージェント問題」が本稿の執筆に使用したワークフロー自体でも発現したというこの一人称的観察は、セクション1で提示したACMの動機を補強するものである。
+
 ---
 
 ## References
@@ -491,5 +496,5 @@ AIが生成したテキストはすべて、掲載前に著者によるレビュ
 
 ---
 
-*Draft v0.10 — 2026-03-08 — Feedback welcome*
+*Draft v0.11 — 2026-03-08 — Feedback welcome*
 *Target venue: arXiv cs.SE / cs.AI*

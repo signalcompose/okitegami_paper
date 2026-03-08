@@ -4,7 +4,7 @@
 Keio University / Signal compose Inc.  
 yamato@signalcompose.com
 
-*Preprint — Draft v0.10 — 2026-03-08*
+*Preprint — Draft v0.11 — 2026-03-08*
 
 ---
 
@@ -446,6 +446,11 @@ AI tools did not: originate research questions, propose the ACM architecture, id
 
 All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation was conducted by the same AI tools and should be interpreted accordingly—it represents a structured quality check, not independent expert review. The full process is documented in `docs/session-log.md` in the accompanying repository (https://github.com/signalcompose/okitegami_paper).
 
+**Addendum — 2026-03-08:**
+During the preparation of this manuscript, the session-log maintenance problem described in Section 1 was observed in the authors' own workflow. The Strategist/Implementer collaboration pattern used throughout this project—where claude.ai (Strategist) retains session context and Claude Code (Implementer) executes file operations—required manual bridging to keep `docs/session-log.md` current. This manual update step was frequently missed, resulting in context gaps when resuming sessions.
+
+This problem was addressed by implementing a Claude Code Stop hook (`.claude/hooks/update_session_log.py`) that fires automatically each time Claude Code completes a response turn and appends edited file records to `session-log.md`. The hook required debugging to account for the actual JSONL transcript structure, where tool_use blocks are nested within `assistant.message.content[]` rather than at the top level. This first-person observation—that the "amnesiac agent" problem manifests even in the workflow used to write this paper—reinforces the motivation for ACM as presented in Section 1.
+
 ---
 
 ## References
@@ -490,5 +495,5 @@ All AI-generated text was reviewed, edited, and approved by the author before in
 
 ---
 
-*Draft v0.10 — 2026-03-08 — Feedback welcome*
+*Draft v0.11 — 2026-03-08 — Feedback welcome*
 *Target venue: arXiv cs.SE / cs.AI*

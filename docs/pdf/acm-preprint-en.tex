@@ -489,6 +489,11 @@ AI tools assisted with: literature search and summarization, drafting and revisi
 
 All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation was conducted by the same AI tools and should be interpreted accordingly---it represents a structured quality check, not independent expert review. The full process is documented in \texttt{docs/session-log.md} in the accompanying repository.
 
+\textbf{Addendum --- 2026-03-08:}
+During the preparation of this manuscript, the session-log maintenance problem described in Section~I was observed in the authors' own workflow. The Strategist/Implementer collaboration pattern used throughout this project---where claude.ai (Strategist) retains session context and Claude Code (Implementer) executes file operations---required manual bridging to keep \texttt{docs/session-log.md} current. This manual update step was frequently missed, resulting in context gaps when resuming sessions.
+
+This problem was addressed by implementing a Claude Code Stop hook (\texttt{.claude/hooks/update\_session\_log.py}) that fires automatically each time Claude Code completes a response turn and appends edited file records to \texttt{session-log.md}. The hook required debugging to account for the actual JSONL transcript structure, where \texttt{tool\_use} blocks are nested within \texttt{assistant.message.content[]} rather than at the top level. This first-person observation---that the ``amnesiac agent'' problem manifests even in the workflow used to write this paper---reinforces the motivation for ACM as presented in Section~I.
+
 \bibliographystyle{IEEEtran}
 \bibliography{../references}
 
