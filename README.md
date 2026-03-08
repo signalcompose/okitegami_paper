@@ -18,30 +18,33 @@ A taxonomy of implicit feedback signals in coding agent interactions, with `Post
 
 ## Repository Structure
 
-- `docs/acm-preprint-draft.md` — Paper draft (v0.4)
+- `docs/acm-preprint-draft.md` — Paper draft (v0.11)
+- `docs/acm-preprint-draft-ja.md` — Paper draft Japanese (v0.11)
+- `docs/SPECIFICATION.md` — Implementation specification (Single Source of Truth)
+- `docs/ROADMAP.md` — Implementation roadmap
 - `docs/acm-handoff.md` — Research context and design decisions
-- `docs/session-log.md` — AI collaboration process log
+- `docs/session-log.md` — AI collaboration process log (auto-updated by Stop hook)
+- `docs/pdf/` — IEEEtran format PDFs (EN/JA)
 - `adr/` — Architecture Decision Records
-- `src/` — Implementation (in progress)
+- `src/` — Implementation (ACM MCP server)
+- `experiments/` — Task definitions, procedures, and results
 
 ## Status
 
 - [x] Research design
 - [x] Related work review (ADR 0001)
 - [x] Phase 0 feasibility probe (ADR 0002)
-- [x] Paper draft v0.4
-- [ ] arXiv submission
+- [x] Paper draft v0.11
+- [~] arXiv submission (pending endorsement)
 - [ ] Implementation
+- [ ] Experimental evaluation
 
 ## Preprint
 
-arXiv submission in progress. Link will be added upon publication.
+arXiv submission in progress (pending endorsement). Link will be added upon publication.
 
 ---
 
 *Signal compose Inc. / Keio University*
 
 <!-- Last updated: 2026-03-08 -->
-# hook test 3 (debug)
-# hook test 4 (after restart)
-# hook test 5 (session-log test)
