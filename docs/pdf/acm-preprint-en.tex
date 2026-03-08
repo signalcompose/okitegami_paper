@@ -1,0 +1,495 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{fontspec}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue,
+  citecolor=black
+}
+
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible
+}
+
+\begin{document}
+
+\title{Associative Context Memory: Persistent Experience-Based Memory for LLM Coding Agents Beyond Context Window Dependency}
+
+\author{
+  \IEEEauthorblockN{Hiroshi Yamato}
+  \IEEEauthorblockA{
+    Keio University / Signal compose Inc.\\
+    yamato@signalcompose.com
+  }
+}
+
+\maketitle
+
+\begin{abstract}
+Large Language Model (LLM)-based coding agents suffer from a fundamental limitation: their memory is entirely bound to the context window, which degrades in quality as token count increases---a phenomenon known as Context Rot. Existing mitigations such as context compression, session splitting, and retrieval-augmented generation address symptoms but do not resolve the underlying dependency on context window size. We propose \textbf{Associative Context Memory (ACM)}, an external persistent memory architecture for LLM coding agents that captures success and failure experiences from implicit user feedback signals, enabling agents to learn across sessions without relying on context window capacity. A key contribution of this work is the taxonomy and strength ordering of implicit feedback signals in coding agent interactions: interrupt events (Ctrl+C / force stop) followed by post-interrupt dialogue, rewind operations, corrective instructions, and uninterrupted task completion. We design ACM as an MCP (Model Context Protocol) server compatible with existing LLM coding agent ecosystems, and propose an experimental design to evaluate its effectiveness in reducing context window dependency while improving task performance over repeated sessions. This paper presents ACM as a position paper and system proposal; we include a Phase~0 feasibility probe confirming key implementation assumptions, while full experimental validation is left for future work.
+\end{abstract}
+
+\section{Introduction}
+
+LLM-based coding agents such as Claude Code and OpenAI Codex have demonstrated remarkable capability in software development tasks. However, they share a fundamental architectural constraint: all context---conversation history, tool outputs, system prompts, and retrieved documents---must fit within a finite context window. As token count grows within a session, model performance degrades measurably. Recent empirical work has characterized this phenomenon as \textbf{Context Rot} \cite{ChromaResearch2025}, showing that attention becomes diluted across tokens, and the probability of successfully completing a given task decreases as context accumulates.
+
+Current approaches to this problem fall into two categories:
+
+\textbf{Compression and splitting} approaches (auto-compact, Plan Mode, manual session resets) treat context rot as a session management problem. They mitigate degradation by reducing context size, but provide no mechanism for the agent to carry knowledge across sessions. Each new session begins from zero---what we term the \textbf{``amnesiac agent'' problem}.
+
+\textbf{Retrieval-augmented} approaches (Serena \cite{OraiosAI2025Serena}, RAG-based context augmentation) improve the agent's access to relevant information, but focus on retrieving existing artifacts (code, documentation) rather than capturing experiential knowledge about what worked and what failed.
+
+Neither category addresses a deeper question: \textbf{can an agent learn from its own interaction history in a way that persists across context windows and across sessions?}
+
+Human cognition offers an instructive contrast. Experienced developers do not retain verbatim memories of past debugging sessions. Instead, they accumulate \emph{associative patterns}: ``when I see this kind of authentication error, the approach that worked was X; the approach that failed was Y.'' This knowledge is sparse, compressed, and indexed by associative retrieval cues rather than stored as raw episodic detail.
+
+We propose \textbf{Associative Context Memory (ACM)}, a persistent external memory layer for LLM coding agents that:
+
+\begin{enumerate}
+\item Captures success and failure experiences from implicit user feedback signals
+\item Stores experiences in a structured, retrievable format indexed by associative keys
+\item Injects relevant past experiences into new sessions without consuming excessive context
+\item Reduces the agent's dependency on context window size for sustained performance
+\end{enumerate}
+
+A central novelty of this work is the \textbf{taxonomy of implicit feedback signals} available in coding agent interactions. We identify interrupt events---the act of forcibly stopping an agent mid-execution via Ctrl+C or equivalent---as the strongest available signal of user dissatisfaction, particularly when combined with the dialogue that immediately follows. This signal has been overlooked in prior work on agent feedback despite being readily observable at the PTY (pseudo-terminal) level.
+
+The remainder of this paper is structured as follows. Section~2 reviews related work on context management and agent memory. Section~3 presents the ACM framework. Section~4 defines the implicit feedback signal taxonomy. Section~5 describes the experimental design for evaluating ACM. Section~6 discusses implications and limitations. Section~7 concludes.
+
+\section{Background and Related Work}
+
+\subsection{Context Window Limitations and Context Rot}
+
+The Transformer architecture's self-attention mechanism operates over all tokens in the context window, with computational complexity scaling as $O(n^2)$ in the number of tokens $n$. Beyond computational cost, empirical studies have shown that model performance on reasoning and instruction-following tasks degrades as context length increases. Chroma Research \cite{ChromaResearch2025} systematically characterized this as ``Context Rot,'' demonstrating that even state-of-the-art models including Claude Opus~4 and Sonnet~4 exhibit measurable performance degradation as context fills.
+
+Practitioners have observed a rule of thumb: performance is most reliable within approximately the first 40\% of the context window (termed the ``Smart zone''), with degradation becoming pronounced beyond this threshold \cite{Huntley2025}.
+
+\subsection{Context Management in Coding Agents}
+
+Existing context management strategies in coding agents include:
+
+\textbf{Auto-compact}: Summarization of session history when context approaches capacity. A critical weakness is that summarization is performed by a degraded model operating near context capacity---exactly the condition where summarization quality is lowest.
+
+\textbf{Plan Mode (Claude Code)}: Separates planning and implementation into distinct sessions with clean context windows. Effective but requires manual workflow discipline and provides no cross-session memory.
+
+\textbf{CLAUDE.md and persistent instructions} \cite{Anthropic2025}: Static documents loaded at session start. Useful for stable project context but not adaptive to interaction history.
+
+\subsection{Agent Memory Systems}
+
+The landscape of persistent memory for LLM agents has developed rapidly. We situate ACM within this landscape by identifying the key dimensions along which approaches differ.
+
+\textbf{MemGPT / Letta} \cite{Packer2023MemGPT} introduced a tiered memory architecture treating the context window as ``RAM'' and external storage as ``disk,'' with the agent autonomously paging information in and out. This is the most influential general-purpose agent memory architecture, but it is designed for conversational agents and does not address outcome-weighted memory selection or coding-specific feedback signals.
+
+\textbf{Mem0 and A-MEM} \cite{Chhikara2025Mem0} provide memory layers with semantic search and graph-based organization. A-MEM \cite{Xu2025AMEM} improves flexibility through dynamic note construction and link generation. Neither system distinguishes memory entries by outcome quality; all interactions are stored and retrieved without weighting by success or failure.
+
+\textbf{A-MAC (Adaptive Memory Admission Control)} \cite{Zhang2026AMAC} is the most structurally similar prior work to ACM. A-MAC decomposes memory admission into five value signals: future utility, factual confidence, semantic novelty, temporal recency, and content type prior. However, A-MAC operates on general conversational memory and does not utilize behavioral signals from coding agent interactions (interrupts, rewinds) as admission criteria. Its evaluation targets personal and professional dialogue domains, not software development tasks.
+
+\textbf{REMEMBERER} \cite{Zhang2023REMEMBERER} implements episodic memory as a table of interaction records including Q-values, updated by reinforcement learning without fine-tuning the base LLM. This is structurally related to ACM's experience scoring, but applies reinforcement learning updates rather than using implicit behavioral feedback signals directly observable from the PTY interface.
+
+\textbf{Self-Generated In-Context Examples} \cite{Sarukkai2025SelfGenICE} stores successful task trajectories for use as in-context examples in future tasks, demonstrating significant performance gains (73\%$\rightarrow$89\% on ALFWorld). This validates the core premise of experience-based memory in agents. ACM extends this direction by: (1) including failure experiences alongside successes, (2) introducing a signal strength taxonomy based on behavioral feedback rather than binary task completion, and (3) targeting coding agent interactions specifically.
+
+\textbf{Letta Code} \cite{LettaCode2025} is a memory-first coding agent based on the MemGPT/Letta architecture. It achieves strong results on Terminal-Bench but does not expose or exploit PTY-level behavioral signals as memory quality indicators.
+
+\textbf{How Memory Management Impacts LLM Agents} \cite{Xiong2025MemoryMgmt} empirically demonstrates the ``experience-following property'' of LLM agents---that agents tend to replicate patterns from their memory, including erroneous ones. This finding directly motivates ACM's distinction between success and failure entries: without outcome-weighted memory selection, failure experiences would propagate errors rather than prevent them.
+
+\textbf{Reflexion} \cite{Shinn2023Reflexion} enables agents to learn from failure by generating verbal self-feedback after unsuccessful task attempts and storing it as episodic memory for subsequent trials. Reflexion is structurally similar to ACM's failure entry mechanism: both capture post-failure information to guide future behavior. A key distinction is that Reflexion generates feedback through self-reflection by the agent itself, whereas ACM captures implicit behavioral signals from the user (interrupt events, rewind operations) that are independent of the agent's self-assessment. Reflexion also does not persist memory across sessions in a retrievable external store.\footnote{Reflexion persists episodic memory across retries within a single task, but does not provide a general-purpose retrievable store across different tasks or codebases. We classify it as Cross-session: No under ACM's definition, where a ``session'' refers to a Claude Code terminal session and cross-session memory implies retrieval across distinct tasks and projects.}
+
+\textbf{ExpeL} \cite{Zhao2023ExpeL} extracts transferable knowledge from a collection of past task trajectories---both successful and failed---without fine-tuning the base model, using the extracted knowledge as in-context guidance for future tasks. ExpeL shares ACM's goal of experience-based learning without weight updates. ACM differs in its focus on real-time implicit feedback signals (PTY-level interrupts) rather than retrospective trajectory analysis, and in its MCP-based integration with existing coding agent infrastructure. Furthermore, ExpeL's retrospective trajectory analysis introduces latency: knowledge extraction occurs after task completion, making it unavailable during the session itself. ACM's real-time signal capture (via hooks firing during session execution) enables experience accumulation that could support within-session behavioral adjustment in future extensions.
+
+\textbf{Voyager} \cite{Wang2023Voyager} builds a persistent skill library from successful task executions in a Minecraft environment, enabling continual learning across sessions. Voyager validates the core premise of cross-session experience accumulation. ACM extends this direction to coding agent interactions and adds failure experience alongside success, using implicit user feedback rather than environment reward signals.
+
+The common limitation across all prior memory systems is the \textbf{absence of PTY-level behavioral signals}---interrupt events, rewind operations, and corrective instruction patterns---as first-class memory quality signals. These signals are uniquely available in interactive terminal-based coding agent sessions and provide high-quality implicit feedback without requiring explicit user annotation.
+
+\subsection{Implicit Feedback in Human-LLM Interaction}
+
+Recent work has studied implicit feedback in conversational LLM interactions. An ICML 2025 paper \cite{Liu2025ImplicitFeedback} analyzed implicit user feedback in WildChat and LMSYS datasets, finding that the \emph{content} of feedback (e.g., what the user wanted clarified) improves model performance more than polarity alone. A concurrent study at Google \cite{Nam2025CiderChat} analyzed telemetry from Cider Chat (an internal coding assistant), finding that explicit thumbs-up/down feedback occurs in only 0.6\% of interactions, motivating the use of implicit behavioral signals instead.
+
+Neither study examines PTY-level interrupt events as feedback signals. The Cider Chat study focuses on sentiment in natural language prompts rather than behavioral actions (force-stop, rewind). ACM's signal taxonomy fills this gap specifically for terminal-based coding agents.
+
+\subsection{Retrieval-Augmented Code Generation}
+
+\textbf{Serena} \cite{OraiosAI2025Serena} uses Language Server Protocol (LSP) to build a semantic index of codebases, enabling agents to retrieve relevant code symbols, definitions, and references. ACM is orthogonal to Serena: Serena improves \emph{what codebase information is available}, while ACM improves \emph{what experiential patterns about working in this codebase are available}. We evaluate their combination in our experimental design.
+
+\subsection{Positioning ACM}
+
+Table~\ref{tab:comparison} summarizes how ACM differs from the most closely related prior work.
+
+\begin{table*}[t]
+\centering
+\caption{Comparison of ACM with related agent memory systems}
+\label{tab:comparison}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{System} & \textbf{Cross-session} & \textbf{Failure} & \textbf{PTY/behavioral} & \textbf{Coding-agent} \\
+ & \textbf{memory} & \textbf{experiences} & \textbf{signals} & \textbf{specific} \\
+\midrule
+MemGPT / Letta & Yes & No & No & No \\
+Mem0 / A-MEM & Yes & No & No & No \\
+A-MAC & Yes & Partial & No & No \\
+REMEMBERER & Yes & Yes (Q-value) & No & No \\
+Self-Gen ICE & Yes & No & No & No \\
+Reflexion & No* & Yes & No & No \\
+ExpeL & Yes & Yes & No & No \\
+Voyager & Yes & No & No & No \\
+Letta Code & Yes & No & No & Yes \\
+\textbf{ACM (ours)} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
+\bottomrule
+\multicolumn{5}{l}{\small *Within-session only; see footnote in Section~2.3.}
+\end{tabular}
+\end{table*}
+
+\section{The ACM Framework}
+
+\subsection{Architecture Overview}
+
+ACM is designed as an MCP (Model Context Protocol) server that wraps existing LLM coding agent infrastructure. This design choice ensures compatibility with Claude Code, OpenAI Codex CLI, and any agent that supports MCP.
+
+\begin{lstlisting}[caption={ACM MCP Server hook architecture},label={lst:hooks}]
+[ACM MCP Server] -- Claude Code hooks API
+
+  SessionStart hook
+    -> Inject ACM context (relevant past
+       success/failure entries)
+
+  UserPromptSubmit hook
+    -> Capture N=3-5 turns after interrupt
+    -> Detect corrective instruction patterns
+
+  PostToolUse hook
+    -> Record successful tool completions
+
+  PostToolUseFailure hook
+    -> is_interrupt=true: begin failure entry
+    -> User interrupts available via hooks API
+
+  Stop hook
+    -> Normal completion: success candidate
+    -> Non-firing = complementary interrupt
+       detection signal
+
+  SessionEnd hook
+    -> Finalize and persist entries
+    -> Retrieve session log (JSONL)
+    -> Retrieve token usage from config
+\end{lstlisting}
+
+The ACM layer performs three functions:
+
+\begin{enumerate}
+\item \textbf{Retrieval at session start}: Query the experience DB for entries relevant to the current task, inject a compressed representation into session context
+\item \textbf{Signal monitoring during session}: Capture implicit feedback signals from the PTY interface and conversation
+\item \textbf{Experience writing at session end}: Score and store the session as success or failure entries
+\end{enumerate}
+
+\subsection{Experience Entry Structure}
+
+ACM maintains two types of entries:
+
+\textbf{Success entries} (``do this''):
+\begin{lstlisting}
+{
+  "type": "success",
+  "trigger": "Authentication bug in auth.py",
+  "action": "Used FileSystemWatcher, showed
+             diff before applying",
+  "outcome": "Tests passed, no rewind",
+  "retrieval_keys": ["auth", "JWT",
+    "FileSystemWatcher", "diff"],
+  "signal_strength": 0.85
+}
+\end{lstlisting}
+
+\textbf{Failure entries} (``don't do this''):
+\begin{lstlisting}
+{
+  "type": "failure",
+  "trigger": "Authentication bug in auth.py",
+  "action": "Attempted bulk rewrite of all
+             related files simultaneously",
+  "outcome": "Interrupt detected. Post-
+    interrupt: 'just change the diff'",
+  "retrieval_keys": ["auth", "bulk rewrite"],
+  "signal_strength": 0.95,
+  "interrupt_context": {
+    "turns_captured": 3,
+    "dialogue_summary": "User wanted
+      incremental diff-based changes"
+  }
+}
+\end{lstlisting}
+
+\subsection{Retrieval and Injection}
+
+At the start of each session, ACM:
+
+\begin{enumerate}
+\item Extracts keywords from the user's initial task description
+\item Performs vector similarity search over \texttt{retrieval\_keys} in the experience DB
+\item Retrieves top-K relevant entries (both success and failure)
+\item Injects a compressed summary into session context
+\end{enumerate}
+
+The injection is deliberately compact. Detailed entries are stored externally and referenced by path, avoiding context window inflation. This implements the ``index not content'' principle: the agent knows \emph{where} to find detail if needed, without loading it unconditionally.
+
+\subsection{Experience Scoring and Promotion}
+
+At session end, ACM scores the session using available signals (detailed in Section~4) and writes entries above a promotion threshold to the experience DB. Sessions with mixed signals may generate both a success entry (for sub-tasks that completed cleanly) and a failure entry (for sub-tasks that triggered interrupts or rewinds).
+
+\section{Implicit Feedback Signal Taxonomy}
+
+A central contribution of this work is the systematic classification of implicit feedback signals available in LLM coding agent interactions. Unlike explicit feedback (ratings, thumbs up/down), implicit signals are behavioral---observable from the interaction interface without requiring deliberate user action.
+
+We propose the following taxonomy, ordered by signal strength (strongest to weakest):
+
+\subsection{Level 1: Interrupt + Post-Interrupt Dialogue (Highest Strength)}
+
+\textbf{Signal}: User triggers a force-stop of agent execution (Ctrl+C, Esc$\times$2, or equivalent interrupt mechanism) followed by corrective dialogue.
+
+\textbf{Observable from}: PTY-level SIGINT/interrupt event; subsequent conversation turns ($N$=3--5 recommended)
+
+Specifically, Claude Code's \texttt{PostToolUseFailure} hook provides an \texttt{is\_interrupt} boolean field that explicitly flags user-initiated interrupts via the official hooks API, without requiring PTY-level instrumentation. The \texttt{Stop} hook's absence of firing when an interrupt occurs provides a complementary confirmation signal.
+
+\textbf{Why strongest}: The interrupt event represents the highest-cost user action---actively stopping an ongoing process. The post-interrupt dialogue is uniquely valuable because it typically contains the user's explicit articulation of \emph{why} they stopped: ``not like that,'' ``you're changing too much,'' ``that approach is wrong.'' This constitutes labeled negative feedback with explanatory content.
+
+\subsection{Level 2: Rewind Operation (High Strength)}
+
+\textbf{Signal}: User invokes the rewind function (/rewind or Esc$\times$2 in Claude Code) to restore conversation to a prior state.
+
+\textbf{Why high strength}: Rewind represents deliberate undoing of agent output. Unlike simply ignoring agent output, rewind indicates the user wants to erase the interaction from the record---strong implicit rejection.
+
+\textbf{Distinction from interrupt}: Rewind is post-hoc (after completion of an agent action); interrupt is real-time (during execution). Both are strong negative signals but capture different failure modes.
+
+\subsection{Level 3: Corrective Instructions (Medium Strength)}
+
+\textbf{Signal}: User provides natural language correction within the conversation (``that's wrong,'' ``try again,'' ``not what I meant,'' etc.)
+
+\textbf{Why medium strength}: Verbal correction is lower cost than interrupt or rewind and may reflect minor misalignment rather than fundamental failure. However, repeated corrective instructions within a session are a reliable failure indicator.
+
+\textbf{Compound signal}: Multiple corrective instructions within a session (e.g., 3+ corrections) should be weighted similarly to a rewind event.
+
+\subsection{Level 4: Uninterrupted Completion (Baseline / Weak Positive)}
+
+\textbf{Signal}: Task completes without interrupt, rewind, or corrective instructions; tests pass (where applicable).
+
+\textbf{Why weak}: Absence of negative signal is not strong confirmation of success. The user may have accepted suboptimal output, or may not have reviewed it carefully. However, combined with test passage, uninterrupted completion is a reliable positive signal.
+
+\subsection{Signal Strength Summary}
+
+Note: the following strength scores are hypothetical values proposed as working assumptions for the experimental design; they will be calibrated based on empirical data in future work. The ordering reflects the cost of user action: interrupt requires active process termination (highest cost), rewind requires deliberate state restoration, corrective instruction requires only typing, and silence is zero-cost.
+
+\begin{table}[h]
+\centering
+\caption{Signal strength taxonomy}
+\label{tab:signals}
+\small
+\begin{tabular}{p{3.2cm}ccp{1.8cm}}
+\toprule
+\textbf{Signal} & \textbf{Score} & \textbf{Dir.} & \textbf{Capture} \\
+\midrule
+Interrupt + dialogue & 0.90--1.00 & Neg & PTY + $N$ turns \\
+Rewind & 0.75--0.90 & Neg & Session log \\
+Corrective (3+) & 0.60--0.80 & Neg & Conv.\ text \\
+Corrective (1) & 0.30--0.50 & Neg & Conv.\ text \\
+Test pass + uninterr. & 0.70--0.85 & Pos & Exit code \\
+Uninterrupted & 0.40--0.60 & Pos & Session log \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Signal strength scores are used to weight experience entries during retrieval: high-strength entries are surfaced preferentially.
+
+\section{Experimental Design}
+
+\subsection{Phase 0: Feasibility Probe}
+
+Prior to full experimental evaluation, we conducted a feasibility probe to verify that the key technical assumptions underlying ACM are realizable within the Claude Code environment.
+
+\textbf{Finding 1: PTY interrupt signals are accessible via the official hooks API.}
+Claude Code's \texttt{PostToolUseFailure} hook provides an \texttt{is\_interrupt} boolean field that is set to \texttt{true} when the user interrupts tool execution via Ctrl+C or equivalent. This confirms that ACM's Level~1 signal (interrupt detection) can be implemented without PTY-level instrumentation.
+
+\textbf{Finding 2: Session logs provide sufficient data for experience entry generation.}
+Session logs are stored as JSONL files under \texttt{\textasciitilde/.claude/projects/}, containing full conversation history, tool invocations, and ISO 8601 timestamps. The \texttt{transcript\_path} field in hook payloads enables ACM to access the current session log at any hook invocation point.
+
+\textbf{Finding 3: Post-session token usage is recoverable.}
+Token usage per session is recorded in \texttt{\textasciitilde/.claude.json} after session end, enabling post-hoc evaluation for RQ4. Real-time token count during a session is not accessible via the hooks API; the \texttt{PreCompact} hook firing serves as a proxy for near-capacity conditions.
+
+\textbf{Finding 4: Rewind events have no dedicated hook.}
+Claude Code does not expose a dedicated hook for rewind operations. ACM detects rewinds indirectly via corrective instruction patterns in \texttt{UserPromptSubmit} events and message count reduction in the session transcript.
+
+These findings confirm that ACM's core architecture is implementable within the Claude Code hooks API without modifications to the agent itself.
+
+\subsection{Research Questions}
+
+\begin{description}
+\item[RQ1] Does ACM reduce context window dependency while maintaining or improving task performance over repeated sessions?
+\item[RQ2] Among ACM-S (success only), ACM-F (failure only), and ACM-SF (both), which memory composition yields the greatest performance improvement?
+\item[RQ3] Do implicit feedback signal types (interrupt, rewind, corrective instruction) correlate with experience entry quality as measured by downstream task performance?
+\item[RQ4] Does ACM allow sustained performance under artificially constrained context window sizes?
+\item[RQ5] Is ACM complementary to retrieval-based approaches (Serena), and does combining them yield additive benefits?
+\end{description}
+
+\subsection{Experimental Conditions}
+
+\begin{table}[h]
+\centering
+\caption{Experimental conditions}
+\label{tab:conditions}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Condition} & \textbf{Description} \\
+\midrule
+Control & Base LLM agent, no context mgmt \\
+Baseline-compact & Agent + auto-compact \\
+Baseline-Serena & Agent + Serena \\
+ACM-S & Agent + ACM (success only) \\
+ACM-F & Agent + ACM (failure only) \\
+ACM-SF & Agent + ACM (success + failure) \\
+ACM-SF + Serena & Combined approach \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+To isolate model capability from architecture effects, we use a fixed open-weight model (e.g., Llama 3.1 70B or Qwen2.5-Coder 32B) as the base agent across all conditions. Claude Code / Codex are included as reference points but not as controlled experimental variables.
+
+\subsection{Context Window Constraint Conditions (for RQ4)}
+
+Each condition above is evaluated at three context window sizes:
+
+\begin{table}[h]
+\centering
+\caption{Context window constraints}
+\label{tab:constraints}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Constraint} & \textbf{Token budget} \\
+\midrule
+Full & 128k (model default) \\
+Half & 64k \\
+Smart zone & 50k ($\sim$40\% of full) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+If ACM enables comparable performance at reduced context sizes, this demonstrates that architectural memory can substitute for context window capacity.
+
+\subsection{Task Suite}
+
+We note that SWE-bench \cite{Jimenez2024SWEbench}, the standard benchmark for evaluating coding agents on real-world GitHub issues, is not directly used in our evaluation. SWE-bench tasks are single-session and do not involve repeated interactions with the same codebase over multiple sessions---the condition under which ACM's cross-session memory provides benefit. Our task suite is designed to exhibit context rot and cross-session improvement, which requires multi-session repeated execution. We view SWE-bench compatibility as a direction for future work.
+
+Tasks are designed to exhibit context rot under baseline conditions while providing clear success/failure criteria:
+
+\textbf{Task A --- Multi-file bug fix}: Fix a seeded bug requiring changes across 5--10 files in a realistic codebase. Evaluated by test suite passage.
+
+\textbf{Task B --- Feature addition from specification}: Implement a feature described in a natural language specification document. Evaluated by functional tests + human review of specification adherence.
+
+\textbf{Task C --- Refactoring with design principles}: Apply a stated design principle (e.g., dependency inversion) consistently across a codebase. Evaluated by automated linting + human consistency review.
+
+Each task is executed in 5 repeated sessions per condition. Sessions 1--2 build the experience DB; sessions 3--5 measure retrieval benefits. Cross-session improvement rate is a primary metric.
+
+\subsection{Evaluation Metrics}
+
+\begin{table}[h]
+\centering
+\caption{Evaluation metrics}
+\label{tab:metrics}
+\small
+\begin{tabular}{p{2.5cm}p{2.5cm}c}
+\toprule
+\textbf{Metric} & \textbf{Measurement} & \textbf{RQ} \\
+\midrule
+Task completion & Test pass / human eval & RQ1 \\
+Interrupt count & PTY SIGINT events & RQ1,3 \\
+Rewind count & Session event log & RQ1,3 \\
+Corrective instr. & Conv.\ text analysis & RQ1,3 \\
+Context efficiency & Tokens / complexity & RQ4 \\
+Cross-session impr. & $\Delta$ completion 1$\rightarrow$5 & RQ1,2 \\
+Signal-quality corr. & Pearson $r$ & RQ3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+
+\subsection{The Amnesiac Agent Problem}
+
+Current LLM coding agents are, by design, amnesiac: each session begins with no knowledge of prior interactions. Context window management strategies mitigate this within a session but do not address the cross-session knowledge gap. ACM addresses this directly by externalizing experiential knowledge in a form that persists and compounds across sessions.
+
+This has practical implications beyond performance metrics. An agent with ACM can develop \emph{project-specific behavioral patterns}---knowing not just what the codebase contains (retrievable via Serena) but how this particular user prefers to approach problems in this particular codebase.
+
+\subsection{Interrupt as a First-Class Signal}
+
+The interrupt event has been underutilized as a feedback mechanism in agent systems research. In conversational AI, the equivalent would be a user closing the window mid-generation---rare and ambiguous. In coding agents, interrupts are common and semantically rich: an agent pursuing the wrong approach will be stopped, and the user's subsequent explanation is precisely the negative training signal needed to avoid that approach in future.
+
+Capturing $N$=3--5 post-interrupt turns as part of the failure entry is particularly valuable because this dialogue is typically the most explicit feedback a user provides---prompted by frustration into articulating exactly what went wrong.
+
+\subsection{Relationship to Reinforcement Learning}
+
+The ACM signal taxonomy bears structural similarity to reward signals in reinforcement learning: interrupt events approximate large negative rewards, uninterrupted task completion approximates positive rewards, with intermediate signals filling the gradient. However, ACM does not perform weight updates on the underlying model---it operates at the context level, injecting relevant past experience as soft guidance. This distinction makes ACM deployable with any LLM without requiring fine-tuning infrastructure.
+
+\subsection{Limitations}
+
+\textbf{Cold start}: ACM provides no benefit in the first session on a new task type. Performance gains require accumulated experience.
+
+\textbf{Experience staleness}: Codebase evolution may render past experiences misleading. We plan to evaluate time-decay weighting in future work.
+
+\textbf{Interrupt ambiguity}: Not all interrupts signal dissatisfaction with agent approach---some reflect external interruptions (phone calls, meetings). Disambiguation heuristics based on post-interrupt dialogue content are needed.
+
+\textbf{Scope}: The current design targets coding agents specifically. Generalization to other agentic domains (web agents, data analysis agents) requires adaptation of the signal taxonomy.
+
+\textbf{Rewind detection}: Claude Code does not provide a dedicated hook event for rewind operations. ACM detects rewinds indirectly via corrective instruction patterns in subsequent \texttt{UserPromptSubmit} events, or by monitoring message count reduction in the session transcript. This merges rewind (Level~2) with corrective instructions (Level~3) in practice, though the distinction remains conceptually valid for agent environments that expose rewind as a first-class event.
+
+\textbf{Real-time context usage}: Token count within an active session is not accessible via the Claude Code hooks API. ACM uses post-session token counts from the agent configuration file for RQ4 evaluation, and treats \texttt{PreCompact} hook firing as a proxy for near-limit conditions.
+
+\section{Conclusion}
+
+We have presented Associative Context Memory (ACM), a persistent external memory architecture for LLM coding agents that captures success and failure experiences from implicit user feedback. ACM's key contributions are:
+
+\begin{enumerate}
+\item A taxonomy of implicit feedback signals in coding agent interactions, with interrupt + post-interrupt dialogue identified as the strongest available signal
+\item An experience entry structure that distinguishes success (``do this'') from failure (``don't do this'') memories, enabling the agent to develop both positive patterns and avoidance behaviors
+\item An MCP-compatible architecture design that integrates with existing LLM coding agent ecosystems without model modification
+\item An experimental design for evaluating cross-session learning and context window dependency reduction
+\end{enumerate}
+
+The central claim of this work---that architectural memory can reduce an agent's dependency on context window capacity---has implications beyond engineering practice. If validated, it suggests that the ``amnesiac agent'' problem is addressable without scaling context windows, offering a complementary path to sustained agent performance.
+
+The paper draft and supporting documents are available at \url{https://github.com/signalcompose/okitegami_paper}.
+
+\subsection*{Author Contributions and AI Use Disclosure}
+
+\textbf{Intellectual contributions and authorship responsibility.}
+All research questions, core ideas, architectural concepts, and intellectual contributions in this paper originate from Hiroshi Yamato. The author bears full responsibility for the content, claims, and conclusions presented.
+
+\textbf{Use of AI tools in the research and writing process.}
+This paper was produced through a human-directed AI collaboration workflow. Two AI tools were used in distinct roles:
+
+\begin{itemize}
+\item \textbf{Claude.ai (Anthropic)} served as a \emph{Strategist}: maintaining conversational context across sessions, supporting literature search and synthesis, simulating peer review, and assisting in drafting and revising text. The Strategist did not directly write to files or execute code.
+\item \textbf{Claude Code (Anthropic)} served as an \emph{Implementer}: executing file operations, conducting web searches to retrieve paper metadata, updating draft documents, and managing version control (git commits and pushes). All actions were performed under explicit instruction from the author.
+\end{itemize}
+
+The division of labor reflects the architecture that ACM itself proposes to automate: a context-holding agent (Strategist) coordinating with an execution agent (Implementer), both directed by a human principal investigator.
+
+\textbf{What AI did and did not do.}
+AI tools assisted with: literature search and summarization, drafting and revising prose, simulating reviewer feedback, formatting references, and version management. AI tools did not: originate research questions, propose the ACM architecture, identify the interrupt-as-signal insight, make decisions about paper scope or claims, or bear any responsibility for the content.
+
+All AI-generated text was reviewed, edited, and approved by the author before inclusion. The peer review simulation was conducted by the same AI tools and should be interpreted accordingly---it represents a structured quality check, not independent expert review. The full process is documented in \texttt{docs/session-log.md} in the accompanying repository.
+
+\bibliographystyle{IEEEtran}
+\bibliography{../references}
+
+\end{document}
