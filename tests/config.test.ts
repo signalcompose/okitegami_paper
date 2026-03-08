@@ -65,6 +65,38 @@ describe("loadConfig", () => {
   });
 
   it("throws on non-existent file", () => {
-    expect(() => loadConfig("/nonexistent/path.json")).toThrow();
+    expect(() => loadConfig("/nonexistent/path.json")).toThrow("Cannot read config file");
+  });
+
+  it("throws on malformed JSON", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, "{broken json");
+
+    expect(() => loadConfig(configPath)).toThrow("Invalid JSON");
+  });
+
+  it("throws on unknown config keys", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, JSON.stringify({ topK: 10 }));
+
+    expect(() => loadConfig(configPath)).toThrow("Unknown config keys");
+  });
+
+  it("throws on top_k < 1", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, JSON.stringify({ top_k: 0 }));
+
+    expect(() => loadConfig(configPath)).toThrow("top_k must be >= 1");
+  });
+
+  it("throws on capture_turns < 1", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, JSON.stringify({ capture_turns: 0 }));
+
+    expect(() => loadConfig(configPath)).toThrow("capture_turns must be >= 1");
   });
 });

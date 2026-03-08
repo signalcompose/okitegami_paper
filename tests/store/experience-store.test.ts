@@ -224,6 +224,7 @@ describe("ExperienceStore", () => {
       );
 
       expect(entry).toBeNull();
+      expect(strictStore.list()).toHaveLength(0);
       strictStore.close();
     });
 

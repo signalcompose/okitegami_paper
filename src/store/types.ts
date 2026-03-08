@@ -19,7 +19,7 @@ export const ACM_MODES = [
 export type AcmMode = (typeof ACM_MODES)[number];
 
 export interface InterruptContext {
-  turns_captured: number; // N=3–5 post-interrupt turns
+  turns_captured: number; // Post-interrupt turns captured (configurable via capture_turns)
   dialogue_summary: string; // Why the user interrupted
 }
 

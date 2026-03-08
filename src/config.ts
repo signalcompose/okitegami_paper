@@ -3,6 +3,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { AcmConfig, ACM_MODES, DEFAULT_CONFIG } from "./store/types.js";
 
+const KNOWN_CONFIG_KEYS = new Set<string>([
+  "mode",
+  "top_k",
+  "capture_turns",
+  "promotion_threshold",
+  "db_path",
+]);
+
 function expandTilde(filePath: string): string {
   if (filePath === "~") {
     return homedir();
@@ -36,8 +44,30 @@ export function loadConfig(path?: string): AcmConfig {
   let overrides: Partial<AcmConfig> = {};
 
   if (path) {
-    const raw = readFileSync(path, "utf-8");
-    overrides = JSON.parse(raw) as Partial<AcmConfig>;
+    let raw: string;
+    try {
+      raw = readFileSync(path, "utf-8");
+    } catch (err) {
+      throw new Error(
+        `Cannot read config file "${path}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+    try {
+      overrides = JSON.parse(raw) as Partial<AcmConfig>;
+    } catch (err) {
+      throw new Error(
+        `Invalid JSON in config file "${path}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    const unknownKeys = Object.keys(overrides).filter(
+      (k) => !KNOWN_CONFIG_KEYS.has(k)
+    );
+    if (unknownKeys.length > 0) {
+      throw new Error(
+        `Unknown config keys: ${unknownKeys.join(", ")}. Valid keys: ${[...KNOWN_CONFIG_KEYS].join(", ")}`
+      );
+    }
   }
 
   const config: AcmConfig = {

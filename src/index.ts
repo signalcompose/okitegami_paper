@@ -8,6 +8,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("ACM server failed to start:", error);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`ACM server failed to start: ${message}`);
   process.exit(1);
 });

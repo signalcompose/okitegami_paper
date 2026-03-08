@@ -123,20 +123,27 @@ export class ExperienceStore {
   }
 
   private rowToEntry(row: Record<string, unknown>): ExperienceEntry {
-    return {
-      id: row.id as string,
-      type: row.type as "success" | "failure",
-      trigger: row.trigger_text as string,
-      action: row.action_text as string,
-      outcome: row.outcome_text as string,
-      retrieval_keys: JSON.parse(row.retrieval_keys as string) as string[],
-      signal_strength: row.signal_strength as number,
-      signal_type: row.signal_type as ExperienceEntry["signal_type"],
-      session_id: row.session_id as string,
-      timestamp: row.timestamp as string,
-      interrupt_context: row.interrupt_context
-        ? (JSON.parse(row.interrupt_context as string) as ExperienceEntry["interrupt_context"])
-        : undefined,
-    };
+    const id = row.id as string;
+    try {
+      return {
+        id,
+        type: row.type as "success" | "failure",
+        trigger: row.trigger_text as string,
+        action: row.action_text as string,
+        outcome: row.outcome_text as string,
+        retrieval_keys: JSON.parse(row.retrieval_keys as string) as string[],
+        signal_strength: row.signal_strength as number,
+        signal_type: row.signal_type as ExperienceEntry["signal_type"],
+        session_id: row.session_id as string,
+        timestamp: row.timestamp as string,
+        interrupt_context: row.interrupt_context
+          ? (JSON.parse(row.interrupt_context as string) as ExperienceEntry["interrupt_context"])
+          : undefined,
+      };
+    } catch (err) {
+      throw new Error(
+        `Failed to deserialize experience entry id="${id}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 }
