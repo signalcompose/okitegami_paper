@@ -156,6 +156,22 @@
 
 *Run experiments and analyze results for RQ1–RQ5.*
 
+### Milestone 6-A: Minimum Viable Validation（最初に実行）
+
+**目的**: 最小セットで ACM の有効性を確認する。
+
+- 条件: Control vs ACM-SF（2条件のみ）
+- タスク: Task A のみ
+- コンテキストサイズ: Full (128k) のみ
+- セッション数: 5回 × 2条件 = 10セッション
+
+完了条件: RQ1 の仮説（ACM-SF が Control より高い task completion rate /
+低い interrupt count）について傾向が確認できること。
+
+### Milestone 6-B: Full Experimental Set（Milestone 6-A 結果を見て判断）
+
+論文 Section 5.2 の全条件（225回）。Milestone 6-A の結果を見てやまとさんが実施を判断する。
+
 ### Deliverables
 
 - [ ] Execute all experimental conditions (Paper Section 5.2)
@@ -166,7 +182,8 @@
 
 ### Completion Criteria
 
-- All 5 conditions × 3 context sizes × 3 tasks × 5 sessions = 225 runs completed
+- Milestone 6-A: 10 runs completed, RQ1 傾向確認
+- Milestone 6-B: All 5 conditions × 3 context sizes × 3 tasks × 5 sessions = 225 runs completed
 - RQ1–RQ5 answered with statistical evidence
 - Results ready for paper Section 5 update
 

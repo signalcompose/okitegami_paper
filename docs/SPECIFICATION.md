@@ -7,13 +7,31 @@
 
 ## 1. System Overview
 
+### 1.0 Distribution Policy
+
+本リポジトリ（`signalcompose/okitegami_paper`）自体を Marketplace プラグインとして配布する。
+
+**目的**: 論文の反証可能性の担保。誰でも以下のコマンドで同一環境を再現できる。
+
+```bash
+/plugin marketplace add signalcompose/okitegami_paper
+/plugin install acm
+```
+
+**制約**:
+- 実装は `.claude-plugin/plugin.json` を持つ Marketplace プラグイン構造に準拠すること
+- 論文に記載されていない機能を追加しないこと
+- 実験条件の再現に必要な設定はすべて設定ファイルで制御できること
+
+### 1.1 Functional Overview
+
 ACM (Associative Context Memory) is an MCP server that integrates with Claude Code via the hooks API. It performs three functions:
 
 1. **Retrieval**: At session start, query the experience DB and inject relevant entries into context
 2. **Signal monitoring**: During session, capture implicit feedback signals via hooks
 3. **Experience writing**: At session end, score and persist experience entries
 
-### 1.1 Architecture
+### 1.2 Architecture
 
 ```
 Claude Code
@@ -32,7 +50,7 @@ Claude Code
   └── Retrieval Engine     — semantic search over retrieval_keys
 ```
 
-### 1.2 Technology Stack
+### 1.3 Technology Stack
 
 - **Language**: TypeScript (Node.js) — MCP SDK compatibility
 - **Storage**: SQLite (structured data) + vector embeddings (retrieval)
@@ -273,20 +291,20 @@ ACM itself should minimize context consumption. Injection text target: <500 toke
 ### 6.2 Task B — Feature Addition from Specification
 
 - Natural language specification → implementation
-- Evaluation: functional tests + specification adherence score
+- Evaluation: functional tests (automated) only. Specification adherence is not evaluated in this phase (requires human review).
 - 5 repeated sessions per condition
 
 ### 6.3 Task C — Refactoring with Design Principles
 
 - Apply design principle consistently across codebase
-- Evaluation: automated linting + consistency score
+- Evaluation: automated linting only (eslint / tsc). Human consistency review is deferred to paper revision phase.
 - 5 repeated sessions per condition
 
 ### 6.4 Evaluation Metrics
 
 | Metric | Measurement | Primary RQ |
 |--------|-------------|-----------|
-| Task completion rate | Test pass rate / human eval (0–1) | RQ1 |
+| Task completion rate | Test pass rate (automated, 0–1) | RQ1 |
 | Interrupt count | PostToolUseFailure.is_interrupt events | RQ1, RQ3 |
 | Corrective instruction count | UserPromptSubmit pattern detection | RQ1, RQ3 |
 | Context efficiency | Tokens used / task complexity | RQ4 |
