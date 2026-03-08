@@ -1,0 +1,22 @@
+{
+  "name": "acm",
+  "version": "0.1.0",
+  "description": "Associative Context Memory (ACM) — an MCP server that captures implicit feedback signals and builds cross-session experience memory for Claude Code.",
+  "author": {
+    "name": "Signal compose",
+    "url": "https://github.com/signalcompose"
+  },
+  "repository": "signalcompose/okitegami_paper",
+  "license": "MIT",
+  "engines": {
+    "claude-code": ">=1.0.0"
+  },
+  "mcp_servers": [
+    {
+      "name": "acm",
+      "command": "node",
+      "args": ["dist/index.js"],
+      "description": "ACM experience memory server"
+    }
+  ]
+}
