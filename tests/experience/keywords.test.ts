@@ -5,19 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { extractRetrievalKeys } from "../../src/experience/keywords.js";
 import type { SessionSignal } from "../../src/signals/types.js";
-
-function makeSignal(
-  eventType: SessionSignal["event_type"],
-  data: Record<string, unknown> | null = null
-): SessionSignal {
-  return {
-    id: 1,
-    session_id: "test-session",
-    event_type: eventType,
-    data,
-    timestamp: new Date().toISOString(),
-  };
-}
+import { makeSignal } from "./helpers.js";
 
 describe("extractRetrievalKeys", () => {
   it("extracts tool_name from tool_success signals", () => {

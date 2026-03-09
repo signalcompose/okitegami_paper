@@ -7,30 +7,7 @@ import {
   computeFailureStrength,
   computeSuccessStrength,
 } from "../../src/experience/scoring.js";
-import type { SessionSummary } from "../../src/signals/signal-collector.js";
-import type { EventType } from "../../src/signals/types.js";
-
-function makeSummary(
-  overrides: Partial<SessionSummary> = {}
-): SessionSummary {
-  const defaultCounts: Record<EventType, number> = {
-    interrupt: 0,
-    post_interrupt_turn: 0,
-    corrective_instruction: 0,
-    tool_success: 0,
-    stop: 0,
-    rewind: 0,
-  };
-  return {
-    session_id: "test-session",
-    total_signals: 0,
-    counts: defaultCounts,
-    was_interrupted: false,
-    corrective_instruction_count: 0,
-    has_test_pass: false,
-    ...overrides,
-  };
-}
+import { makeSummary } from "./helpers.js";
 
 describe("computeFailureStrength", () => {
   it("returns 0.90–1.00 for interrupt + post-interrupt dialogue", () => {

@@ -72,3 +72,16 @@ export function computeSuccessStrength(
   // Uninterrupted (no tests) → 0.40–0.60
   return round(0.4 + toolSuccessRatio * 0.2);
 }
+
+/**
+ * Compute corrective instruction (3+) strength independently.
+ * Unlike computeFailureStrength which prioritizes interrupt,
+ * this always evaluates corrective count regardless of interrupt state.
+ * Used when both interrupt and corrective failures should be generated.
+ */
+export function computeCorrectiveStrength(
+  correctiveCount: number
+): number | null {
+  if (correctiveCount < 3) return null;
+  return round(Math.min(0.8, 0.6 + (correctiveCount - 3) * 0.05));
+}

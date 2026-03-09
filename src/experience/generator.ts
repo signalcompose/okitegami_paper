@@ -8,7 +8,7 @@
 import type { ExperienceEntry } from "../store/types.js";
 import type { SessionSummary } from "../signals/signal-collector.js";
 import type { SessionSignal } from "../signals/types.js";
-import { computeFailureStrength, computeSuccessStrength } from "./scoring.js";
+import { computeFailureStrength, computeSuccessStrength, computeCorrectiveStrength } from "./scoring.js";
 import { extractRetrievalKeys } from "./keywords.js";
 
 export interface GenerationInput {
@@ -59,7 +59,7 @@ export class ExperienceGenerator {
 
     // Failure entry from corrective instructions (independent of interrupt — different signal types)
     if (summary.corrective_instruction_count >= 3) {
-      const corrStrength = this.computeCorrective3PlusStrength(summary);
+      const corrStrength = computeCorrectiveStrength(summary.corrective_instruction_count);
       if (corrStrength !== null && corrStrength >= this.options.promotion_threshold) {
         results.push({
           type: "failure",
@@ -177,13 +177,6 @@ export class ExperienceGenerator {
       turns_captured: postTurns.length,
       dialogue_summary: prompts.join("; ").slice(0, 500),
     };
-  }
-
-  private computeCorrective3PlusStrength(summary: SessionSummary): number | null {
-    const count = summary.corrective_instruction_count;
-    if (count < 3) return null;
-    // SPECIFICATION Section 2.2: Corrective instruction (3+) → 0.60–0.80
-    return Math.min(0.8, Math.round((0.6 + (count - 3) * 0.05) * 1000) / 1000);
   }
 
   private getUniqueToolNames(signals: SessionSignal[]): string[] {
