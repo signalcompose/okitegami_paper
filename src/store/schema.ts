@@ -24,6 +24,20 @@ CREATE INDEX IF NOT EXISTS idx_experiences_signal_strength
   ON experiences(signal_strength);
 CREATE INDEX IF NOT EXISTS idx_experiences_timestamp
   ON experiences(timestamp);
+
+CREATE TABLE IF NOT EXISTS session_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  event_type TEXT NOT NULL CHECK(event_type IN (
+    'interrupt', 'post_interrupt_turn', 'corrective_instruction',
+    'tool_success', 'stop', 'rewind'
+  )),
+  data TEXT,
+  timestamp TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_signals_session_id
+  ON session_signals(session_id);
 `;
 
 export function initializeDatabase(dbPath: string): Database.Database {
