@@ -30,7 +30,7 @@ export class ExperienceGenerator {
   generate(input: GenerationInput): GenerationResult {
     const { session_id, summary, signals } = input;
 
-    if (summary.total_signals === 0 && signals.length === 0) {
+    if (summary.total_signals === 0) {
       return [];
     }
 
@@ -77,7 +77,7 @@ export class ExperienceGenerator {
 
     // Success entry: only if not interrupted and corrective < 3
     if (!summary.was_interrupted && summary.corrective_instruction_count < 3) {
-      const totalToolCalls = summary.total_signals;
+      const totalToolCalls = summary.counts.tool_success;
       const strength = computeSuccessStrength(summary, totalToolCalls);
       if (strength !== null && strength >= this.options.promotion_threshold) {
         results.push({
