@@ -7,6 +7,9 @@ import { EVENT_TYPES } from "../signals/types.js";
 import { DEFAULT_CONFIG } from "../store/types.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { ExperienceGenerator } from "../experience/generator.js";
+import { Embedder } from "../retrieval/embedder.js";
+import { Retriever } from "../retrieval/retriever.js";
+import { formatInjection } from "../retrieval/injector.js";
 
 const VERSION = "0.1.0";
 
@@ -15,6 +18,7 @@ export interface AcmServerOptions {
   capture_turns?: number;
   promotion_threshold?: number;
   experienceStore?: ExperienceStore;
+  embedder?: Embedder;
 }
 
 export function createAcmServer(options?: AcmServerOptions): McpServer {
@@ -190,6 +194,118 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
                 {
                   type: "text" as const,
                   text: `Error generating experience: ${err instanceof Error ? err.message : String(err)}`,
+                },
+              ],
+            };
+          }
+        }
+      );
+    }
+
+    if (options.experienceStore && options.embedder) {
+      const experienceStore = options.experienceStore;
+      const embedder = options.embedder;
+      const retriever = new Retriever(experienceStore);
+
+      server.tool(
+        "acm_retrieve",
+        "Retrieve relevant past experiences for a query and return injection text (SessionStart hook)",
+        {
+          query: z.string().describe("Query text (e.g., initial user message)"),
+          top_k: z.number().optional().describe("Number of results (default: 5)"),
+        },
+        async (params) => {
+          try {
+            if (!embedder.initialized) {
+              await embedder.initialize();
+            }
+            const queryEmbedding = await embedder.embed(params.query);
+            const topK = params.top_k ?? DEFAULT_CONFIG.top_k;
+            const results = retriever.retrieve(queryEmbedding, topK);
+            const injectionText = formatInjection(results);
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    injection_text: injectionText,
+                    entries_count: results.length,
+                    entries: results.map((r) => ({
+                      id: r.entry.id,
+                      type: r.entry.type,
+                      trigger: r.entry.trigger,
+                      similarity: Number(r.similarity.toFixed(4)),
+                      score: Number(r.score.toFixed(4)),
+                    })),
+                  }),
+                },
+              ],
+            };
+          } catch (err) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error retrieving experiences: ${err instanceof Error ? err.message : String(err)}`,
+                },
+              ],
+            };
+          }
+        }
+      );
+
+      server.tool(
+        "acm_store_embedding",
+        "Generate and store embedding for an experience entry",
+        {
+          experience_id: z.string().uuid().describe("Experience entry ID"),
+        },
+        async (params) => {
+          try {
+            if (!embedder.initialized) {
+              await embedder.initialize();
+            }
+            const entry = experienceStore.getById(params.experience_id);
+            if (!entry) {
+              return {
+                isError: true,
+                content: [
+                  {
+                    type: "text" as const,
+                    text: `Experience entry not found: ${params.experience_id}`,
+                  },
+                ],
+              };
+            }
+
+            const textToEmbed = [
+              entry.trigger,
+              ...entry.retrieval_keys,
+            ].join(" ");
+            const embedding = await embedder.embed(textToEmbed);
+            const updated = experienceStore.updateEmbedding(entry.id, embedding);
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    id: entry.id,
+                    embedded: updated,
+                    dimensions: embedding.length,
+                  }),
+                },
+              ],
+            };
+          } catch (err) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error storing embedding: ${err instanceof Error ? err.message : String(err)}`,
                 },
               ],
             };
