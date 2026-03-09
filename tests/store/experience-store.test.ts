@@ -17,9 +17,7 @@ describe("ExperienceStore", () => {
     it("creates an entry and returns it with a generated id", () => {
       const entry = store.create(makeEntry());
       expect(entry).not.toBeNull();
-      expect(entry!.id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-      );
+      expect(entry!.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(entry!.type).toBe("success");
       expect(entry!.trigger).toBe("Fix bug in auth module");
     });
@@ -55,20 +53,18 @@ describe("ExperienceStore", () => {
 
   describe("validation", () => {
     it("throws on signal_strength out of range", () => {
-      expect(() =>
-        store.create(makeEntry({ signal_strength: 1.5 }))
-      ).toThrow("signal_strength must be between 0 and 1");
+      expect(() => store.create(makeEntry({ signal_strength: 1.5 }))).toThrow(
+        "signal_strength must be between 0 and 1"
+      );
 
-      expect(() =>
-        store.create(makeEntry({ signal_strength: -0.1 }))
-      ).toThrow("signal_strength must be between 0 and 1");
+      expect(() => store.create(makeEntry({ signal_strength: -0.1 }))).toThrow(
+        "signal_strength must be between 0 and 1"
+      );
     });
 
     it("throws on invalid signal_type", () => {
       expect(() =>
-        store.create(
-          makeEntry({ signal_type: "invalid_type" as ExperienceEntry["signal_type"] })
-        )
+        store.create(makeEntry({ signal_type: "invalid_type" as ExperienceEntry["signal_type"] }))
       ).toThrow("Invalid signal_type");
     });
   });
@@ -130,9 +126,7 @@ describe("ExperienceStore", () => {
 
   describe("mode filtering", () => {
     it("filters to success entries only in success_only mode", () => {
-      const successStore = new ExperienceStore(
-        makeConfig({ mode: "success_only" })
-      );
+      const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
       successStore.create(makeEntry({ type: "success" }));
       successStore.create(
         makeEntry({
@@ -149,9 +143,7 @@ describe("ExperienceStore", () => {
     });
 
     it("filters to failure entries only in failure_only mode", () => {
-      const failureStore = new ExperienceStore(
-        makeConfig({ mode: "failure_only" })
-      );
+      const failureStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
       failureStore.create(makeEntry({ type: "success" }));
       failureStore.create(
         makeEntry({
@@ -182,9 +174,7 @@ describe("ExperienceStore", () => {
     });
 
     it("returns empty in disabled mode", () => {
-      const disabledStore = new ExperienceStore(
-        makeConfig({ mode: "disabled" })
-      );
+      const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
       disabledStore.create(makeEntry({ type: "success" }));
 
       const entries = disabledStore.listByMode();
@@ -195,13 +185,9 @@ describe("ExperienceStore", () => {
 
   describe("promotion threshold", () => {
     it("does not persist entries below promotion_threshold", () => {
-      const strictStore = new ExperienceStore(
-        makeConfig({ promotion_threshold: 0.5 })
-      );
+      const strictStore = new ExperienceStore(makeConfig({ promotion_threshold: 0.5 }));
 
-      const entry = strictStore.create(
-        makeEntry({ signal_strength: 0.3 })
-      );
+      const entry = strictStore.create(makeEntry({ signal_strength: 0.3 }));
 
       expect(entry).toBeNull();
       expect(strictStore.list()).toHaveLength(0);
@@ -209,13 +195,9 @@ describe("ExperienceStore", () => {
     });
 
     it("persists entries at or above promotion_threshold", () => {
-      const strictStore = new ExperienceStore(
-        makeConfig({ promotion_threshold: 0.5 })
-      );
+      const strictStore = new ExperienceStore(makeConfig({ promotion_threshold: 0.5 }));
 
-      const entry = strictStore.create(
-        makeEntry({ signal_strength: 0.5 })
-      );
+      const entry = strictStore.create(makeEntry({ signal_strength: 0.5 }));
 
       expect(entry).not.toBeNull();
       expect(entry!.signal_strength).toBe(0.5);

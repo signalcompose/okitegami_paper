@@ -8,7 +8,11 @@
 import type { ExperienceEntry } from "../store/types.js";
 import type { SessionSummary } from "../signals/signal-collector.js";
 import type { EventType, SessionSignal } from "../signals/types.js";
-import { computeFailureStrength, computeSuccessStrength, computeCorrectiveStrength } from "./scoring.js";
+import {
+  computeFailureStrength,
+  computeSuccessStrength,
+  computeCorrectiveStrength,
+} from "./scoring.js";
 import { extractRetrievalKeys } from "./keywords.js";
 
 export interface GenerationInput {
@@ -199,9 +203,7 @@ export class ExperienceGenerator {
       : "Task completed without test verification";
   }
 
-  private buildInterruptContext(
-    idx: SignalIndex
-  ): ExperienceEntry["interrupt_context"] {
+  private buildInterruptContext(idx: SignalIndex): ExperienceEntry["interrupt_context"] {
     return {
       turns_captured: idx.postInterruptPrompts.length,
       dialogue_summary: idx.postInterruptPrompts.join("; ").slice(0, 500),

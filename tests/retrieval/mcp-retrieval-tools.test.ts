@@ -32,12 +32,8 @@ describe("Retrieval MCP Tools", () => {
       embedder,
     });
     client = new Client({ name: "test-client", version: "1.0.0" });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    await Promise.all([
-      server.connect(serverTransport),
-      client.connect(clientTransport),
-    ]);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   }, 60_000);
 
   afterAll(async () => {

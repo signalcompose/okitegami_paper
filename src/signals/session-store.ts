@@ -33,9 +33,7 @@ export class SessionSignalStore {
     this.countByTypeStmt = db.prepare(
       "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? GROUP BY event_type"
     );
-    this.clearSessionStmt = db.prepare(
-      "DELETE FROM session_signals WHERE session_id = ?"
-    );
+    this.clearSessionStmt = db.prepare("DELETE FROM session_signals WHERE session_id = ?");
     this.countSpecificTypesStmt = db.prepare(
       "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN (?, ?) GROUP BY event_type"
     );
@@ -80,9 +78,7 @@ export class SessionSignalStore {
       count: number;
     }>;
 
-    const counts = Object.fromEntries(
-      EVENT_TYPES.map((t) => [t, 0])
-    ) as Record<EventType, number>;
+    const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0])) as Record<EventType, number>;
 
     for (const row of rows) {
       counts[row.event_type as EventType] = row.count;

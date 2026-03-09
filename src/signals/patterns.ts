@@ -40,9 +40,7 @@ const PATTERNS: PatternDef[] = [
   { regex: /やめて/, label: "やめて", language: "ja" },
 ];
 
-export function detectCorrectiveInstruction(
-  text: string
-): CorrectiveMatch | null {
+export function detectCorrectiveInstruction(text: string): CorrectiveMatch | null {
   for (const { regex, label, language } of PATTERNS) {
     if (regex.test(text)) {
       return { pattern: label, language };

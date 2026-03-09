@@ -16,18 +16,14 @@ describe("session_signals schema", () => {
   });
 
   it("creates session_signals table with correct columns", () => {
-    const tableInfo = db
-      .prepare("PRAGMA table_info(session_signals)")
-      .all() as Array<{ name: string; type: string; notnull: number }>;
+    const tableInfo = db.prepare("PRAGMA table_info(session_signals)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+    }>;
 
     const columnNames = tableInfo.map((c) => c.name);
-    expect(columnNames).toEqual([
-      "id",
-      "session_id",
-      "event_type",
-      "data",
-      "timestamp",
-    ]);
+    expect(columnNames).toEqual(["id", "session_id", "event_type", "data", "timestamp"]);
   });
 
   it("creates session_id index on session_signals", () => {
@@ -43,9 +39,7 @@ describe("session_signals schema", () => {
 
   it("coexists with experiences table", () => {
     const tables = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-      )
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
       .all() as Array<{ name: string }>;
 
     const tableNames = tables.map((t) => t.name);

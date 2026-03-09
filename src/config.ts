@@ -23,9 +23,7 @@ function expandTilde(filePath: string): string {
 
 function validate(config: AcmConfig): void {
   if (!ACM_MODES.includes(config.mode)) {
-    throw new Error(
-      `Invalid mode "${config.mode}". Must be one of: ${ACM_MODES.join(", ")}`
-    );
+    throw new Error(`Invalid mode "${config.mode}". Must be one of: ${ACM_MODES.join(", ")}`);
   }
   if (config.promotion_threshold < 0 || config.promotion_threshold > 1) {
     throw new Error(
@@ -49,20 +47,20 @@ export function loadConfig(path?: string): AcmConfig {
       raw = readFileSync(path, "utf-8");
     } catch (err) {
       throw new Error(
-        `Cannot read config file "${path}": ${err instanceof Error ? err.message : String(err)}`
+        `Cannot read config file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
       );
     }
     try {
       overrides = JSON.parse(raw) as Partial<AcmConfig>;
     } catch (err) {
       throw new Error(
-        `Invalid JSON in config file "${path}": ${err instanceof Error ? err.message : String(err)}`
+        `Invalid JSON in config file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
       );
     }
 
-    const unknownKeys = Object.keys(overrides).filter(
-      (k) => !KNOWN_CONFIG_KEYS.has(k)
-    );
+    const unknownKeys = Object.keys(overrides).filter((k) => !KNOWN_CONFIG_KEYS.has(k));
     if (unknownKeys.length > 0) {
       throw new Error(
         `Unknown config keys: ${unknownKeys.join(", ")}. Valid keys: ${[...KNOWN_CONFIG_KEYS].join(", ")}`

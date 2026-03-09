@@ -55,28 +55,16 @@ describe("computeFailureStrength", () => {
   });
 
   it("scales corrective (3+) with count", () => {
-    const score3 = computeFailureStrength(
-      makeSummary({ corrective_instruction_count: 3 }),
-      5
-    );
-    const score7 = computeFailureStrength(
-      makeSummary({ corrective_instruction_count: 7 }),
-      5
-    );
+    const score3 = computeFailureStrength(makeSummary({ corrective_instruction_count: 3 }), 5);
+    const score7 = computeFailureStrength(makeSummary({ corrective_instruction_count: 7 }), 5);
     expect(score3).toBe(0.6);
     expect(score7).toBeLessThanOrEqual(0.8);
     expect(score7).toBeGreaterThan(score3);
   });
 
   it("returns 0.30–0.50 for corrective instruction count 1-2", () => {
-    const score1 = computeFailureStrength(
-      makeSummary({ corrective_instruction_count: 1 }),
-      5
-    );
-    const score2 = computeFailureStrength(
-      makeSummary({ corrective_instruction_count: 2 }),
-      5
-    );
+    const score1 = computeFailureStrength(makeSummary({ corrective_instruction_count: 1 }), 5);
+    const score2 = computeFailureStrength(makeSummary({ corrective_instruction_count: 2 }), 5);
     expect(score1).toBeGreaterThanOrEqual(0.3);
     expect(score1).toBeLessThanOrEqual(0.5);
     expect(score2).toBeGreaterThanOrEqual(0.3);

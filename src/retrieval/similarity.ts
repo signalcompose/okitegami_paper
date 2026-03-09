@@ -4,9 +4,7 @@
  */
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) {
-    throw new Error(
-      `Vectors must have same length, got ${a.length} and ${b.length}`
-    );
+    throw new Error(`Vectors must have same length, got ${a.length} and ${b.length}`);
   }
 
   let dot = 0;

@@ -3,10 +3,7 @@ import type Database from "better-sqlite3";
 import { initializeDatabase } from "./schema.js";
 import { SIGNAL_TYPES } from "./types.js";
 import type { ExperienceEntry, AcmConfig } from "./types.js";
-import {
-  serializeEmbedding,
-  deserializeEmbedding,
-} from "../retrieval/embedding-serde.js";
+import { serializeEmbedding, deserializeEmbedding } from "../retrieval/embedding-serde.js";
 
 export interface EntryWithEmbedding {
   entry: ExperienceEntry;
@@ -36,21 +33,13 @@ export class ExperienceStore {
         session_id, timestamp, interrupt_context, embedding)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    this.stmtGetById = this.db.prepare(
-      "SELECT * FROM experiences WHERE id = ?"
-    );
-    this.stmtList = this.db.prepare(
-      "SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?"
-    );
+    this.stmtGetById = this.db.prepare("SELECT * FROM experiences WHERE id = ?");
+    this.stmtList = this.db.prepare("SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?");
     this.stmtListByType = this.db.prepare(
       "SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC"
     );
-    this.stmtDelete = this.db.prepare(
-      "DELETE FROM experiences WHERE id = ?"
-    );
-    this.stmtUpdateEmbedding = this.db.prepare(
-      "UPDATE experiences SET embedding = ? WHERE id = ?"
-    );
+    this.stmtDelete = this.db.prepare("DELETE FROM experiences WHERE id = ?");
+    this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
     this.stmtAllWithEmbedding = this.db.prepare(
       "SELECT * FROM experiences WHERE embedding IS NOT NULL"
     );
@@ -59,9 +48,7 @@ export class ExperienceStore {
     );
   }
 
-  create(
-    data: Omit<ExperienceEntry, "id">
-  ): ExperienceEntry | null {
+  create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null {
     return this.insertEntry(data, null);
   }
 
@@ -73,18 +60,14 @@ export class ExperienceStore {
   }
 
   getById(id: string): ExperienceEntry | null {
-    const row = this.stmtGetById.get(id) as
-      | Record<string, unknown>
-      | undefined;
+    const row = this.stmtGetById.get(id) as Record<string, unknown> | undefined;
 
     if (!row) return null;
     return this.rowToEntry(row);
   }
 
   list(options?: { limit?: number }): ExperienceEntry[] {
-    const rows = this.stmtList.all(
-      options?.limit ?? -1
-    ) as Record<string, unknown>[];
+    const rows = this.stmtList.all(options?.limit ?? -1) as Record<string, unknown>[];
 
     return rows.map((row) => this.rowToEntry(row));
   }
@@ -103,10 +86,7 @@ export class ExperienceStore {
   }
 
   updateEmbedding(id: string, embedding: Float32Array): boolean {
-    const result = this.stmtUpdateEmbedding.run(
-      serializeEmbedding(embedding),
-      id
-    );
+    const result = this.stmtUpdateEmbedding.run(serializeEmbedding(embedding), id);
     return result.changes > 0;
   }
 
@@ -145,9 +125,7 @@ export class ExperienceStore {
       }
     }
     if (skippedCount > 0) {
-      console.warn(
-        `[ACM] getAllWithEmbedding: skipped ${skippedCount} corrupt row(s)`
-      );
+      console.warn(`[ACM] getAllWithEmbedding: skipped ${skippedCount} corrupt row(s)`);
     }
     return results;
   }
@@ -166,9 +144,7 @@ export class ExperienceStore {
     embeddingBlob: Buffer | null
   ): ExperienceEntry | null {
     if (data.signal_strength < 0 || data.signal_strength > 1) {
-      throw new Error(
-        `signal_strength must be between 0 and 1, got ${data.signal_strength}`
-      );
+      throw new Error(`signal_strength must be between 0 and 1, got ${data.signal_strength}`);
     }
     if (!SIGNAL_TYPES.includes(data.signal_type)) {
       throw new Error(
@@ -193,9 +169,7 @@ export class ExperienceStore {
       entry.signal_type,
       entry.session_id,
       entry.timestamp,
-      entry.interrupt_context
-        ? JSON.stringify(entry.interrupt_context)
-        : null,
+      entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null,
       embeddingBlob
     );
 
@@ -227,7 +201,8 @@ export class ExperienceStore {
       };
     } catch (err) {
       throw new Error(
-        `Failed to deserialize experience entry id="${id}": ${err instanceof Error ? err.message : String(err)}`
+        `Failed to deserialize experience entry id="${id}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
       );
     }
   }
