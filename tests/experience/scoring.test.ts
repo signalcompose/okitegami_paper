@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeFailureStrength,
   computeSuccessStrength,
+  computeCorrectiveStrength,
 } from "../../src/experience/scoring.js";
 import { makeSummary } from "./helpers.js";
 
@@ -176,5 +177,34 @@ describe("computeSuccessStrength", () => {
     const score = computeSuccessStrength(summary, 0);
     expect(score).toBeGreaterThanOrEqual(0.4);
     expect(score).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe("computeCorrectiveStrength", () => {
+  it("returns null for count 0", () => {
+    expect(computeCorrectiveStrength(0)).toBeNull();
+  });
+
+  it("returns null for count 1", () => {
+    expect(computeCorrectiveStrength(1)).toBeNull();
+  });
+
+  it("returns null for count 2", () => {
+    expect(computeCorrectiveStrength(2)).toBeNull();
+  });
+
+  it("returns 0.6 for count 3 (lower bound)", () => {
+    expect(computeCorrectiveStrength(3)).toBe(0.6);
+  });
+
+  it("scales with count above 3", () => {
+    const score5 = computeCorrectiveStrength(5);
+    const score3 = computeCorrectiveStrength(3);
+    expect(score5).toBeGreaterThan(score3!);
+    expect(score5).toBeLessThanOrEqual(0.8);
+  });
+
+  it("caps at 0.8 for high counts", () => {
+    expect(computeCorrectiveStrength(100)).toBe(0.8);
   });
 });

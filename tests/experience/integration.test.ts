@@ -4,11 +4,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
 import { SignalCollector } from "../../src/signals/signal-collector.js";
 import { ExperienceGenerator } from "../../src/experience/generator.js";
+import { createAcmServer } from "../../src/server/tools.js";
 import type { AcmConfig } from "../../src/store/types.js";
 import type Database from "better-sqlite3";
 
@@ -178,5 +181,89 @@ describe("Signal → Experience Integration", () => {
     // Mode filtering
     const successes = experienceStore.listByMode();
     expect(successes.length).toBe(2); // mode=full returns all
+  });
+});
+
+describe("acm_generate_experience MCP tool", () => {
+  let db: Database.Database;
+  let experienceStore: ExperienceStore;
+  let client: Client;
+
+  beforeEach(async () => {
+    db = initializeDatabase(":memory:");
+    experienceStore = new ExperienceStore(TEST_CONFIG);
+
+    const server = createAcmServer({
+      db,
+      capture_turns: TEST_CONFIG.capture_turns,
+      promotion_threshold: TEST_CONFIG.promotion_threshold,
+      experienceStore,
+    });
+
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    client = new Client({ name: "test-client", version: "0.0.1" });
+    await client.connect(clientTransport);
+  });
+
+  afterEach(() => {
+    experienceStore.close();
+    db.close();
+  });
+
+  it("generates and persists experience entries via MCP tool", async () => {
+    const sessionId = "mcp-test-session";
+
+    // Record signals via MCP
+    await client.callTool({
+      name: "acm_record_signal",
+      arguments: {
+        session_id: sessionId,
+        event_type: "interrupt",
+        data: JSON.stringify({ tool_name: "Bash", error: "test failed" }),
+      },
+    });
+    await client.callTool({
+      name: "acm_record_signal",
+      arguments: {
+        session_id: sessionId,
+        event_type: "post_interrupt_turn",
+        data: JSON.stringify({ prompt: "Fix the failing test" }),
+      },
+    });
+
+    // Generate experience via MCP tool
+    const result = await client.callTool({
+      name: "acm_generate_experience",
+      arguments: { session_id: sessionId },
+    });
+
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+
+    expect(parsed.session_id).toBe(sessionId);
+    expect(parsed.generated).toBeGreaterThanOrEqual(1);
+    expect(parsed.persisted).toBe(parsed.generated);
+    expect(parsed.ids.length).toBe(parsed.persisted);
+
+    // Verify persistence via ExperienceStore
+    const all = experienceStore.list();
+    expect(all.length).toBe(parsed.persisted);
+    expect(all[0].session_id).toBe(sessionId);
+  });
+
+  it("returns empty result for session with no signals", async () => {
+    const result = await client.callTool({
+      name: "acm_generate_experience",
+      arguments: { session_id: "nonexistent-session" },
+    });
+
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+
+    expect(parsed.generated).toBe(0);
+    expect(parsed.persisted).toBe(0);
+    expect(parsed.ids).toEqual([]);
   });
 });

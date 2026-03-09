@@ -146,25 +146,42 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             });
 
             const persisted: string[] = [];
+            const errors: string[] = [];
             for (const entry of entries) {
-              const saved = experienceStore.create(entry);
-              if (saved) {
-                persisted.push(saved.id);
+              try {
+                const saved = experienceStore.create(entry);
+                if (saved) {
+                  persisted.push(saved.id);
+                } else {
+                  errors.push(
+                    `Failed to persist ${entry.type} entry (signal_type: ${entry.signal_type}): create returned null`
+                  );
+                }
+              } catch (persistErr) {
+                errors.push(
+                  `Failed to persist ${entry.type} entry (signal_type: ${entry.signal_type}): ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`
+                );
               }
+            }
+
+            const result: Record<string, unknown> = {
+              session_id: params.session_id,
+              generated: entries.length,
+              persisted: persisted.length,
+              ids: persisted,
+            };
+            if (errors.length > 0) {
+              result.errors = errors;
             }
 
             return {
               content: [
                 {
                   type: "text" as const,
-                  text: JSON.stringify({
-                    session_id: params.session_id,
-                    generated: entries.length,
-                    persisted: persisted.length,
-                    ids: persisted,
-                  }),
+                  text: JSON.stringify(result),
                 },
               ],
+              isError: errors.length > 0 && persisted.length === 0,
             };
           } catch (err) {
             return {
@@ -172,7 +189,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
               content: [
                 {
                   type: "text" as const,
-                  text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                  text: `Error generating experience: ${err instanceof Error ? err.message : String(err)}`,
                 },
               ],
             };
