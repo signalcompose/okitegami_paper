@@ -154,7 +154,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
                   persisted.push(saved.id);
                 } else {
                   errors.push(
-                    `Failed to persist ${entry.type} entry (signal_type: ${entry.signal_type}): create returned null`
+                    `Entry ${entry.type} (signal_type: ${entry.signal_type}, strength: ${entry.signal_strength}) rejected by store: below promotion_threshold`
                   );
                 }
               } catch (persistErr) {
@@ -181,7 +181,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
                   text: JSON.stringify(result),
                 },
               ],
-              isError: errors.length > 0 && persisted.length === 0,
+              isError: errors.length > 0,
             };
           } catch (err) {
             return {

@@ -96,6 +96,9 @@ export class ExperienceGenerator {
 
     // Success entry: only if not interrupted and corrective < 3
     if (!summary.was_interrupted && summary.corrective_instruction_count < 3) {
+      // TODO: Phase 2 only records tool_success events (no tool_failure type).
+      // totalToolCalls == tool_success, so toolSuccessRatio is always 1.0.
+      // When tool_failure events are added, pass total (success + failure) here.
       const totalToolCalls = summary.counts.tool_success;
       const strength = computeSuccessStrength(summary, totalToolCalls);
       if (strength !== null && strength >= this.options.promotion_threshold) {

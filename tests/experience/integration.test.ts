@@ -31,7 +31,10 @@ describe("Signal → Experience Integration", () => {
   let generator: ExperienceGenerator;
 
   beforeEach(() => {
+    // Signal-side DB: session_signals table
     db = initializeDatabase(":memory:");
+    // Experience-side DB: ExperienceStore opens its own isolated :memory: DB
+    // (separate from signal DB — data is threaded between them via generator)
     experienceStore = new ExperienceStore(TEST_CONFIG);
     signalStore = new SessionSignalStore(db);
     collector = new SignalCollector(signalStore, {
@@ -190,7 +193,9 @@ describe("acm_generate_experience MCP tool", () => {
   let client: Client;
 
   beforeEach(async () => {
+    // Signal-side DB shared with server's internal SessionSignalStore
     db = initializeDatabase(":memory:");
+    // Experience-side DB: separate :memory: instance (ExperienceStore manages its own connection)
     experienceStore = new ExperienceStore(TEST_CONFIG);
 
     const server = createAcmServer({
