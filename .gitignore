@@ -1,6 +1,13 @@
 .DS_Store
 *.zip
-.claude/
+.claude/*
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/*.py
+
+# Node.js
+node_modules/
+dist/
 
 # [code:security-patterns:fbe2794b]
 .env
