@@ -147,4 +147,50 @@ describe("SessionSignalStore", () => {
       store.addSignal("s1", "bogus" as EventType, null);
     }).toThrow();
   });
+
+  describe("countSpecificTypes", () => {
+    it("returns counts for specified event types only", () => {
+      store.addSignal("s1", "interrupt", null);
+      store.addSignal("s1", "interrupt", null);
+      store.addSignal("s1", "post_interrupt_turn", { prompt: "fix it" });
+      store.addSignal("s1", "tool_success", null);
+
+      const counts = store.countSpecificTypes("s1", "interrupt", "post_interrupt_turn");
+      expect(counts.interrupt).toBe(2);
+      expect(counts.post_interrupt_turn).toBe(1);
+      expect(counts).not.toHaveProperty("tool_success");
+    });
+
+    it("returns zeros for types with no signals", () => {
+      const counts = store.countSpecificTypes("s1", "interrupt", "post_interrupt_turn");
+      expect(counts.interrupt).toBe(0);
+      expect(counts.post_interrupt_turn).toBe(0);
+    });
+  });
+
+  describe("hasTestPass", () => {
+    it("returns true when a test_passed signal exists", () => {
+      store.addSignal("s1", "tool_success", {
+        tool_name: "Bash",
+        is_test_runner: true,
+        test_passed: true,
+      });
+
+      expect(store.hasTestPass("s1")).toBe(true);
+    });
+
+    it("returns false when no test_passed signal exists", () => {
+      store.addSignal("s1", "tool_success", {
+        tool_name: "Bash",
+        is_test_runner: true,
+        test_passed: false,
+      });
+
+      expect(store.hasTestPass("s1")).toBe(false);
+    });
+
+    it("returns false for empty session", () => {
+      expect(store.hasTestPass("nonexistent")).toBe(false);
+    });
+  });
 });

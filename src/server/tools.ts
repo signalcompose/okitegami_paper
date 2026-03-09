@@ -93,12 +93,24 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
         session_id: z.string().describe("Session identifier"),
       },
       (params) => {
-        const summary = collector.getSessionSummary(params.session_id);
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(summary) },
-          ],
-        };
+        try {
+          const summary = collector.getSessionSummary(params.session_id);
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(summary) },
+            ],
+          };
+        } catch (err) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text" as const,
+                text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+              },
+            ],
+          };
+        }
       }
     );
   }

@@ -182,11 +182,15 @@ describe("SignalCollector", () => {
       const summary = collector.getSessionSummary(sessionId);
 
       expect(summary.session_id).toBe(sessionId);
-      expect(summary.total_signals).toBeGreaterThan(0);
+      // interrupt + corrective_instruction + post_interrupt_turn + tool_success + stop = 5
+      expect(summary.total_signals).toBe(5);
       expect(summary.counts.interrupt).toBe(1);
+      expect(summary.counts.corrective_instruction).toBe(1);
+      expect(summary.counts.post_interrupt_turn).toBe(1);
+      expect(summary.counts.tool_success).toBe(1);
       expect(summary.counts.stop).toBe(1);
       expect(summary.was_interrupted).toBe(true);
-      expect(summary.corrective_instruction_count).toBeGreaterThanOrEqual(1);
+      expect(summary.corrective_instruction_count).toBe(1);
     });
 
     it("returns empty summary for unknown session", () => {

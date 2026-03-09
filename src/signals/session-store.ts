@@ -69,7 +69,7 @@ export class SessionSignalStore {
       id: row.id,
       session_id: row.session_id,
       event_type: row.event_type as EventType,
-      data: row.data ? (JSON.parse(row.data) as Record<string, unknown>) : null,
+      data: row.data ? this.parseData(row.data) : null,
       timestamp: row.timestamp,
     }));
   }
@@ -115,5 +115,13 @@ export class SessionSignalStore {
   clearSession(sessionId: string): number {
     const result = this.clearSessionStmt.run(sessionId);
     return result.changes;
+  }
+
+  private parseData(raw: string): Record<string, unknown> {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return { _raw: raw, _parse_error: true };
+    }
   }
 }
