@@ -7,7 +7,7 @@
 
 import type { ExperienceEntry } from "../store/types.js";
 import type { SessionSummary } from "../signals/signal-collector.js";
-import type { SessionSignal } from "../signals/types.js";
+import type { EventType, SessionSignal } from "../signals/types.js";
 import { computeFailureStrength, computeSuccessStrength, computeCorrectiveStrength } from "./scoring.js";
 import { extractRetrievalKeys } from "./keywords.js";
 
@@ -24,6 +24,16 @@ export interface ExperienceGeneratorOptions {
   promotion_threshold: number;
 }
 
+type EntryContext = "interrupt" | "corrective" | "success";
+
+/** Pre-indexed signals to avoid repeated array scans */
+interface SignalIndex {
+  byType: Map<EventType, SessionSignal[]>;
+  toolNames: string[];
+  postInterruptPrompts: string[];
+  hasTestPass: boolean;
+}
+
 export class ExperienceGenerator {
   constructor(private options: ExperienceGeneratorOptions) {}
 
@@ -36,7 +46,16 @@ export class ExperienceGenerator {
 
     const results: GenerationResult = [];
     const timestamp = new Date().toISOString();
-    const retrievalKeys = extractRetrievalKeys(signals);
+    const idx = this.buildSignalIndex(signals);
+
+    // Lazy: only extract keys if at least one entry will be generated
+    let retrievalKeys: string[] | null = null;
+    const getKeys = () => {
+      if (retrievalKeys === null) {
+        retrievalKeys = extractRetrievalKeys(signals);
+      }
+      return retrievalKeys;
+    };
 
     // Failure entry from interrupt
     if (summary.was_interrupted) {
@@ -44,15 +63,15 @@ export class ExperienceGenerator {
       if (strength !== null && strength >= this.options.promotion_threshold) {
         results.push({
           type: "failure",
-          trigger: this.buildTrigger(signals, "interrupt"),
-          action: this.buildAction(signals, "interrupt"),
-          outcome: this.buildOutcome(signals, "interrupt"),
-          retrieval_keys: retrievalKeys,
+          trigger: this.buildTrigger(idx, "interrupt"),
+          action: this.buildAction(idx, "interrupt"),
+          outcome: this.buildOutcome(idx, "interrupt"),
+          retrieval_keys: getKeys(),
           signal_strength: strength,
           signal_type: "interrupt_with_dialogue",
           session_id,
           timestamp,
-          interrupt_context: this.buildInterruptContext(signals),
+          interrupt_context: this.buildInterruptContext(idx),
         });
       }
     }
@@ -63,10 +82,10 @@ export class ExperienceGenerator {
       if (corrStrength !== null && corrStrength >= this.options.promotion_threshold) {
         results.push({
           type: "failure",
-          trigger: this.buildTrigger(signals, "corrective"),
-          action: this.buildAction(signals, "corrective"),
-          outcome: this.buildOutcome(signals, "corrective"),
-          retrieval_keys: retrievalKeys,
+          trigger: this.buildTrigger(idx, "corrective"),
+          action: this.buildAction(idx, "corrective"),
+          outcome: this.buildOutcome(idx, "corrective"),
+          retrieval_keys: getKeys(),
           signal_strength: corrStrength,
           signal_type: "corrective_instruction",
           session_id,
@@ -82,10 +101,10 @@ export class ExperienceGenerator {
       if (strength !== null && strength >= this.options.promotion_threshold) {
         results.push({
           type: "success",
-          trigger: this.buildTrigger(signals, "success"),
-          action: this.buildAction(signals, "success"),
-          outcome: this.buildOutcome(signals, "success"),
-          retrieval_keys: retrievalKeys,
+          trigger: this.buildTrigger(idx, "success"),
+          action: this.buildAction(idx, "success"),
+          outcome: this.buildOutcome(idx, "success"),
+          retrieval_keys: getKeys(),
           signal_strength: strength,
           signal_type: "uninterrupted_completion",
           session_id,
@@ -97,33 +116,60 @@ export class ExperienceGenerator {
     return results;
   }
 
-  private buildTrigger(signals: SessionSignal[], context: string): string {
+  private buildSignalIndex(signals: SessionSignal[]): SignalIndex {
+    const byType = new Map<EventType, SessionSignal[]>();
+    const toolNames = new Set<string>();
+    const postInterruptPrompts: string[] = [];
+    let hasTestPass = false;
+
+    for (const signal of signals) {
+      const existing = byType.get(signal.event_type);
+      if (existing) {
+        existing.push(signal);
+      } else {
+        byType.set(signal.event_type, [signal]);
+      }
+
+      if (signal.data?.tool_name && typeof signal.data.tool_name === "string") {
+        toolNames.add(signal.data.tool_name);
+      }
+      if (signal.event_type === "post_interrupt_turn") {
+        const prompt = signal.data?.prompt;
+        if (typeof prompt === "string" && prompt) {
+          postInterruptPrompts.push(prompt);
+        }
+      }
+      if (signal.event_type === "tool_success" && signal.data?.test_passed === true) {
+        hasTestPass = true;
+      }
+    }
+
+    return { byType, toolNames: [...toolNames], postInterruptPrompts, hasTestPass };
+  }
+
+  private buildTrigger(idx: SignalIndex, context: EntryContext): string {
     if (context === "interrupt") {
-      const interrupt = signals.find((s) => s.event_type === "interrupt");
+      const interrupts = idx.byType.get("interrupt");
+      const interrupt = interrupts?.[0];
       if (interrupt?.data) {
         return `Tool ${interrupt.data.tool_name} failed: ${interrupt.data.error}`;
       }
       return "Session interrupted by user";
     }
     if (context === "corrective") {
-      const corrections = signals.filter(
-        (s) => s.event_type === "corrective_instruction"
-      );
+      const corrections = idx.byType.get("corrective_instruction") ?? [];
       const firstPrompt = corrections[0]?.data?.prompt;
       return typeof firstPrompt === "string"
         ? `Corrective feedback: ${firstPrompt.slice(0, 100)}`
         : "Multiple corrective instructions received";
     }
-    // success
-    const tools = this.getUniqueToolNames(signals);
-    return tools.length > 0
-      ? `Session using: ${tools.join(", ")}`
+    return idx.toolNames.length > 0
+      ? `Session using: ${idx.toolNames.join(", ")}`
       : "Session completed";
   }
 
-  private buildAction(signals: SessionSignal[], context: string): string {
-    const tools = this.getUniqueToolNames(signals);
-    const toolStr = tools.length > 0 ? tools.join(", ") : "unknown tools";
+  private buildAction(idx: SignalIndex, context: EntryContext): string {
+    const toolStr = idx.toolNames.length > 0 ? idx.toolNames.join(", ") : "unknown tools";
 
     if (context === "interrupt") {
       return `Agent used ${toolStr} before user interrupted`;
@@ -134,58 +180,28 @@ export class ExperienceGenerator {
     return `Agent completed task using ${toolStr}`;
   }
 
-  private buildOutcome(signals: SessionSignal[], context: string): string {
+  private buildOutcome(idx: SignalIndex, context: EntryContext): string {
     if (context === "interrupt") {
-      const postTurns = signals.filter(
-        (s) => s.event_type === "post_interrupt_turn"
-      );
-      const prompts = postTurns
-        .map((s) => (s.data?.prompt as string) ?? "")
-        .filter(Boolean);
-      return prompts.length > 0
-        ? `User feedback: ${prompts.join("; ").slice(0, 200)}`
+      return idx.postInterruptPrompts.length > 0
+        ? `User feedback: ${idx.postInterruptPrompts.join("; ").slice(0, 200)}`
         : "User interrupted the session";
     }
     if (context === "corrective") {
-      const corrections = signals.filter(
-        (s) => s.event_type === "corrective_instruction"
-      );
+      const corrections = idx.byType.get("corrective_instruction") ?? [];
       const count = corrections.length;
       return `Received ${count} corrective instruction${count > 1 ? "s" : ""}`;
     }
-    // success
-    const hasTestPass = signals.some(
-      (s) =>
-        s.event_type === "tool_success" && s.data?.test_passed === true
-    );
-    return hasTestPass
+    return idx.hasTestPass
       ? "Task completed with passing tests"
       : "Task completed without test verification";
   }
 
   private buildInterruptContext(
-    signals: SessionSignal[]
+    idx: SignalIndex
   ): ExperienceEntry["interrupt_context"] {
-    const postTurns = signals.filter(
-      (s) => s.event_type === "post_interrupt_turn"
-    );
-    const prompts = postTurns
-      .map((s) => (s.data?.prompt as string) ?? "")
-      .filter(Boolean);
-
     return {
-      turns_captured: postTurns.length,
-      dialogue_summary: prompts.join("; ").slice(0, 500),
+      turns_captured: idx.postInterruptPrompts.length,
+      dialogue_summary: idx.postInterruptPrompts.join("; ").slice(0, 500),
     };
-  }
-
-  private getUniqueToolNames(signals: SessionSignal[]): string[] {
-    const tools = new Set<string>();
-    for (const signal of signals) {
-      if (signal.data?.tool_name && typeof signal.data.tool_name === "string") {
-        tools.add(signal.data.tool_name);
-      }
-    }
-    return [...tools];
   }
 }
