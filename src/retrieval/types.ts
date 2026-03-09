@@ -1,7 +1,7 @@
 /**
  * Retrieval types — SPECIFICATION Section 4.3
  */
-import type { ExperienceEntry, AcmMode } from "../store/types.js";
+import type { ExperienceEntry } from "../store/types.js";
 
 export interface RetrievalResult {
   entry: ExperienceEntry;
