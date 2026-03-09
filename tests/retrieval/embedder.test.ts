@@ -48,4 +48,21 @@ describe("Embedder", () => {
     const fresh = new Embedder();
     await expect(fresh.embed("test")).rejects.toThrow("not initialized");
   });
+
+  it("allows retry after initialization failure", async () => {
+    const fresh = new Embedder();
+    // First call: dispose sets pipeline to null, so embed would fail
+    // We test that after dispose (simulating failure), reinitialize works
+    await fresh.initialize();
+    expect(fresh.initialized).toBe(true);
+    fresh.dispose();
+    expect(fresh.initialized).toBe(false);
+    // Re-initialize should succeed (initPromise was cleared by dispose)
+    await fresh.initialize();
+    expect(fresh.initialized).toBe(true);
+    const result = await fresh.embed("retry test");
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(result.length).toBe(384);
+    fresh.dispose();
+  });
 });

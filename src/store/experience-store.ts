@@ -128,15 +128,26 @@ export class ExperienceStore {
     }
 
     const results: EntryWithEmbedding[] = [];
+    let skippedCount = 0;
     for (const row of rows) {
       try {
         results.push({
           entry: this.rowToEntry(row),
           embedding: deserializeEmbedding(row.embedding as Buffer),
         });
-      } catch {
+      } catch (err) {
         // Skip corrupt embedding rows rather than failing entire retrieval
+        const rowId = (row.id as string) ?? "unknown";
+        console.warn(
+          `[ACM] Skipping corrupt embedding row id="${rowId}": ${err instanceof Error ? err.message : String(err)}`
+        );
+        skippedCount++;
       }
+    }
+    if (skippedCount > 0) {
+      console.warn(
+        `[ACM] getAllWithEmbedding: skipped ${skippedCount} corrupt row(s)`
+      );
     }
     return results;
   }

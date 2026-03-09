@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import {
   serializeEmbedding,
@@ -27,6 +27,19 @@ describe("ExperienceStore embedding support", () => {
       for (let i = 0; i < original.length; i++) {
         expect(restored[i]).toBeCloseTo(original[i], 5);
       }
+    });
+
+    it("throws for blob with byte length not a multiple of 4", () => {
+      const buf = Buffer.from([0x01, 0x02, 0x03]);
+      expect(() => deserializeEmbedding(buf)).toThrow("not a multiple of 4");
+    });
+
+    it("throws when dimensions do not match expected", () => {
+      const small = new Float32Array([0.1, 0.2]);
+      const buf = serializeEmbedding(small);
+      expect(() => deserializeEmbedding(buf, 384)).toThrow(
+        "2 dimensions, expected 384"
+      );
     });
 
     it("handles 384-dimensional embedding", () => {
@@ -148,6 +161,41 @@ describe("ExperienceStore embedding support", () => {
       expect(results).toHaveLength(1);
       expect(results[0].entry.type).toBe("failure");
       failStore.close();
+    });
+
+    it("skips corrupt embedding rows without crashing", () => {
+      // Insert a valid entry with correct 384-dim embedding
+      const goodEmb = new Float32Array(384);
+      goodEmb[0] = 0.5;
+      store.createWithEmbedding(
+        makeEntry({ session_id: "good" }),
+        goodEmb
+      );
+
+      // Manually insert a corrupt embedding (invalid byte length) via raw SQL
+      const corruptBuf = Buffer.from([0x01, 0x02, 0x03]); // 3 bytes, not multiple of 4
+      const db = (store as any).db;
+      db.prepare(
+        `INSERT INTO experiences
+         (id, type, trigger_text, action_text, outcome_text,
+          retrieval_keys, signal_strength, signal_type,
+          session_id, timestamp, interrupt_context, embedding)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        "corrupt-id", "success", "trigger", "action", "outcome",
+        '["key"]', 0.8, "uninterrupted_completion",
+        "corrupt-session", new Date().toISOString(), null, corruptBuf
+      );
+
+      // Should return only the good entry, skipping corrupt
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const results = store.getAllWithEmbedding();
+      expect(results).toHaveLength(1);
+      expect(results[0].entry.session_id).toBe("good");
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("corrupt-id")
+      );
+      warnSpy.mockRestore();
     });
 
     it("returns empty for disabled mode", () => {

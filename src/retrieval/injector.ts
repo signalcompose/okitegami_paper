@@ -1,5 +1,5 @@
 /**
- * Injection text formatting — SPECIFICATION Section 3.1
+ * Injection text formatting — SPECIFICATION Section 3.1 (injection format)
  * Formats retrieval results into compact context injection text.
  * Budget: ~500 tokens ≈ 2000 characters.
  */

@@ -14,14 +14,19 @@ export class Retriever {
   retrieve(queryEmbedding: Float32Array, topK: number): RetrievalResult[] {
     const candidates = this.store.getAllWithEmbedding();
 
-    const scored: RetrievalResult[] = candidates.map(({ entry, embedding }) => {
-      const similarity = cosineSimilarity(queryEmbedding, embedding);
-      return {
-        entry,
-        similarity,
-        score: similarity * entry.signal_strength,
-      };
-    });
+    const scored: RetrievalResult[] = [];
+    for (const { entry, embedding } of candidates) {
+      try {
+        const similarity = cosineSimilarity(queryEmbedding, embedding);
+        scored.push({
+          entry,
+          similarity,
+          score: similarity * entry.signal_strength,
+        });
+      } catch {
+        // Skip entries with dimension mismatch (corrupt embedding)
+      }
+    }
 
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topK);
