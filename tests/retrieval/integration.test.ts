@@ -112,10 +112,7 @@ describe("Phase 4 Integration: write → embed → retrieve → inject", () => {
 
     const emb = await embedder.embed("test query for mode filter");
 
-    successStore.createWithEmbedding(
-      makeEntry({ type: "success", session_id: "mode-s" }),
-      emb
-    );
+    successStore.createWithEmbedding(makeEntry({ type: "success", session_id: "mode-s" }), emb);
     successStore.createWithEmbedding(
       makeEntry({
         type: "failure",

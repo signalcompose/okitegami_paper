@@ -26,10 +26,7 @@ describe("loadConfig", () => {
   it("loads config from JSON file", () => {
     mkdirSync(testDir, { recursive: true });
     const configPath = join(testDir, "acm.json");
-    writeFileSync(
-      configPath,
-      JSON.stringify({ mode: "success_only", top_k: 10 })
-    );
+    writeFileSync(configPath, JSON.stringify({ mode: "success_only", top_k: 10 }));
 
     const config = loadConfig(configPath);
     expect(config.mode).toBe("success_only");
@@ -56,10 +53,7 @@ describe("loadConfig", () => {
   it("throws on out-of-range promotion_threshold", () => {
     mkdirSync(testDir, { recursive: true });
     const configPath = join(testDir, "bad.json");
-    writeFileSync(
-      configPath,
-      JSON.stringify({ promotion_threshold: 1.5 })
-    );
+    writeFileSync(configPath, JSON.stringify({ promotion_threshold: 1.5 }));
 
     expect(() => loadConfig(configPath)).toThrow();
   });

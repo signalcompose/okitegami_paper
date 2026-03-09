@@ -21,18 +21,9 @@ describe("Retriever", () => {
     const emb2 = new Float32Array([0.9, 0.1, 0]);
     const emb3 = new Float32Array([0, 1, 0]);
 
-    store.createWithEmbedding(
-      makeEntry({ signal_strength: 0.5, session_id: "s1" }),
-      emb1
-    );
-    store.createWithEmbedding(
-      makeEntry({ signal_strength: 0.9, session_id: "s2" }),
-      emb2
-    );
-    store.createWithEmbedding(
-      makeEntry({ signal_strength: 0.8, session_id: "s3" }),
-      emb3
-    );
+    store.createWithEmbedding(makeEntry({ signal_strength: 0.5, session_id: "s1" }), emb1);
+    store.createWithEmbedding(makeEntry({ signal_strength: 0.9, session_id: "s2" }), emb2);
+    store.createWithEmbedding(makeEntry({ signal_strength: 0.8, session_id: "s3" }), emb3);
 
     const query = new Float32Array([1, 0, 0]);
     const results = retriever.retrieve(query, 2);
@@ -45,10 +36,7 @@ describe("Retriever", () => {
 
   it("skips entries without embeddings", () => {
     store.create(makeEntry({ session_id: "no-emb" }));
-    store.createWithEmbedding(
-      makeEntry({ session_id: "has-emb" }),
-      new Float32Array([1, 0, 0])
-    );
+    store.createWithEmbedding(makeEntry({ session_id: "has-emb" }), new Float32Array([1, 0, 0]));
 
     const query = new Float32Array([1, 0, 0]);
     const results = retriever.retrieve(query, 10);
@@ -58,10 +46,7 @@ describe("Retriever", () => {
   });
 
   it("returns fewer than K if not enough entries", () => {
-    store.createWithEmbedding(
-      makeEntry(),
-      new Float32Array([1, 0, 0])
-    );
+    store.createWithEmbedding(makeEntry(), new Float32Array([1, 0, 0]));
 
     const query = new Float32Array([1, 0, 0]);
     const results = retriever.retrieve(query, 5);
@@ -75,15 +60,10 @@ describe("Retriever", () => {
   });
 
   it("returns empty array in disabled mode", () => {
-    const disabledStore = new ExperienceStore(
-      makeConfig({ mode: "disabled" })
-    );
+    const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
     const disabledRetriever = new Retriever(disabledStore);
 
-    disabledStore.createWithEmbedding(
-      makeEntry(),
-      new Float32Array([1, 0, 0])
-    );
+    disabledStore.createWithEmbedding(makeEntry(), new Float32Array([1, 0, 0]));
 
     const results = disabledRetriever.retrieve(new Float32Array([1, 0, 0]), 5);
     expect(results).toHaveLength(0);
@@ -91,16 +71,11 @@ describe("Retriever", () => {
   });
 
   it("filters success_only mode", () => {
-    const successStore = new ExperienceStore(
-      makeConfig({ mode: "success_only" })
-    );
+    const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
     const successRetriever = new Retriever(successStore);
     const emb = new Float32Array([1, 0, 0]);
 
-    successStore.createWithEmbedding(
-      makeEntry({ type: "success", session_id: "s-success" }),
-      emb
-    );
+    successStore.createWithEmbedding(makeEntry({ type: "success", session_id: "s-success" }), emb);
     successStore.createWithEmbedding(
       makeEntry({
         type: "failure",
@@ -118,16 +93,11 @@ describe("Retriever", () => {
   });
 
   it("filters failure_only mode", () => {
-    const failStore = new ExperienceStore(
-      makeConfig({ mode: "failure_only" })
-    );
+    const failStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
     const failRetriever = new Retriever(failStore);
     const emb = new Float32Array([1, 0, 0]);
 
-    failStore.createWithEmbedding(
-      makeEntry({ type: "success", session_id: "s-success" }),
-      emb
-    );
+    failStore.createWithEmbedding(makeEntry({ type: "success", session_id: "s-success" }), emb);
     failStore.createWithEmbedding(
       makeEntry({
         type: "failure",
@@ -146,10 +116,7 @@ describe("Retriever", () => {
 
   it("score = similarity * signal_strength", () => {
     const emb = new Float32Array([1, 0, 0]);
-    store.createWithEmbedding(
-      makeEntry({ signal_strength: 0.8 }),
-      emb
-    );
+    store.createWithEmbedding(makeEntry({ signal_strength: 0.8 }), emb);
 
     const query = new Float32Array([1, 0, 0]);
     const results = retriever.retrieve(query, 1);

@@ -12,9 +12,21 @@ describe("initializeDatabase", () => {
   afterEach(() => {
     db?.close();
     for (const p of cleanupPaths) {
-      try { unlinkSync(p); } catch { /* ignore */ }
-      try { unlinkSync(p + "-wal"); } catch { /* ignore */ }
-      try { unlinkSync(p + "-shm"); } catch { /* ignore */ }
+      try {
+        unlinkSync(p);
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(p + "-wal");
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(p + "-shm");
+      } catch {
+        /* ignore */
+      }
     }
     cleanupPaths.length = 0;
   });
@@ -22,9 +34,11 @@ describe("initializeDatabase", () => {
   it("creates experiences table with correct columns", () => {
     db = initializeDatabase(":memory:");
 
-    const tableInfo = db
-      .prepare("PRAGMA table_info(experiences)")
-      .all() as Array<{ name: string; type: string; notnull: number }>;
+    const tableInfo = db.prepare("PRAGMA table_info(experiences)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+    }>;
 
     const columnNames = tableInfo.map((c) => c.name);
     expect(columnNames).toContain("id");
@@ -45,9 +59,7 @@ describe("initializeDatabase", () => {
     db = initializeDatabase(":memory:");
 
     const indexes = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'experiences'"
-      )
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'experiences'")
       .all() as Array<{ name: string }>;
 
     const indexNames = indexes.map((i) => i.name);
@@ -66,9 +78,7 @@ describe("initializeDatabase", () => {
     // Second call on same file should not throw
     db = initializeDatabase(dbPath);
 
-    const tableInfo = db
-      .prepare("PRAGMA table_info(experiences)")
-      .all() as Array<{ name: string }>;
+    const tableInfo = db.prepare("PRAGMA table_info(experiences)").all() as Array<{ name: string }>;
     expect(tableInfo.map((c) => c.name)).toContain("id");
   });
 });

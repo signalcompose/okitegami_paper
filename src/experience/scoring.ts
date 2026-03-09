@@ -61,8 +61,7 @@ export function computeSuccessStrength(
     return null;
   }
 
-  const toolSuccessRatio =
-    totalToolCalls > 0 ? summary.counts.tool_success / totalToolCalls : 0;
+  const toolSuccessRatio = totalToolCalls > 0 ? summary.counts.tool_success / totalToolCalls : 0;
 
   // Test pass + uninterrupted → 0.70–0.85
   if (summary.has_test_pass) {
@@ -79,9 +78,7 @@ export function computeSuccessStrength(
  * this always evaluates corrective count regardless of interrupt state.
  * Used when both interrupt and corrective failures should be generated.
  */
-export function computeCorrectiveStrength(
-  correctiveCount: number
-): number | null {
+export function computeCorrectiveStrength(correctiveCount: number): number | null {
   if (correctiveCount < 3) return null;
   return round(Math.min(0.8, 0.6 + (correctiveCount - 3) * 0.05));
 }

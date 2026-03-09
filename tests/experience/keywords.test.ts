@@ -79,9 +79,7 @@ describe("extractRetrievalKeys", () => {
   });
 
   it("handles signals with null data", () => {
-    const signals: SessionSignal[] = [
-      makeSignal("stop", null),
-    ];
+    const signals: SessionSignal[] = [makeSignal("stop", null)];
     const keys = extractRetrievalKeys(signals);
     expect(keys).toEqual([]);
   });

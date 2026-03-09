@@ -66,16 +66,12 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
       "Record a raw session signal directly to DB (debug/test only — hooks use SignalCollector)",
       {
         session_id: z.string().describe("Session identifier"),
-        event_type: z.string().describe(
-          `Signal event type: ${EVENT_TYPES.join(", ")}`
-        ),
-        data: z.string().optional().describe(
-          "Event-specific data as JSON string"
-        ),
+        event_type: z.string().describe(`Signal event type: ${EVENT_TYPES.join(", ")}`),
+        data: z.string().optional().describe("Event-specific data as JSON string"),
       },
       (params) => {
         try {
-          if (!EVENT_TYPES.includes(params.event_type as any)) {
+          if (!EVENT_TYPES.includes(params.event_type as (typeof EVENT_TYPES)[number])) {
             throw new Error(
               `Invalid event_type "${params.event_type}". Must be one of: ${EVENT_TYPES.join(", ")}`
             );
@@ -113,10 +109,8 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
 
     if (options.experienceStore) {
       const experienceStore = options.experienceStore;
-      const captureTurns =
-        options.capture_turns ?? DEFAULT_CONFIG.capture_turns;
-      const promotionThreshold =
-        options.promotion_threshold ?? DEFAULT_CONFIG.promotion_threshold;
+      const captureTurns = options.capture_turns ?? DEFAULT_CONFIG.capture_turns;
+      const promotionThreshold = options.promotion_threshold ?? DEFAULT_CONFIG.promotion_threshold;
       const generator = new ExperienceGenerator({
         capture_turns: captureTurns,
         promotion_threshold: promotionThreshold,
@@ -240,7 +234,9 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             const updated = experienceStore.updateEmbedding(entry.id, embedding);
 
             if (!updated) {
-              return toolError(`Failed to update embedding for entry ${entry.id}: UPDATE affected 0 rows`);
+              return toolError(
+                `Failed to update embedding for entry ${entry.id}: UPDATE affected 0 rows`
+              );
             }
 
             return toolResult({

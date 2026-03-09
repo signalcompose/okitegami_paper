@@ -4,9 +4,7 @@
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
 import { DEFAULT_CONFIG } from "../../src/store/types.js";
 
-export function makeEntry(
-  overrides: Partial<ExperienceEntry> = {}
-): Omit<ExperienceEntry, "id"> {
+export function makeEntry(overrides: Partial<ExperienceEntry> = {}): Omit<ExperienceEntry, "id"> {
   return {
     type: "success",
     trigger: "Fix bug in auth module",

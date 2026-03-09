@@ -7,6 +7,7 @@ const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 
 export class Embedder {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @xenova/transformers pipeline has no exported type
   private pipeline: any = null;
   private _initialized = false;
   private initPromise: Promise<void> | null = null;
@@ -47,14 +48,10 @@ export class Embedder {
 
     const data = output?.data;
     if (!(data instanceof Float32Array)) {
-      throw new Error(
-        `Expected Float32Array from pipeline, got ${typeof data}`
-      );
+      throw new Error(`Expected Float32Array from pipeline, got ${typeof data}`);
     }
     if (data.length !== EMBEDDING_DIM) {
-      throw new Error(
-        `Expected ${EMBEDDING_DIM} dimensions, got ${data.length}`
-      );
+      throw new Error(`Expected ${EMBEDDING_DIM} dimensions, got ${data.length}`);
     }
     return new Float32Array(data);
   }

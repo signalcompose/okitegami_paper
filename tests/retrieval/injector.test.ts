@@ -35,7 +35,9 @@ describe("formatInjection", () => {
     const result = formatInjection([makeResult()]);
     expect(result).toContain("[ACM Context]");
     expect(result).toContain("Past relevant experience:");
-    expect(result).toContain("SUCCESS: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.72)");
+    expect(result).toContain(
+      "SUCCESS: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.72)"
+    );
   });
 
   it("formats failure entry with dialogue summary", () => {
@@ -51,7 +53,9 @@ describe("formatInjection", () => {
         score: 0.85,
       }),
     ]);
-    expect(result).toContain('FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens, user feedback: "Wrong file was edited" (strength: 0.85)');
+    expect(result).toContain(
+      'FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens, user feedback: "Wrong file was edited" (strength: 0.85)'
+    );
   });
 
   it("formats failure entry without dialogue summary", () => {
@@ -63,7 +67,9 @@ describe("formatInjection", () => {
         score: 0.63,
       }),
     ]);
-    expect(result).toContain("FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.63)");
+    expect(result).toContain(
+      "FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.63)"
+    );
   });
 
   it("includes [ACM Context] header", () => {

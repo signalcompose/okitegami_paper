@@ -5,9 +5,7 @@
 import type { SessionSummary } from "../../src/signals/signal-collector.js";
 import type { EventType, SessionSignal } from "../../src/signals/types.js";
 
-export function makeSummary(
-  overrides: Partial<SessionSummary> = {}
-): SessionSummary {
+export function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
   const defaultCounts: Record<EventType, number> = {
     interrupt: 0,
     post_interrupt_turn: 0,

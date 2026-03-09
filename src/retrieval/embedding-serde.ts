@@ -4,17 +4,11 @@
 
 export function serializeEmbedding(embedding: Float32Array): Buffer {
   return Buffer.from(
-    embedding.buffer.slice(
-      embedding.byteOffset,
-      embedding.byteOffset + embedding.byteLength
-    )
+    embedding.buffer.slice(embedding.byteOffset, embedding.byteOffset + embedding.byteLength)
   );
 }
 
-export function deserializeEmbedding(
-  blob: Buffer,
-  expectedDim?: number
-): Float32Array {
+export function deserializeEmbedding(blob: Buffer, expectedDim?: number): Float32Array {
   if (blob.byteLength % 4 !== 0) {
     throw new Error(
       `Embedding BLOB has invalid byte length ${blob.byteLength} (not a multiple of 4)`
@@ -25,9 +19,7 @@ export function deserializeEmbedding(
   view.set(blob);
   const result = new Float32Array(ab);
   if (expectedDim !== undefined && result.length !== expectedDim) {
-    throw new Error(
-      `Embedding has ${result.length} dimensions, expected ${expectedDim}`
-    );
+    throw new Error(`Embedding has ${result.length} dimensions, expected ${expectedDim}`);
   }
   return result;
 }

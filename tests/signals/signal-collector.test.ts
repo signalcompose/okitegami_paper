@@ -54,22 +54,16 @@ describe("SignalCollector", () => {
       collector.handleUserPrompt(sessionId, "That's wrong, try again");
 
       const signals = store.getBySession(sessionId);
-      const corrective = signals.find(
-        (s) => s.event_type === "corrective_instruction"
-      );
+      const corrective = signals.find((s) => s.event_type === "corrective_instruction");
       expect(corrective).toBeDefined();
-      expect(corrective!.data).toEqual(
-        expect.objectContaining({ pattern: expect.any(String) })
-      );
+      expect(corrective!.data).toEqual(expect.objectContaining({ pattern: expect.any(String) }));
     });
 
     it("does not record post_interrupt_turn without prior interrupt", () => {
       collector.handleUserPrompt(sessionId, "Please implement login");
 
       const signals = store.getBySession(sessionId);
-      const postInterrupt = signals.find(
-        (s) => s.event_type === "post_interrupt_turn"
-      );
+      const postInterrupt = signals.find((s) => s.event_type === "post_interrupt_turn");
       expect(postInterrupt).toBeUndefined();
     });
 
@@ -83,9 +77,7 @@ describe("SignalCollector", () => {
       collector.handleUserPrompt(sessionId, "Turn 4 - should not be captured");
 
       const signals = store.getBySession(sessionId);
-      const postInterruptSignals = signals.filter(
-        (s) => s.event_type === "post_interrupt_turn"
-      );
+      const postInterruptSignals = signals.filter((s) => s.event_type === "post_interrupt_turn");
       expect(postInterruptSignals).toHaveLength(3);
     });
 
@@ -93,13 +85,9 @@ describe("SignalCollector", () => {
       collector.handleUserPrompt(sessionId, "それは違う、こうして");
 
       const signals = store.getBySession(sessionId);
-      const corrective = signals.find(
-        (s) => s.event_type === "corrective_instruction"
-      );
+      const corrective = signals.find((s) => s.event_type === "corrective_instruction");
       expect(corrective).toBeDefined();
-      expect(corrective!.data).toEqual(
-        expect.objectContaining({ language: "ja" })
-      );
+      expect(corrective!.data).toEqual(expect.objectContaining({ language: "ja" }));
     });
   });
 
@@ -110,9 +98,7 @@ describe("SignalCollector", () => {
       const signals = store.getBySession(sessionId);
       expect(signals).toHaveLength(1);
       expect(signals[0].event_type).toBe("tool_success");
-      expect(signals[0].data).toEqual(
-        expect.objectContaining({ tool_name: "Read" })
-      );
+      expect(signals[0].data).toEqual(expect.objectContaining({ tool_name: "Read" }));
     });
 
     it("detects test runner with success", () => {
@@ -156,9 +142,7 @@ describe("SignalCollector", () => {
       });
 
       const signals = store.getBySession(sessionId);
-      expect(signals[0].data).toEqual(
-        expect.objectContaining({ is_test_runner: false })
-      );
+      expect(signals[0].data).toEqual(expect.objectContaining({ is_test_runner: false }));
     });
   });
 

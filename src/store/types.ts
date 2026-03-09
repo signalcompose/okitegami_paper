@@ -10,12 +10,7 @@ export const SIGNAL_TYPES = [
 ] as const;
 export type SignalType = (typeof SIGNAL_TYPES)[number];
 
-export const ACM_MODES = [
-  "disabled",
-  "success_only",
-  "failure_only",
-  "full",
-] as const;
+export const ACM_MODES = ["disabled", "success_only", "failure_only", "full"] as const;
 export type AcmMode = (typeof ACM_MODES)[number];
 
 export interface InterruptContext {

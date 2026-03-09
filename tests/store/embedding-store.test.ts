@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ExperienceStore } from "../../src/store/experience-store.js";
-import {
-  serializeEmbedding,
-  deserializeEmbedding,
-} from "../../src/retrieval/embedding-serde.js";
+import { serializeEmbedding, deserializeEmbedding } from "../../src/retrieval/embedding-serde.js";
 import { makeEntry, makeConfig } from "../retrieval/helpers.js";
 
 describe("ExperienceStore embedding support", () => {
@@ -37,9 +34,7 @@ describe("ExperienceStore embedding support", () => {
     it("throws when dimensions do not match expected", () => {
       const small = new Float32Array([0.1, 0.2]);
       const buf = serializeEmbedding(small);
-      expect(() => deserializeEmbedding(buf, 384)).toThrow(
-        "2 dimensions, expected 384"
-      );
+      expect(() => deserializeEmbedding(buf, 384)).toThrow("2 dimensions, expected 384");
     });
 
     it("handles 384-dimensional embedding", () => {
@@ -95,10 +90,7 @@ describe("ExperienceStore embedding support", () => {
       store.create(makeEntry({ session_id: "no-emb" }));
 
       const embedding = new Float32Array([0.1, 0.2, 0.3]);
-      store.createWithEmbedding(
-        makeEntry({ session_id: "has-emb" }),
-        embedding
-      );
+      store.createWithEmbedding(makeEntry({ session_id: "has-emb" }), embedding);
 
       const results = store.getAllWithEmbedding();
       expect(results).toHaveLength(1);
@@ -114,15 +106,10 @@ describe("ExperienceStore embedding support", () => {
     });
 
     it("filters by mode: success_only", () => {
-      const successStore = new ExperienceStore(
-        makeConfig({ mode: "success_only" })
-      );
+      const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
       const emb = new Float32Array([0.1]);
 
-      successStore.createWithEmbedding(
-        makeEntry({ type: "success" }),
-        emb
-      );
+      successStore.createWithEmbedding(makeEntry({ type: "success" }), emb);
       successStore.createWithEmbedding(
         makeEntry({
           type: "failure",
@@ -139,15 +126,10 @@ describe("ExperienceStore embedding support", () => {
     });
 
     it("filters by mode: failure_only", () => {
-      const failStore = new ExperienceStore(
-        makeConfig({ mode: "failure_only" })
-      );
+      const failStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
       const emb = new Float32Array([0.1]);
 
-      failStore.createWithEmbedding(
-        makeEntry({ type: "success" }),
-        emb
-      );
+      failStore.createWithEmbedding(makeEntry({ type: "success" }), emb);
       failStore.createWithEmbedding(
         makeEntry({
           type: "failure",
@@ -167,13 +149,11 @@ describe("ExperienceStore embedding support", () => {
       // Insert a valid entry with correct 384-dim embedding
       const goodEmb = new Float32Array(384);
       goodEmb[0] = 0.5;
-      store.createWithEmbedding(
-        makeEntry({ session_id: "good" }),
-        goodEmb
-      );
+      store.createWithEmbedding(makeEntry({ session_id: "good" }), goodEmb);
 
       // Manually insert a corrupt embedding (invalid byte length) via raw SQL
       const corruptBuf = Buffer.from([0x01, 0x02, 0x03]); // 3 bytes, not multiple of 4
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private db for test setup
       const db = (store as any).db;
       db.prepare(
         `INSERT INTO experiences
@@ -182,9 +162,18 @@ describe("ExperienceStore embedding support", () => {
           session_id, timestamp, interrupt_context, embedding)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        "corrupt-id", "success", "trigger", "action", "outcome",
-        '["key"]', 0.8, "uninterrupted_completion",
-        "corrupt-session", new Date().toISOString(), null, corruptBuf
+        "corrupt-id",
+        "success",
+        "trigger",
+        "action",
+        "outcome",
+        '["key"]',
+        0.8,
+        "uninterrupted_completion",
+        "corrupt-session",
+        new Date().toISOString(),
+        null,
+        corruptBuf
       );
 
       // Should return only the good entry, skipping corrupt
@@ -192,16 +181,12 @@ describe("ExperienceStore embedding support", () => {
       const results = store.getAllWithEmbedding();
       expect(results).toHaveLength(1);
       expect(results[0].entry.session_id).toBe("good");
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("corrupt-id")
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt-id"));
       warnSpy.mockRestore();
     });
 
     it("returns empty for disabled mode", () => {
-      const disabledStore = new ExperienceStore(
-        makeConfig({ mode: "disabled" })
-      );
+      const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
       const emb = new Float32Array([0.1]);
       disabledStore.createWithEmbedding(makeEntry(), emb);
 

@@ -41,11 +41,7 @@ export class SignalCollector {
     private options: SignalCollectorOptions
   ) {}
 
-  handleInterrupt(
-    sessionId: string,
-    toolName: string,
-    error: string
-  ): void {
+  handleInterrupt(sessionId: string, toolName: string, error: string): void {
     this.store.addSignal(sessionId, "interrupt", {
       tool_name: toolName,
       error,
@@ -54,15 +50,8 @@ export class SignalCollector {
 
   handleUserPrompt(sessionId: string, prompt: string): void {
     // Check if session was interrupted and we're still within capture window
-    const counts = this.store.countSpecificTypes(
-      sessionId,
-      "interrupt",
-      "post_interrupt_turn"
-    );
-    if (
-      counts.interrupt > 0 &&
-      counts.post_interrupt_turn < this.options.capture_turns
-    ) {
+    const counts = this.store.countSpecificTypes(sessionId, "interrupt", "post_interrupt_turn");
+    if (counts.interrupt > 0 && counts.post_interrupt_turn < this.options.capture_turns) {
       this.store.addSignal(sessionId, "post_interrupt_turn", { prompt });
     }
 
@@ -111,10 +100,7 @@ export class SignalCollector {
     };
   }
 
-  private isTestRunnerCommand(
-    toolName: string,
-    toolInput: Record<string, unknown>
-  ): boolean {
+  private isTestRunnerCommand(toolName: string, toolInput: Record<string, unknown>): boolean {
     if (toolName !== "Bash") return false;
     const command = toolInput.command;
     if (typeof command !== "string") return false;

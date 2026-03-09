@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  detectCorrectiveInstruction,
-  type CorrectiveMatch,
-} from "../../src/signals/patterns.js";
+import { detectCorrectiveInstruction } from "../../src/signals/patterns.js";
 
 describe("detectCorrectiveInstruction", () => {
   describe("English patterns", () => {

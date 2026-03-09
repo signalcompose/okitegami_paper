@@ -205,8 +205,7 @@ describe("acm_generate_experience MCP tool", () => {
       experienceStore,
     });
 
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     client = new Client({ name: "test-client", version: "0.0.1" });
     await client.connect(clientTransport);
