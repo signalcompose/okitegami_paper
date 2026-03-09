@@ -3,6 +3,15 @@ import type Database from "better-sqlite3";
 import { initializeDatabase } from "./schema.js";
 import { SIGNAL_TYPES } from "./types.js";
 import type { ExperienceEntry, AcmConfig } from "./types.js";
+import {
+  serializeEmbedding,
+  deserializeEmbedding,
+} from "../retrieval/embedding-serde.js";
+
+export interface EntryWithEmbedding {
+  entry: ExperienceEntry;
+  embedding: Float32Array;
+}
 
 export class ExperienceStore {
   private db: Database.Database;
@@ -12,6 +21,9 @@ export class ExperienceStore {
   private stmtList: Database.Statement;
   private stmtListByType: Database.Statement;
   private stmtDelete: Database.Statement;
+  private stmtUpdateEmbedding: Database.Statement;
+  private stmtAllWithEmbedding: Database.Statement;
+  private stmtAllWithEmbeddingByType: Database.Statement;
 
   constructor(config: AcmConfig) {
     this.config = config;
@@ -36,46 +48,28 @@ export class ExperienceStore {
     this.stmtDelete = this.db.prepare(
       "DELETE FROM experiences WHERE id = ?"
     );
+    this.stmtUpdateEmbedding = this.db.prepare(
+      "UPDATE experiences SET embedding = ? WHERE id = ?"
+    );
+    this.stmtAllWithEmbedding = this.db.prepare(
+      "SELECT * FROM experiences WHERE embedding IS NOT NULL"
+    );
+    this.stmtAllWithEmbeddingByType = this.db.prepare(
+      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?"
+    );
   }
 
   create(
     data: Omit<ExperienceEntry, "id">
   ): ExperienceEntry | null {
-    if (data.signal_strength < 0 || data.signal_strength > 1) {
-      throw new Error(
-        `signal_strength must be between 0 and 1, got ${data.signal_strength}`
-      );
-    }
-    if (!SIGNAL_TYPES.includes(data.signal_type)) {
-      throw new Error(
-        `Invalid signal_type "${data.signal_type}". Must be one of: ${SIGNAL_TYPES.join(", ")}`
-      );
-    }
-    if (data.signal_strength < this.config.promotion_threshold) {
-      return null;
-    }
+    return this.insertEntry(data, null);
+  }
 
-    const id = randomUUID();
-    const entry: ExperienceEntry = { id, ...data };
-
-    this.stmtInsert.run(
-      entry.id,
-      entry.type,
-      entry.trigger,
-      entry.action,
-      entry.outcome,
-      JSON.stringify(entry.retrieval_keys),
-      entry.signal_strength,
-      entry.signal_type,
-      entry.session_id,
-      entry.timestamp,
-      entry.interrupt_context
-        ? JSON.stringify(entry.interrupt_context)
-        : null,
-      null // embedding is NULL in Phase 1
-    );
-
-    return entry;
+  createWithEmbedding(
+    data: Omit<ExperienceEntry, "id">,
+    embedding: Float32Array
+  ): ExperienceEntry | null {
+    return this.insertEntry(data, serializeEmbedding(embedding));
   }
 
   getById(id: string): ExperienceEntry | null {
@@ -108,6 +102,56 @@ export class ExperienceStore {
     }
   }
 
+  updateEmbedding(id: string, embedding: Float32Array): boolean {
+    const result = this.stmtUpdateEmbedding.run(
+      serializeEmbedding(embedding),
+      id
+    );
+    return result.changes > 0;
+  }
+
+  getAllWithEmbedding(): EntryWithEmbedding[] {
+    let rows: Record<string, unknown>[];
+
+    switch (this.config.mode) {
+      case "disabled":
+        return [];
+      case "success_only":
+        rows = this.stmtAllWithEmbeddingByType.all("success") as Record<string, unknown>[];
+        break;
+      case "failure_only":
+        rows = this.stmtAllWithEmbeddingByType.all("failure") as Record<string, unknown>[];
+        break;
+      case "full":
+        rows = this.stmtAllWithEmbedding.all() as Record<string, unknown>[];
+        break;
+    }
+
+    const results: EntryWithEmbedding[] = [];
+    let skippedCount = 0;
+    for (const row of rows) {
+      try {
+        results.push({
+          entry: this.rowToEntry(row),
+          embedding: deserializeEmbedding(row.embedding as Buffer),
+        });
+      } catch (err) {
+        // Skip corrupt embedding rows rather than failing entire retrieval
+        const rowId = (row.id as string) ?? "unknown";
+        console.warn(
+          `[ACM] Skipping corrupt embedding row id="${rowId}": ${err instanceof Error ? err.message : String(err)}`
+        );
+        skippedCount++;
+      }
+    }
+    if (skippedCount > 0) {
+      console.warn(
+        `[ACM] getAllWithEmbedding: skipped ${skippedCount} corrupt row(s)`
+      );
+    }
+    return results;
+  }
+
   delete(id: string): boolean {
     const result = this.stmtDelete.run(id);
     return result.changes > 0;
@@ -115,6 +159,47 @@ export class ExperienceStore {
 
   close(): void {
     this.db.close();
+  }
+
+  private insertEntry(
+    data: Omit<ExperienceEntry, "id">,
+    embeddingBlob: Buffer | null
+  ): ExperienceEntry | null {
+    if (data.signal_strength < 0 || data.signal_strength > 1) {
+      throw new Error(
+        `signal_strength must be between 0 and 1, got ${data.signal_strength}`
+      );
+    }
+    if (!SIGNAL_TYPES.includes(data.signal_type)) {
+      throw new Error(
+        `Invalid signal_type "${data.signal_type}". Must be one of: ${SIGNAL_TYPES.join(", ")}`
+      );
+    }
+    if (data.signal_strength < this.config.promotion_threshold) {
+      return null;
+    }
+
+    const id = randomUUID();
+    const entry: ExperienceEntry = { id, ...data };
+
+    this.stmtInsert.run(
+      entry.id,
+      entry.type,
+      entry.trigger,
+      entry.action,
+      entry.outcome,
+      JSON.stringify(entry.retrieval_keys),
+      entry.signal_strength,
+      entry.signal_type,
+      entry.session_id,
+      entry.timestamp,
+      entry.interrupt_context
+        ? JSON.stringify(entry.interrupt_context)
+        : null,
+      embeddingBlob
+    );
+
+    return entry;
   }
 
   private listByType(type: "success" | "failure"): ExperienceEntry[] {

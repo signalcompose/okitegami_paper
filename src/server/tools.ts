@@ -7,14 +7,38 @@ import { EVENT_TYPES } from "../signals/types.js";
 import { DEFAULT_CONFIG } from "../store/types.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { ExperienceGenerator } from "../experience/generator.js";
+import { Embedder } from "../retrieval/embedder.js";
+import { Retriever } from "../retrieval/retriever.js";
+import { formatInjection } from "../retrieval/injector.js";
+import type { ExperienceEntry } from "../store/types.js";
 
 const VERSION = "0.1.0";
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function toolResult(data: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(data) }] };
+}
+
+function buildEmbeddingText(entry: ExperienceEntry): string {
+  return [entry.trigger, ...entry.retrieval_keys].join(" ");
+}
+
+function toolError(message: string) {
+  return {
+    isError: true as const,
+    content: [{ type: "text" as const, text: message }],
+  };
+}
 
 export interface AcmServerOptions {
   db?: Database.Database;
   capture_turns?: number;
   promotion_threshold?: number;
   experienceStore?: ExperienceStore;
+  embedder?: Embedder;
 }
 
 export function createAcmServer(options?: AcmServerOptions): McpServer {
@@ -24,18 +48,11 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
   });
 
   server.tool("acm_health", "Check ACM server health status", {}, () => {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            status: "ok",
-            version: VERSION,
-            timestamp: new Date().toISOString(),
-          }),
-        },
-      ],
-    };
+    return toolResult({
+      status: "ok",
+      version: VERSION,
+      timestamp: new Date().toISOString(),
+    });
   });
 
   if (options?.db) {
@@ -71,21 +88,9 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             params.event_type as (typeof EVENT_TYPES)[number],
             parsedData
           );
-          return {
-            content: [
-              { type: "text" as const, text: JSON.stringify(signal) },
-            ],
-          };
+          return toolResult(signal);
         } catch (err) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-              },
-            ],
-          };
+          return toolError(`Error: ${errorMessage(err)}`);
         }
       }
     );
@@ -99,21 +104,9 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
       (params) => {
         try {
           const summary = collector.getSessionSummary(params.session_id);
-          return {
-            content: [
-              { type: "text" as const, text: JSON.stringify(summary) },
-            ],
-          };
+          return toolResult(summary);
         } catch (err) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-              },
-            ],
-          };
+          return toolError(`Error: ${errorMessage(err)}`);
         }
       }
     );
@@ -159,7 +152,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
                 }
               } catch (persistErr) {
                 errors.push(
-                  `Failed to persist ${entry.type} entry (signal_type: ${entry.signal_type}): ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`
+                  `Failed to persist ${entry.type} entry (signal_type: ${entry.signal_type}): ${errorMessage(persistErr)}`
                 );
               }
             }
@@ -175,24 +168,88 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             }
 
             return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify(result),
-                },
-              ],
+              ...toolResult(result),
               isError: errors.length > 0,
             };
           } catch (err) {
-            return {
-              isError: true,
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Error generating experience: ${err instanceof Error ? err.message : String(err)}`,
-                },
-              ],
-            };
+            return toolError(`Error generating experience: ${errorMessage(err)}`);
+          }
+        }
+      );
+    }
+
+    if (options.experienceStore && options.embedder) {
+      const experienceStore = options.experienceStore;
+      const embedder = options.embedder;
+      const retriever = new Retriever(experienceStore);
+
+      server.tool(
+        "acm_retrieve",
+        "Retrieve relevant past experiences for a query and return injection text (SessionStart hook)",
+        {
+          query: z.string().describe("Query text (e.g., initial user message)"),
+          top_k: z.number().optional().describe("Number of results (default: 5)"),
+        },
+        async (params) => {
+          let queryEmbedding: Float32Array;
+          try {
+            await embedder.initialize();
+            queryEmbedding = await embedder.embed(params.query);
+          } catch (err) {
+            return toolError(`Embedding error: ${errorMessage(err)}`);
+          }
+
+          try {
+            const topK = params.top_k ?? DEFAULT_CONFIG.top_k;
+            const results = retriever.retrieve(queryEmbedding, topK);
+            const injectionText = formatInjection(results);
+
+            return toolResult({
+              injection_text: injectionText,
+              entries_count: results.length,
+              entries: results.map((r) => ({
+                id: r.entry.id,
+                type: r.entry.type,
+                trigger: r.entry.trigger,
+                similarity: Number(r.similarity.toFixed(4)),
+                score: Number(r.score.toFixed(4)),
+              })),
+            });
+          } catch (err) {
+            return toolError(`Retrieval error: ${errorMessage(err)}`);
+          }
+        }
+      );
+
+      server.tool(
+        "acm_store_embedding",
+        "Generate and store embedding for an experience entry",
+        {
+          experience_id: z.string().uuid().describe("Experience entry ID"),
+        },
+        async (params) => {
+          try {
+            await embedder.initialize();
+            const entry = experienceStore.getById(params.experience_id);
+            if (!entry) {
+              return toolError(`Experience entry not found: ${params.experience_id}`);
+            }
+
+            const textToEmbed = buildEmbeddingText(entry);
+            const embedding = await embedder.embed(textToEmbed);
+            const updated = experienceStore.updateEmbedding(entry.id, embedding);
+
+            if (!updated) {
+              return toolError(`Failed to update embedding for entry ${entry.id}: UPDATE affected 0 rows`);
+            }
+
+            return toolResult({
+              id: entry.id,
+              embedded: true,
+              dimensions: embedding.length,
+            });
+          } catch (err) {
+            return toolError(`Error storing embedding: ${errorMessage(err)}`);
           }
         }
       );
