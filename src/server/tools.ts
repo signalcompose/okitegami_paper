@@ -215,11 +215,25 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
           top_k: z.number().optional().describe("Number of results (default: 5)"),
         },
         async (params) => {
+          let queryEmbedding: Float32Array;
           try {
             if (!embedder.initialized) {
               await embedder.initialize();
             }
-            const queryEmbedding = await embedder.embed(params.query);
+            queryEmbedding = await embedder.embed(params.query);
+          } catch (err) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Embedding error: ${err instanceof Error ? err.message : String(err)}`,
+                },
+              ],
+            };
+          }
+
+          try {
             const topK = params.top_k ?? DEFAULT_CONFIG.top_k;
             const results = retriever.retrieve(queryEmbedding, topK);
             const injectionText = formatInjection(results);
@@ -248,7 +262,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
               content: [
                 {
                   type: "text" as const,
-                  text: `Error retrieving experiences: ${err instanceof Error ? err.message : String(err)}`,
+                  text: `Retrieval error: ${err instanceof Error ? err.message : String(err)}`,
                 },
               ],
             };
@@ -287,13 +301,25 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             const embedding = await embedder.embed(textToEmbed);
             const updated = experienceStore.updateEmbedding(entry.id, embedding);
 
+            if (!updated) {
+              return {
+                isError: true,
+                content: [
+                  {
+                    type: "text" as const,
+                    text: `Failed to update embedding for entry ${entry.id}: UPDATE affected 0 rows`,
+                  },
+                ],
+              };
+            }
+
             return {
               content: [
                 {
                   type: "text" as const,
                   text: JSON.stringify({
                     id: entry.id,
-                    embedded: updated,
+                    embedded: true,
                     dimensions: embedding.length,
                   }),
                 },

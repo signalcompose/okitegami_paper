@@ -37,5 +37,8 @@ export function formatInjection(results: RetrievalResult[]): string {
     totalChars += blockLen;
   }
 
+  // Return empty if no entries fit (avoid misleading header-only output)
+  if (lines.length === 1) return "";
+
   return lines.join("\n");
 }

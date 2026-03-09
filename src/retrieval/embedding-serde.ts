@@ -12,6 +12,11 @@ export function serializeEmbedding(embedding: Float32Array): Buffer {
 }
 
 export function deserializeEmbedding(blob: Buffer): Float32Array {
+  if (blob.byteLength % 4 !== 0) {
+    throw new Error(
+      `Embedding BLOB has invalid byte length ${blob.byteLength} (not a multiple of 4)`
+    );
+  }
   const ab = new ArrayBuffer(blob.byteLength);
   const view = new Uint8Array(ab);
   view.set(blob);

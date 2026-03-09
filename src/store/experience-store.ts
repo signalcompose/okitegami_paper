@@ -127,10 +127,18 @@ export class ExperienceStore {
         break;
     }
 
-    return rows.map((row) => ({
-      entry: this.rowToEntry(row),
-      embedding: deserializeEmbedding(row.embedding as Buffer),
-    }));
+    const results: EntryWithEmbedding[] = [];
+    for (const row of rows) {
+      try {
+        results.push({
+          entry: this.rowToEntry(row),
+          embedding: deserializeEmbedding(row.embedding as Buffer),
+        });
+      } catch {
+        // Skip corrupt embedding rows rather than failing entire retrieval
+      }
+    }
+    return results;
   }
 
   delete(id: string): boolean {

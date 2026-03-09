@@ -22,5 +22,6 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (denom === 0) return 0;
 
   const similarity = dot / denom;
+  // Clamp to [0, 1] — negative similarity treated as no relevance for retrieval
   return Math.max(0, similarity);
 }

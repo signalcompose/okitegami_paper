@@ -22,12 +22,6 @@ describe("Retrieval MCP Tools", () => {
       ...DEFAULT_CONFIG,
       db_path: ":memory:",
     });
-    // Use the same DB for experienceStore by rebuilding with the existing db
-    experienceStore.close();
-    experienceStore = new ExperienceStore({
-      ...DEFAULT_CONFIG,
-      db_path: ":memory:",
-    });
 
     embedder = new Embedder();
     await embedder.initialize();
@@ -101,7 +95,7 @@ describe("Retrieval MCP Tools", () => {
   it("acm_store_embedding returns error for non-existent entry", async () => {
     const result = await client.callTool({
       name: "acm_store_embedding",
-      arguments: { experience_id: "non-existent-id" },
+      arguments: { experience_id: "00000000-0000-0000-0000-000000000000" },
     });
     expect(result.isError).toBe(true);
   });

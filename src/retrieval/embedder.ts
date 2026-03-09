@@ -15,9 +15,14 @@ export class Embedder {
     if (this._initialized) return;
     if (!this.initPromise) {
       this.initPromise = (async () => {
-        const { pipeline } = await import("@xenova/transformers");
-        this.pipeline = await pipeline("feature-extraction", MODEL_NAME);
-        this._initialized = true;
+        try {
+          const { pipeline } = await import("@xenova/transformers");
+          this.pipeline = await pipeline("feature-extraction", MODEL_NAME);
+          this._initialized = true;
+        } catch (err) {
+          this.initPromise = null;
+          throw err;
+        }
       })();
     }
     return this.initPromise;
@@ -40,7 +45,12 @@ export class Embedder {
       normalize: true,
     });
 
-    const data = output.data as Float32Array;
+    const data = output?.data;
+    if (!(data instanceof Float32Array)) {
+      throw new Error(
+        `Expected Float32Array from pipeline, got ${typeof data}`
+      );
+    }
     if (data.length !== EMBEDDING_DIM) {
       throw new Error(
         `Expected ${EMBEDDING_DIM} dimensions, got ${data.length}`
@@ -52,6 +62,7 @@ export class Embedder {
   dispose(): void {
     this.pipeline = null;
     this._initialized = false;
+    this.initPromise = null;
   }
 }
 
