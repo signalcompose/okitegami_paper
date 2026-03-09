@@ -5,12 +5,16 @@ import { SessionSignalStore } from "../signals/session-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 import { EVENT_TYPES } from "../signals/types.js";
 import { DEFAULT_CONFIG } from "../store/types.js";
+import { ExperienceStore } from "../store/experience-store.js";
+import { ExperienceGenerator } from "../experience/generator.js";
 
 const VERSION = "0.1.0";
 
 export interface AcmServerOptions {
   db?: Database.Database;
   capture_turns?: number;
+  promotion_threshold?: number;
+  experienceStore?: ExperienceStore;
 }
 
 export function createAcmServer(options?: AcmServerOptions): McpServer {
@@ -113,6 +117,69 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
         }
       }
     );
+
+    if (options.experienceStore) {
+      const experienceStore = options.experienceStore;
+      const captureTurns =
+        options.capture_turns ?? DEFAULT_CONFIG.capture_turns;
+      const promotionThreshold =
+        options.promotion_threshold ?? DEFAULT_CONFIG.promotion_threshold;
+      const generator = new ExperienceGenerator({
+        capture_turns: captureTurns,
+        promotion_threshold: promotionThreshold,
+      });
+
+      server.tool(
+        "acm_generate_experience",
+        "Generate experience entries from session signals (SessionEnd hook)",
+        {
+          session_id: z.string().describe("Session identifier"),
+        },
+        (params) => {
+          try {
+            const summary = collector.getSessionSummary(params.session_id);
+            const signals = store.getBySession(params.session_id);
+            const entries = generator.generate({
+              session_id: params.session_id,
+              summary,
+              signals,
+            });
+
+            const persisted: string[] = [];
+            for (const entry of entries) {
+              const saved = experienceStore.create(entry);
+              if (saved) {
+                persisted.push(saved.id);
+              }
+            }
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    session_id: params.session_id,
+                    generated: entries.length,
+                    persisted: persisted.length,
+                    ids: persisted,
+                  }),
+                },
+              ],
+            };
+          } catch (err) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                },
+              ],
+            };
+          }
+        }
+      );
+    }
   }
 
   return server;
