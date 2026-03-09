@@ -20,6 +20,8 @@ export class SessionSignalStore {
   private getBySessionStmt: Database.Statement;
   private countByTypeStmt: Database.Statement;
   private clearSessionStmt: Database.Statement;
+  private countSpecificTypesStmt: Database.Statement;
+  private hasTestPassStmt: Database.Statement;
 
   constructor(private db: Database.Database) {
     this.insertStmt = db.prepare(
@@ -33,6 +35,12 @@ export class SessionSignalStore {
     );
     this.clearSessionStmt = db.prepare(
       "DELETE FROM session_signals WHERE session_id = ?"
+    );
+    this.countSpecificTypesStmt = db.prepare(
+      "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN (?, ?) GROUP BY event_type"
+    );
+    this.hasTestPassStmt = db.prepare(
+      "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = 'tool_success' AND json_extract(data, '$.test_passed') = 1 LIMIT 1"
     );
   }
 
@@ -81,6 +89,27 @@ export class SessionSignalStore {
     }
 
     return counts;
+  }
+
+  countSpecificTypes(
+    sessionId: string,
+    type1: EventType,
+    type2: EventType
+  ): Record<string, number> {
+    const rows = this.countSpecificTypesStmt.all(sessionId, type1, type2) as Array<{
+      event_type: string;
+      count: number;
+    }>;
+    const counts: Record<string, number> = { [type1]: 0, [type2]: 0 };
+    for (const row of rows) {
+      counts[row.event_type] = row.count;
+    }
+    return counts;
+  }
+
+  hasTestPass(sessionId: string): boolean {
+    const row = this.hasTestPassStmt.get(sessionId);
+    return row != null;
   }
 
   clearSession(sessionId: string): number {

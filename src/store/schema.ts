@@ -1,6 +1,9 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { EVENT_TYPES } from "../signals/types.js";
+
+const EVENT_TYPES_SQL = EVENT_TYPES.map((t) => `'${t}'`).join(",");
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS experiences (
@@ -28,16 +31,16 @@ CREATE INDEX IF NOT EXISTS idx_experiences_timestamp
 CREATE TABLE IF NOT EXISTS session_signals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id TEXT NOT NULL,
-  event_type TEXT NOT NULL CHECK(event_type IN (
-    'interrupt', 'post_interrupt_turn', 'corrective_instruction',
-    'tool_success', 'stop', 'rewind'
-  )),
+  event_type TEXT NOT NULL CHECK(event_type IN (${EVENT_TYPES_SQL})),
   data TEXT,
   timestamp TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_session_signals_session_id
   ON session_signals(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_session_signals_session_event
+  ON session_signals(session_id, event_type);
 `;
 
 export function initializeDatabase(dbPath: string): Database.Database {

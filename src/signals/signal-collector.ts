@@ -54,7 +54,11 @@ export class SignalCollector {
 
   handleUserPrompt(sessionId: string, prompt: string): void {
     // Check if session was interrupted and we're still within capture window
-    const counts = this.store.countByType(sessionId);
+    const counts = this.store.countSpecificTypes(
+      sessionId,
+      "interrupt",
+      "post_interrupt_turn"
+    );
     if (
       counts.interrupt > 0 &&
       counts.post_interrupt_turn < this.options.capture_turns
@@ -97,22 +101,13 @@ export class SignalCollector {
     const counts = this.store.countByType(sessionId);
     const totalSignals = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    // Check for test pass by scanning tool_success signals
-    const signals = this.store.getBySession(sessionId);
-    const hasTestPass = signals.some(
-      (s) =>
-        s.event_type === "tool_success" &&
-        s.data?.is_test_runner === true &&
-        s.data?.test_passed === true
-    );
-
     return {
       session_id: sessionId,
       total_signals: totalSignals,
       counts,
       was_interrupted: counts.interrupt > 0,
       corrective_instruction_count: counts.corrective_instruction,
-      has_test_pass: hasTestPass,
+      has_test_pass: this.store.hasTestPass(sessionId),
     };
   }
 

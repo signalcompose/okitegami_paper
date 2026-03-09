@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { SessionSignalStore } from "../signals/session-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 import { EVENT_TYPES } from "../signals/types.js";
+import { DEFAULT_CONFIG } from "../store/types.js";
 
 const VERSION = "0.1.0";
 
@@ -36,7 +37,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
   if (options?.db) {
     const store = new SessionSignalStore(options.db);
     const collector = new SignalCollector(store, {
-      capture_turns: options.capture_turns ?? 5,
+      capture_turns: options.capture_turns ?? DEFAULT_CONFIG.capture_turns,
     });
 
     server.tool(
