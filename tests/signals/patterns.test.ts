@@ -12,11 +12,11 @@ describe("detectCorrectiveInstruction", () => {
       ["not what I meant", "that's not what I meant"],
       ["undo", "undo that change"],
       ["revert", "revert the last commit"],
-      ["wrong", "wrong approach, use Y instead"],
+      ["wrong approach", "wrong approach, use Y instead"],
       ["don't do that", "don't do that"],
-      ["stop", "stop, that's incorrect"],
+      ["stop, that's", "stop, that's incorrect"],
       ["no no no", "no no no, I said to use X"],
-      ["instead", "use map instead"],
+      ["use X instead", "use map instead"],
     ])("detects '%s' pattern in: %s", (_pattern, input) => {
       const result = detectCorrectiveInstruction(input);
       expect(result).not.toBeNull();
@@ -51,6 +51,11 @@ describe("detectCorrectiveInstruction", () => {
       "テストを書いてください",
       "ログイン機能を実装して",
       "ありがとう、助かりました",
+      "stop the loop when i exceeds n",
+      "what went wrong?",
+      "stop running after the first failure",
+      "something is wrong with the API",
+      "add a fallback instead",
     ])("does not detect corrective pattern in: %s", (input) => {
       const result = detectCorrectiveInstruction(input);
       expect(result).toBeNull();

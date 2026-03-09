@@ -41,7 +41,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
 
     server.tool(
       "acm_record_signal",
-      "Record a session signal (for hook integration and testing)",
+      "Record a raw session signal directly to DB (debug/test only — hooks use SignalCollector)",
       {
         session_id: z.string().describe("Session identifier"),
         event_type: z.string().describe(

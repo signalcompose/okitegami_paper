@@ -21,7 +21,7 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export interface HookInputBase {
   session_id: string;
   transcript_path: string;
-  cwd: string;
+  cwd?: string; // Not all hook types provide cwd
   hook_event_name: string;
 }
 

@@ -116,10 +116,12 @@ describe("SignalCollector", () => {
     });
 
     it("detects test runner with success", () => {
-      collector.handleToolSuccess(sessionId, "Bash", {
-        command: "npm run test",
-        exit_code: 0,
-      });
+      collector.handleToolSuccess(
+        sessionId,
+        "Bash",
+        { command: "npm run test" },
+        0 // exitCode from tool result
+      );
 
       const signals = store.getBySession(sessionId);
       expect(signals[0].data).toEqual(
@@ -131,10 +133,12 @@ describe("SignalCollector", () => {
     });
 
     it("detects test runner with failure", () => {
-      collector.handleToolSuccess(sessionId, "Bash", {
-        command: "vitest run",
-        exit_code: 1,
-      });
+      collector.handleToolSuccess(
+        sessionId,
+        "Bash",
+        { command: "vitest run" },
+        1 // exitCode from tool result
+      );
 
       const signals = store.getBySession(sessionId);
       expect(signals[0].data).toEqual(

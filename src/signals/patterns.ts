@@ -23,11 +23,11 @@ const PATTERNS: PatternDef[] = [
   { regex: /\bnot\s+what\s+I\s+meant\b/i, label: "not what I meant", language: "en" },
   { regex: /\bundo\b/i, label: "undo", language: "en" },
   { regex: /\brevert\b/i, label: "revert", language: "en" },
-  { regex: /\bwrong\b/i, label: "wrong", language: "en" },
+  { regex: /\bwrong\s+(approach|way|file|method)\b/i, label: "wrong approach", language: "en" },
   { regex: /\bdon'?t\s+do\s+that\b/i, label: "don't do that", language: "en" },
-  { regex: /\bstop\b/i, label: "stop", language: "en" },
+  { regex: /\bstop,?\s+(that|this|no|it)\b/i, label: "stop, that's", language: "en" },
   { regex: /\bno\s+no\b/i, label: "no no", language: "en" },
-  { regex: /\binstead\b/i, label: "instead", language: "en" },
+  { regex: /\buse\s+\S+\s+instead\b/i, label: "use X instead", language: "en" },
 
   // Japanese patterns
   { regex: /違う/, label: "違う", language: "ja" },

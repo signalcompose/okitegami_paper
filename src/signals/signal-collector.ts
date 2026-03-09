@@ -76,10 +76,11 @@ export class SignalCollector {
   handleToolSuccess(
     sessionId: string,
     toolName: string,
-    toolInput: Record<string, unknown>
+    toolInput: Record<string, unknown>,
+    exitCode?: number
   ): void {
     const isTestRunner = this.isTestRunnerCommand(toolName, toolInput);
-    const testPassed = isTestRunner && toolInput.exit_code === 0;
+    const testPassed = isTestRunner && exitCode === 0;
 
     this.store.addSignal(sessionId, "tool_success", {
       tool_name: toolName,
