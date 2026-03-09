@@ -23,8 +23,11 @@ export class Retriever {
           similarity,
           score: similarity * entry.signal_strength,
         });
-      } catch {
-        // Skip entries with dimension mismatch (corrupt embedding)
+      } catch (err) {
+        // Skip entries with dimension mismatch rather than failing entire retrieval
+        console.warn(
+          `[ACM] Skipping entry id="${entry.id}" during retrieval: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
