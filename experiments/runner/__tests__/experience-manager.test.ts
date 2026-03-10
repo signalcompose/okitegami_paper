@@ -79,6 +79,27 @@ describe("ExperienceManager", () => {
       expect(entry!.trigger).toContain("JWT");
     });
 
+    it("classifies completionRate exactly 0.8 as success", () => {
+      const entry = new ExperienceManager(TEST_DIR).generateExperience({
+        sessionId: "s-boundary",
+        completionRate: 0.8,
+        taskDescription: "Boundary test",
+        claudeOutput: "Done",
+      });
+      expect(entry!.type).toBe("success");
+      expect(entry!.signal_strength).toBeCloseTo(0.8);
+    });
+
+    it("classifies completionRate 0.79 as failure", () => {
+      const entry = new ExperienceManager(TEST_DIR).generateExperience({
+        sessionId: "s-boundary-low",
+        completionRate: 0.79,
+        taskDescription: "Boundary test",
+        claudeOutput: "Partially done",
+      });
+      expect(entry!.type).toBe("failure");
+    });
+
     it("includes claude output summary in action/outcome", () => {
       const entry = new ExperienceManager(TEST_DIR).generateExperience({
         sessionId: "s5",
@@ -177,11 +198,19 @@ describe("ExperienceManager", () => {
 
     it("returns empty injection for control condition (disabled mode)", () => {
       const mgr = new ExperienceManager(TEST_DIR);
-      // Control DB path — the manager should know control doesn't inject
       const dbPath = mgr.getDbPath("exp_ctrl", "control", "task-a", "full");
 
-      // Even if we somehow store something, control shouldn't retrieve
       const injection = mgr.retrieveInjection(dbPath, "Fix bugs", "control");
+      expect(injection).toBe("");
+
+      mgr.closeAll();
+    });
+
+    it("returns empty injection for baseline-compact condition", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const dbPath = mgr.getDbPath("exp_bc", "baseline-compact", "task-a", "full");
+
+      const injection = mgr.retrieveInjection(dbPath, "Fix bugs", "baseline-compact");
       expect(injection).toBe("");
 
       mgr.closeAll();

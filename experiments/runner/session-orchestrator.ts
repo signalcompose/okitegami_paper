@@ -87,18 +87,29 @@ export class SessionOrchestrator {
 
   /**
    * Symlink node_modules into the worktree so claude can run tests.
-   * Links both root node_modules (for tsx/hooks) and task-level node_modules (for vitest).
+   * Links both root node_modules (for tsx) and task-level node_modules (for vitest).
    */
   setupWorktreeNodeModules(worktreePath: string, task: string): void {
     if (this.options.dry_run) {
       console.log(`[DRY RUN] Would symlink node_modules in: ${worktreePath}`);
       return;
     }
+    const safeSymlink = (target: string, linkPath: string, label: string) => {
+      if (existsSync(linkPath) || !existsSync(target)) return;
+      try {
+        symlinkSync(target, linkPath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "EEXIST") return;
+        throw new Error(
+          `Failed to symlink ${label} into worktree at ${linkPath}: ${(err as Error).message}`,
+          { cause: err }
+        );
+      }
+    };
+
     const rootNm = join(this.options.project_root, "node_modules");
     const wtRootNm = join(worktreePath, "node_modules");
-    if (!existsSync(wtRootNm) && existsSync(rootNm)) {
-      symlinkSync(rootNm, wtRootNm);
-    }
+    safeSymlink(rootNm, wtRootNm, "root node_modules");
 
     const taskDirName = TASK_DIRS[task] ?? task;
     const taskNm = join(
@@ -109,14 +120,12 @@ export class SessionOrchestrator {
       "node_modules"
     );
     const wtTaskNm = join(worktreePath, "experiments", "tasks", taskDirName, "node_modules");
-    if (!existsSync(wtTaskNm) && existsSync(taskNm)) {
-      symlinkSync(taskNm, wtTaskNm);
-    }
+    safeSymlink(taskNm, wtTaskNm, "task node_modules");
   }
 
   /**
    * Execute a single Claude Code session for a RunSpec.
-   * Uses --print mode with spawn (stdin:ignore to prevent hanging).
+   * Uses --print mode with spawn (prompt piped via stdin; EOF signals end of input).
    * injectionText is prepended to the TASK.md prompt for ACM conditions.
    */
   async executeSession(
@@ -174,20 +183,42 @@ export class SessionOrchestrator {
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
+    const SIGNAL_NUMBERS: Record<string, number> = {
+      SIGHUP: 1,
+      SIGINT: 2,
+      SIGQUIT: 3,
+      SIGTERM: 15,
+      SIGKILL: 9,
+    };
+
     // Pipe taskMd via stdin to avoid CLI argument injection issues
     return new Promise<SessionResult>((resolvePromise) => {
+      let resolved = false;
+      const finish = (result: SessionResult) => {
+        if (resolved) return;
+        resolved = true;
+        resolvePromise(result);
+      };
+
+      let stdout = "";
+      let stderr = "";
+
       const child = spawn("claude", ["--print", "-"], {
         cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"],
       });
 
+      // Handle stdin errors (EPIPE is normal if child exits before reading all input)
+      child.stdin.on("error", (err) => {
+        if ((err as NodeJS.ErrnoException).code !== "EPIPE") {
+          stderr += `stdin write error: ${err.message}\n`;
+        }
+      });
+
       // Write prompt via stdin and close to signal EOF
       child.stdin.write(taskMd);
       child.stdin.end();
-
-      let stdout = "";
-      let stderr = "";
 
       child.stdout.on("data", (data: Buffer) => {
         stdout += data.toString();
@@ -196,21 +227,36 @@ export class SessionOrchestrator {
         stderr += data.toString();
       });
 
+      let sigkillTimer: ReturnType<typeof setTimeout> | undefined;
+
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
         // Follow up with SIGKILL if SIGTERM is ignored
-        setTimeout(() => {
-          if (!child.killed) child.kill("SIGKILL");
+        sigkillTimer = setTimeout(() => {
+          child.kill("SIGKILL");
         }, 5_000);
       }, this.options.timeout_ms);
 
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        clearTimeout(sigkillTimer);
+        finish({
+          run_id: spec.run_id,
+          stdout,
+          stderr: `spawn error: ${err.message}`,
+          exit_code: 1,
+          duration_ms: Date.now() - startTime,
+        });
+      });
+
       child.on("close", (code, signal) => {
         clearTimeout(timer);
-        resolvePromise({
+        clearTimeout(sigkillTimer);
+        finish({
           run_id: spec.run_id,
           stdout,
           stderr,
-          exit_code: signal ? 128 + 15 : (code ?? 1),
+          exit_code: signal ? 128 + (SIGNAL_NUMBERS[signal] ?? 0) : (code ?? 1),
           duration_ms: Date.now() - startTime,
         });
       });

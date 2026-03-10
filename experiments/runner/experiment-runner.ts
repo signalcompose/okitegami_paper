@@ -10,7 +10,6 @@
  *   6. Run tests → evaluate completion_rate
  *   7. [ACM] Generate experience → store in shared DB
  *   8. Collect metrics
- *   9. Cleanup worktree
  */
 
 import { RunSpec, RunResult } from "../harness/types.js";
@@ -70,9 +69,12 @@ export class ExperimentRunner {
     }
   }
 
-  private async runLint(task: string): Promise<string> {
+  private async runLint(task: string, worktreePath?: string): Promise<string> {
     if (task !== "task-c") return "";
-    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+    const taskDirName = TASK_DIRS[task] ?? task;
+    const taskDir = worktreePath
+      ? resolve(worktreePath, "experiments", "tasks", taskDirName)
+      : resolve(this.options.tasks_dir, taskDirName);
     try {
       const { stdout } = await execFileAsync("npx", ["eslint", "src/", "--format", "json"], {
         cwd: taskDir,
@@ -94,10 +96,16 @@ export class ExperimentRunner {
    */
   private readTaskDescription(task: string): string {
     const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+    const taskMdPath = resolve(taskDir, "TASK.md");
     try {
-      return readFileSync(resolve(taskDir, "TASK.md"), "utf-8");
-    } catch {
-      return task;
+      return readFileSync(taskMdPath, "utf-8");
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        console.warn(`[ACM] TASK.md not found at ${taskMdPath}, using task name as fallback`);
+        return task;
+      }
+      throw new Error(`Failed to read task description from ${taskMdPath}`, { cause: err });
     }
   }
 
@@ -154,7 +162,8 @@ export class ExperimentRunner {
         completionRate = 1.0; // Simulated result for dry-run
       } else {
         const vitestOutput = await this.runTaskTests(spec.task, worktreePath);
-        const eslintOutput = spec.task === "task-c" ? await this.runLint(spec.task) : undefined;
+        const eslintOutput =
+          spec.task === "task-c" ? await this.runLint(spec.task, worktreePath) : undefined;
         const evaluation = this.evaluator.evaluate(spec.task, {
           vitest: vitestOutput || undefined,
           eslint: eslintOutput,
@@ -162,23 +171,35 @@ export class ExperimentRunner {
         completionRate = evaluation.completion_rate;
       }
 
-      // 8. Generate and store experience for ACM conditions
+      // 7. Generate and store experience for ACM conditions
       if (isAcmCondition(spec.condition)) {
-        const experience = this.experienceManager.generateExperience({
-          sessionId: spec.run_id,
-          completionRate,
-          taskDescription,
-          claudeOutput: sessionResult.stdout.slice(0, 500),
-        });
-        if (experience) {
-          this.experienceManager.storeExperience(dbPath, experience);
-          console.log(
-            `  [ACM] Stored ${experience.type} experience (strength: ${experience.signal_strength.toFixed(2)})`
+        try {
+          const experience = this.experienceManager.generateExperience({
+            sessionId: spec.run_id,
+            completionRate,
+            taskDescription,
+            claudeOutput: sessionResult.stdout.slice(0, 500),
+          });
+          if (experience) {
+            const stored = this.experienceManager.storeExperience(dbPath, experience);
+            if (stored) {
+              console.log(
+                `  [ACM] Stored ${experience.type} experience (strength: ${experience.signal_strength.toFixed(2)})`
+              );
+            } else {
+              console.warn(
+                `  [ACM] Experience below threshold — not stored (strength: ${experience.signal_strength.toFixed(2)})`
+              );
+            }
+          }
+        } catch (expErr) {
+          console.error(
+            `[ACM] Failed to store experience for run ${spec.run_id}: ${expErr instanceof Error ? expErr.message : String(expErr)}`
           );
         }
       }
 
-      // 9. Collect metrics (no signal data in hook-free mode)
+      // 8. Collect metrics (no signal data in hook-free mode)
       const metrics = this.collector.collect({
         run_id: spec.run_id,
         condition: spec.condition,
@@ -194,6 +215,9 @@ export class ExperimentRunner {
         duration_ms: Date.now() - startTime,
       };
     } catch (err) {
+      const errDetail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      console.error(`[ACM] Run ${spec.run_id} failed:\n${errDetail}`);
+
       const metrics = this.collector.collect({
         run_id: spec.run_id,
         condition: spec.condition,
@@ -218,7 +242,9 @@ export class ExperimentRunner {
             cleanupErr instanceof Error
               ? (cleanupErr.stack ?? cleanupErr.message)
               : String(cleanupErr);
-          console.warn(`[ACM] Failed to cleanup worktree for ${spec.run_id}: ${msg}`);
+          console.error(
+            `[ACM] Failed to cleanup worktree for ${spec.run_id} at ${worktreePath}: ${msg}`
+          );
         }
       }
     }

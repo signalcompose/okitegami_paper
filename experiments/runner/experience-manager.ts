@@ -56,12 +56,18 @@ export class ExperienceManager {
     const existing = this.stores.get(dbPath);
     if (existing) return existing;
 
-    mkdirSync(dirname(dbPath), { recursive: true });
-
-    const config: AcmConfig = { ...EXPERIMENT_ACM_CONFIG, db_path: dbPath };
-    const store = new ExperienceStore(config);
-    this.stores.set(dbPath, store);
-    return store;
+    try {
+      mkdirSync(dirname(dbPath), { recursive: true });
+      const config: AcmConfig = { ...EXPERIMENT_ACM_CONFIG, db_path: dbPath };
+      const store = new ExperienceStore(config);
+      this.stores.set(dbPath, store);
+      return store;
+    } catch (err) {
+      throw new Error(
+        `ExperienceManager: failed to open experience DB at "${dbPath}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
+    }
   }
 
   /**
@@ -76,7 +82,7 @@ export class ExperienceManager {
 
     // Use completion_rate as signal_strength, with minimum 0.1 for failures
     // so they are still stored (above promotion_threshold 0.0)
-    const signalStrength = Math.max(completionRate, 0.1);
+    const signalStrength = isSuccess ? completionRate : Math.max(completionRate, 0.1);
 
     // Extract simple retrieval keys from task description
     const retrievalKeys = extractSimpleKeys(taskDescription);
@@ -134,8 +140,7 @@ export class ExperienceManager {
 
     if (experiences.length === 0) return "";
 
-    // For hook-free mode, we don't have embeddings, so use simple list-based retrieval
-    // Format all experiences using the injector
+    // For hook-free mode, use list-based retrieval sorted by signal_strength; take top_k
     const results = experiences.map((entry) => ({
       entry,
       similarity: 1.0, // No embedding-based similarity in hook-free mode
@@ -153,10 +158,18 @@ export class ExperienceManager {
    * Close all open DB connections.
    */
   closeAll(): void {
-    for (const store of this.stores.values()) {
-      store.close();
+    const errors: string[] = [];
+    for (const [dbPath, store] of this.stores.entries()) {
+      try {
+        store.close();
+      } catch (err) {
+        errors.push(`${dbPath}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
     this.stores.clear();
+    if (errors.length > 0) {
+      console.warn(`[ACM] Errors closing experience DBs:\n${errors.join("\n")}`);
+    }
   }
 }
 
