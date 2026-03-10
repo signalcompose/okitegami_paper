@@ -83,7 +83,15 @@ export class SessionOrchestrator {
 
     // Read TASK.md as the prompt for Claude
     const { readFileSync } = await import("node:fs");
-    const taskMd = readFileSync(resolve(taskDir, "TASK.md"), "utf-8");
+    let taskMd: string;
+    try {
+      taskMd = readFileSync(resolve(taskDir, "TASK.md"), "utf-8");
+    } catch (err) {
+      throw new Error(
+        `Cannot read TASK.md in ${taskDir} — ensure the task directory contains a TASK.md file`,
+        { cause: err }
+      );
+    }
 
     try {
       // Execute claude CLI in --print mode (non-interactive)
