@@ -1,6 +1,7 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, symlinkSync, existsSync } from "node:fs";
 import { RunSpec } from "../harness/types.js";
 import { TASK_DIRS, CONDITION_CONFIGS } from "./types.js";
 import {
@@ -106,22 +107,83 @@ export class SessionOrchestrator {
   }
 
   /**
-   * Execute a single Claude Code session for a RunSpec
+   * Symlink node_modules into the worktree so claude can run tests.
+   * Links both root node_modules (for tsx/hooks) and task-level node_modules (for vitest).
    */
-  async executeSession(spec: RunSpec): Promise<SessionResult> {
-    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[spec.task] ?? spec.task);
-    const configPath = resolve(
+  setupWorktreeNodeModules(worktreePath: string, task: string): void {
+    if (this.options.dry_run) {
+      console.log(`[DRY RUN] Would symlink node_modules in: ${worktreePath}`);
+      return;
+    }
+    const rootNm = join(this.options.project_root, "node_modules");
+    const wtRootNm = join(worktreePath, "node_modules");
+    if (!existsSync(wtRootNm) && existsSync(rootNm)) {
+      symlinkSync(rootNm, wtRootNm);
+    }
+
+    const taskDirName = TASK_DIRS[task] ?? task;
+    const taskNm = join(
+      this.options.project_root,
+      "experiments",
+      "tasks",
+      taskDirName,
+      "node_modules"
+    );
+    const wtTaskNm = join(worktreePath, "experiments", "tasks", taskDirName, "node_modules");
+    if (!existsSync(wtTaskNm) && existsSync(taskNm)) {
+      symlinkSync(taskNm, wtTaskNm);
+    }
+  }
+
+  /**
+   * Generate a per-run ACM config with db_path pointing to the worktree.
+   * Returns the path to the generated config file.
+   */
+  generateRunConfig(worktreePath: string, spec: RunSpec): string {
+    const baseConfigPath = resolve(
       this.options.config_dir,
       CONDITION_CONFIGS[spec.condition] ?? `${spec.condition}.json`
     );
+    const baseConfig = JSON.parse(readFileSync(baseConfigPath, "utf-8"));
+
+    // Set db_path to worktree's .acm directory
+    const acmDir = join(worktreePath, ".acm");
+    mkdirSync(acmDir, { recursive: true });
+    const runConfig = {
+      ...baseConfig,
+      db_path: join(acmDir, "experiences.db"),
+    };
+
+    const runConfigPath = join(worktreePath, "acm-run-config.json");
+    writeFileSync(runConfigPath, JSON.stringify(runConfig, null, 2));
+    return runConfigPath;
+  }
+
+  /**
+   * Execute a single Claude Code session for a RunSpec.
+   * Uses --print mode with spawn (stdin:ignore to prevent hanging).
+   * injectionText is prepended to the TASK.md prompt for ACM conditions.
+   */
+  async executeSession(
+    spec: RunSpec,
+    options?: { worktreePath?: string; injectionText?: string }
+  ): Promise<SessionResult> {
+    const mainTaskDir = resolve(this.options.tasks_dir, TASK_DIRS[spec.task] ?? spec.task);
     const startTime = Date.now();
 
     if (this.options.dry_run) {
+      const configPath = resolve(
+        this.options.config_dir,
+        CONDITION_CONFIGS[spec.condition] ?? `${spec.condition}.json`
+      );
       console.log(`[DRY RUN] Would execute session: ${spec.run_id}`);
-      console.log(`  Task dir: ${taskDir}`);
+      console.log(`  Task dir: ${mainTaskDir}`);
       console.log(`  Config: ${configPath}`);
       console.log(`  Condition: ${spec.condition}`);
       console.log(`  Context size: ${spec.context_size}`);
+      if (options?.injectionText) {
+        console.log(`  Injection: ${options.injectionText.slice(0, 100)}...`);
+      }
       return {
         run_id: spec.run_id,
         stdout: "[DRY RUN] No output",
@@ -131,49 +193,64 @@ export class SessionOrchestrator {
       };
     }
 
-    // Read TASK.md as the prompt for Claude
-    const { readFileSync } = await import("node:fs");
+    // Determine working directory
+    const taskDirName = TASK_DIRS[spec.task] ?? spec.task;
+    const cwd = options?.worktreePath
+      ? join(options.worktreePath, "experiments", "tasks", taskDirName)
+      : mainTaskDir;
+
+    // Read TASK.md
     let taskMd: string;
     try {
-      taskMd = readFileSync(resolve(taskDir, "TASK.md"), "utf-8");
+      taskMd = readFileSync(resolve(cwd, "TASK.md"), "utf-8");
     } catch (err) {
       throw new Error(
-        `Cannot read TASK.md in ${taskDir} — ensure the task directory contains a TASK.md file`,
+        `Cannot read TASK.md in ${cwd} — ensure the task directory contains a TASK.md file`,
         { cause: err }
       );
     }
 
-    try {
-      // Execute claude CLI in --print mode (non-interactive)
-      const { stdout, stderr } = await execFileAsync(
-        "claude",
-        ["--print", `--cwd`, taskDir, taskMd],
-        {
-          cwd: taskDir,
-          timeout: this.options.timeout_ms,
-          env: {
-            ...process.env,
-            ACM_CONFIG_PATH: configPath,
-          },
-        }
-      );
-
-      return {
-        run_id: spec.run_id,
-        stdout,
-        stderr,
-        exit_code: 0,
-        duration_ms: Date.now() - startTime,
-      };
-    } catch (err: unknown) {
-      const error = err as { stdout?: string; stderr?: string; code?: number };
-      return {
-        run_id: spec.run_id,
-        stdout: error.stdout ?? "",
-        stderr: error.stderr ?? String(err),
-        exit_code: error.code ?? 1,
-        duration_ms: Date.now() - startTime,
-      };
+    // Prepend ACM experience injection if available
+    if (options?.injectionText) {
+      taskMd = `${options.injectionText}\n\n---\n\n${taskMd}`;
     }
+
+    // Build env without CLAUDECODE to allow spawning claude from within a session
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+
+    // Use spawn with stdin:ignore — execFile keeps stdin open, causing claude to hang
+    return new Promise<SessionResult>((resolvePromise) => {
+      const child = spawn("claude", ["--print", taskMd], {
+        cwd,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      child.stdout.on("data", (data: Buffer) => {
+        stdout += data.toString();
+      });
+      child.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      const timer = setTimeout(() => {
+        child.kill("SIGTERM");
+      }, this.options.timeout_ms);
+
+      child.on("close", (code, signal) => {
+        clearTimeout(timer);
+        resolvePromise({
+          run_id: spec.run_id,
+          stdout,
+          stderr,
+          exit_code: signal ? 128 + 15 : (code ?? 1),
+          duration_ms: Date.now() - startTime,
+        });
+      });
+    });
   }
 }
