@@ -1,5 +1,5 @@
 export type ConditionName = "control" | "baseline-compact" | "acm-s" | "acm-f" | "acm-sf";
-export type TaskName = "task-a" | "task-b" | "task-c";
+export type TaskName = "task-a" | "task-b" | "task-c" | "task-d";
 export type ContextSize = "full" | "half" | "smart-zone";
 
 export interface RunSpec {

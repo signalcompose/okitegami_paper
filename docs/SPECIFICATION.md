@@ -300,7 +300,16 @@ ACM itself should minimize context consumption. Injection text target: <500 toke
 - Evaluation: automated linting only (eslint / tsc). Human consistency review is deferred to paper revision phase.
 - 5 repeated sessions per condition
 
-### 6.4 Evaluation Metrics
+### 6.4 Task D — Algorithmic Generation
+
+- **Domain**: 2D dungeon generation algorithm
+- **Type**: Implementation from specification (seeded PRNG, two dungeon types, graph connectivity, distribution constraints)
+- **Complexity**: Higher than Tasks A–C. Requires seeded PRNG, room placement without overlap, graph connectivity verification, and distribution constraint satisfaction.
+- **Evaluation**: vitest (23 tests), completion_rate = passed/total
+- **Background**: Added in Phase 6-D to address ceiling effect observed in Tasks A/B (completion_rate = 1.0 for both conditions). Task D targets completion_rate in the 0.5–0.8 range.
+- 5 repeated sessions per condition
+
+### 6.5 Evaluation Metrics
 
 | Metric | Measurement | Primary RQ |
 |--------|-------------|-----------|

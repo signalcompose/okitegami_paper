@@ -21,6 +21,13 @@ export const MILESTONE_6A: MilestoneFilter = {
   sessions: 5,
 };
 
+export const MILESTONE_6D: MilestoneFilter = {
+  conditions: ["control", "acm-sf"],
+  tasks: ["task-d"],
+  context_sizes: ["full"],
+  sessions: 5,
+};
+
 export const FULL_EXPERIMENT: MilestoneFilter = {
   conditions: ["control", "baseline-compact", "acm-s", "acm-f", "acm-sf"],
   tasks: ["task-a", "task-b", "task-c"],
@@ -33,6 +40,7 @@ export const TASK_DIRS: Record<string, string> = {
   "task-a": "task-a-bugfix",
   "task-b": "task-b-feature",
   "task-c": "task-c-refactor",
+  "task-d": "task-d-dungeon",
 };
 
 const NON_ACM_CONDITIONS: ReadonlySet<string> = new Set(["control", "baseline-compact"]);

@@ -168,6 +168,21 @@
 完了条件: RQ1 の仮説（ACM-SF が Control より高い task completion rate /
 低い interrupt count）について傾向が確認できること。
 
+### Milestone 6-D: Task D — Dungeon Generator（Ceiling Effect 回避）
+
+**背景**: Milestone 6-A で Task A/B が天井効果（completion_rate = 1.000）、Task C は ACM-SF が Control を下回る結果。
+より難易度の高いアルゴリズムタスクで再検証する。
+
+- 条件: Control vs ACM-SF（2条件）
+- タスク: Task D（2D Dungeon Generator）のみ
+- コンテキストサイズ: Full (128k) のみ
+- セッション数: 5回 × 2条件 = 10セッション
+
+完了条件: completion_rate に条件間差が観察される（天井効果なし）。
+
+**注意**: これは探索的な追試であり、Task D で ACM 効果が測定できることを保証するものではない。
+null result（差が出ない）も「アルゴリズム実装タスクでは ACM の効果が限定的」という知見として有意義。
+
 ### Milestone 6-B: Full Experimental Set（Milestone 6-A 結果を見て判断）
 
 論文 Section 5.2 の全条件（225回）。Milestone 6-A の結果を見てやまとさんが実施を判断する。
