@@ -7,6 +7,18 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   eslintConfigPrettier,
   {
-    ignores: ["dist/", "node_modules/", "*.config.mjs"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "*.config.mjs",
+      "experiments/tasks/",
+    ],
+  },
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
   }
 );
