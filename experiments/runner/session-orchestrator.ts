@@ -1,16 +1,10 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve, join } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync, symlinkSync, existsSync } from "node:fs";
+import { readFileSync, symlinkSync, existsSync } from "node:fs";
 import { RunSpec } from "../harness/types.js";
 import { TASK_DIRS, CONDITION_CONFIGS } from "./types.js";
-import {
-  createWorktree,
-  cleanupWorktree,
-  generateHooksConfig,
-  readSessionSignals,
-} from "./worktree-helpers.js";
-import type { SignalData } from "../harness/metric-collector.js";
+import { createWorktree, cleanupWorktree } from "./worktree-helpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -67,28 +61,13 @@ export class SessionOrchestrator {
   }
 
   /**
-   * Generate hooks config in worktree for ACM integration
-   */
-  setupHooksInWorktree(worktreePath: string): void {
-    if (this.options.dry_run) {
-      console.log(`[DRY RUN] Would setup hooks in: ${worktreePath}`);
-      return;
-    }
-    generateHooksConfig(worktreePath, this.options.project_root);
-  }
-
-  /**
-   * Read session signal counts from worktree DB
-   */
-  readSignals(dbPath: string, sessionId: string): SignalData {
-    return readSessionSignals(dbPath, sessionId);
-  }
-
-  /**
    * Reset task to initial state by running reset.sh
    */
-  async resetTask(task: string): Promise<void> {
-    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+  async resetTask(task: string, worktreePath?: string): Promise<void> {
+    const taskDirName = TASK_DIRS[task] ?? task;
+    const taskDir = worktreePath
+      ? resolve(worktreePath, "experiments", "tasks", taskDirName)
+      : resolve(this.options.tasks_dir, taskDirName);
     const resetScript = resolve(taskDir, "reset.sh");
 
     if (this.options.dry_run) {
@@ -133,30 +112,6 @@ export class SessionOrchestrator {
     if (!existsSync(wtTaskNm) && existsSync(taskNm)) {
       symlinkSync(taskNm, wtTaskNm);
     }
-  }
-
-  /**
-   * Generate a per-run ACM config with db_path pointing to the worktree.
-   * Returns the path to the generated config file.
-   */
-  generateRunConfig(worktreePath: string, spec: RunSpec): string {
-    const baseConfigPath = resolve(
-      this.options.config_dir,
-      CONDITION_CONFIGS[spec.condition] ?? `${spec.condition}.json`
-    );
-    const baseConfig = JSON.parse(readFileSync(baseConfigPath, "utf-8"));
-
-    // Set db_path to worktree's .acm directory
-    const acmDir = join(worktreePath, ".acm");
-    mkdirSync(acmDir, { recursive: true });
-    const runConfig = {
-      ...baseConfig,
-      db_path: join(acmDir, "experiences.db"),
-    };
-
-    const runConfigPath = join(worktreePath, "acm-run-config.json");
-    writeFileSync(runConfigPath, JSON.stringify(runConfig, null, 2));
-    return runConfigPath;
   }
 
   /**
@@ -219,13 +174,17 @@ export class SessionOrchestrator {
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
-    // Use spawn with stdin:ignore — execFile keeps stdin open, causing claude to hang
+    // Pipe taskMd via stdin to avoid CLI argument injection issues
     return new Promise<SessionResult>((resolvePromise) => {
-      const child = spawn("claude", ["--print", taskMd], {
+      const child = spawn("claude", ["--print", "-"], {
         cwd,
         env,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
+
+      // Write prompt via stdin and close to signal EOF
+      child.stdin.write(taskMd);
+      child.stdin.end();
 
       let stdout = "";
       let stderr = "";
@@ -239,6 +198,10 @@ export class SessionOrchestrator {
 
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
+        // Follow up with SIGKILL if SIGTERM is ignored
+        setTimeout(() => {
+          if (!child.killed) child.kill("SIGKILL");
+        }, 5_000);
       }, this.options.timeout_ms);
 
       child.on("close", (code, signal) => {

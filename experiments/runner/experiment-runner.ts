@@ -121,8 +121,8 @@ export class ExperimentRunner {
       // 2. Symlink node_modules (no hooks setup needed)
       this.orchestrator.setupWorktreeNodeModules(worktreePath, spec.task);
 
-      // 3. Reset task codebase
-      await this.orchestrator.resetTask(spec.task);
+      // 3. Reset task codebase in worktree
+      await this.orchestrator.resetTask(spec.task, worktreePath ?? undefined);
 
       // 4. Retrieve past experiences for ACM conditions
       const taskDescription = this.readTaskDescription(spec.task);
