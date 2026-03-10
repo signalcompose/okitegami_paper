@@ -3,6 +3,13 @@ import { promisify } from "node:util";
 import { resolve } from "node:path";
 import { RunSpec } from "../harness/types.js";
 import { TASK_DIRS, CONDITION_CONFIGS } from "./types.js";
+import {
+  createWorktree,
+  cleanupWorktree,
+  generateHooksConfig,
+  readSessionSignals,
+} from "./worktree-helpers.js";
+import type { SignalData } from "../harness/metric-collector.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -17,6 +24,7 @@ export interface SessionResult {
 export interface OrchestratorOptions {
   tasks_dir: string; // Path to experiments/tasks/
   config_dir: string; // Path to experiments/config/
+  project_root?: string; // Project root for worktree operations
   dry_run?: boolean; // If true, skip actual Claude session
   timeout_ms?: number; // Session timeout (default 10 minutes)
 }
@@ -28,9 +36,51 @@ export class SessionOrchestrator {
     this.options = {
       tasks_dir: options.tasks_dir,
       config_dir: options.config_dir,
+      project_root: options.project_root ?? process.cwd(),
       dry_run: options.dry_run ?? false,
       timeout_ms: options.timeout_ms ?? 600_000, // 10 min
     };
+  }
+
+  /**
+   * Create a git worktree for isolated experiment run
+   */
+  async createWorktree(runId: string): Promise<string> {
+    if (this.options.dry_run) {
+      const path = `/tmp/acm_exp_${runId}`;
+      console.log(`[DRY RUN] Would create worktree: ${path}`);
+      return path;
+    }
+    return createWorktree(this.options.project_root, runId);
+  }
+
+  /**
+   * Remove a git worktree after experiment run
+   */
+  async cleanupWorktree(runId: string): Promise<void> {
+    if (this.options.dry_run) {
+      console.log(`[DRY RUN] Would cleanup worktree: /tmp/acm_exp_${runId}`);
+      return;
+    }
+    return cleanupWorktree(this.options.project_root, runId);
+  }
+
+  /**
+   * Generate hooks config in worktree for ACM integration
+   */
+  setupHooksInWorktree(worktreePath: string): void {
+    if (this.options.dry_run) {
+      console.log(`[DRY RUN] Would setup hooks in: ${worktreePath}`);
+      return;
+    }
+    generateHooksConfig(worktreePath, this.options.project_root);
+  }
+
+  /**
+   * Read session signal counts from worktree DB
+   */
+  readSignals(dbPath: string, sessionId: string): SignalData {
+    return readSessionSignals(dbPath, sessionId);
   }
 
   /**
