@@ -1,8 +1,9 @@
 /**
- * SessionEnd hook — experience generation and embedding
+ * SessionEnd hook — experience generation
  * Issue #39: feat(hooks): session-end hook
  *
- * Aggregates signals → generates experience entries → stores with embedding.
+ * Aggregates signals → generates experience entries → stores.
+ * Embedding is deferred (requires async Embedder, handled separately).
  */
 
 import { bootstrapHook, runAsHookScript } from "./_common.js";

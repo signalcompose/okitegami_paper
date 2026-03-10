@@ -28,24 +28,27 @@ export async function handleSessionStart(stdin: string): Promise<void> {
   const ctx = bootstrapHook(stdin);
   if (!ctx) return;
 
-  const { Embedder } = await import("../retrieval/embedder.js");
-  const embedder = new Embedder();
   try {
-    await embedder.initialize();
+    const { Embedder } = await import("../retrieval/embedder.js");
+    const embedder = new Embedder();
+    try {
+      await embedder.initialize();
 
-    // Build query from session context
-    const sessionId = ctx.input.session_id as string;
-    const cwd = (ctx.input.cwd as string) ?? "";
-    const queryText = `session ${sessionId} working in ${cwd}`;
+      // Build query from session context
+      const sessionId = ctx.input.session_id as string;
+      const cwd = (ctx.input.cwd as string) ?? "";
+      const queryText = `session ${sessionId} working in ${cwd}`;
 
-    const queryEmbedding = await embedder.embed(queryText);
-    const injectionText = retrieveAndInject(ctx, queryEmbedding);
+      const queryEmbedding = await embedder.embed(queryText);
+      const injectionText = retrieveAndInject(ctx, queryEmbedding);
 
-    if (injectionText) {
-      process.stdout.write(injectionText);
+      if (injectionText) {
+        process.stdout.write(injectionText);
+      }
+    } finally {
+      embedder.dispose();
     }
   } finally {
-    embedder.dispose();
     ctx.cleanup();
   }
 }

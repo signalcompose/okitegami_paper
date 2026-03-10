@@ -5,6 +5,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createRequire } from "node:module";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { SignalData } from "../harness/metric-collector.js";
@@ -105,9 +106,9 @@ export function readSessionSignals(dbPath: string, sessionId: string): SignalDat
   }
 
   try {
-    // Dynamic import to avoid loading better-sqlite3 when not needed
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require("better-sqlite3");
+    // Synchronous require to avoid top-level dependency on better-sqlite3
+    const esmRequire = createRequire(import.meta.url);
+    const Database = esmRequire("better-sqlite3");
     const db = new Database(dbPath, { readonly: true });
 
     try {
@@ -127,8 +128,10 @@ export function readSessionSignals(dbPath: string, sessionId: string): SignalDat
     } finally {
       db.close();
     }
-  } catch {
-    // If DB read fails, return defaults
+  } catch (err) {
+    console.warn(
+      `[ACM] Failed to read signals from ${dbPath} for session ${sessionId}: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   return defaultResult;

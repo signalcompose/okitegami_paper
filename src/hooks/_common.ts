@@ -49,22 +49,27 @@ export function bootstrapHook(stdin: string): HookContext | null {
 
   // Initialize DB and stores
   const db = initializeDatabase(config.db_path);
-  const signalStore = new SessionSignalStore(db);
-  const experienceStore = new ExperienceStore(config);
-  const collector = new SignalCollector(signalStore, {
-    capture_turns: config.capture_turns,
-  });
+  try {
+    const signalStore = new SessionSignalStore(db);
+    const experienceStore = new ExperienceStore(config);
+    const collector = new SignalCollector(signalStore, {
+      capture_turns: config.capture_turns,
+    });
 
-  return {
-    input,
-    config,
-    signalStore,
-    experienceStore,
-    collector,
-    cleanup: () => {
-      db.close();
-    },
-  };
+    return {
+      input,
+      config,
+      signalStore,
+      experienceStore,
+      collector,
+      cleanup: () => {
+        db.close();
+      },
+    };
+  } catch (err) {
+    db.close();
+    throw err;
+  }
 }
 
 /**
@@ -83,7 +88,8 @@ export function runAsHookScript(
   });
   process.stdin.on("end", () => {
     Promise.resolve(handler(stdin)).catch((err) => {
-      console.error(`[ACM hook error] ${hookName}: ${err}`);
+      const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      console.error(`[ACM hook error] ${hookName}: ${message}`);
       process.exit(1);
     });
   });
