@@ -54,7 +54,7 @@ describe("ExperienceManager", () => {
       expect(entry!.signal_type).toBe("uninterrupted_completion");
     });
 
-    it("returns null when completion_rate is 0 (below promotion threshold)", () => {
+    it("generates a failure entry with minimum strength when completion_rate is 0", () => {
       const entry = new ExperienceManager(TEST_DIR).generateExperience({
         sessionId: "s3",
         completionRate: 0.0,
@@ -62,12 +62,10 @@ describe("ExperienceManager", () => {
         claudeOutput: "",
       });
 
-      // 0.0 is below default promotion_threshold (0.3), but we want failure entries
-      // for 0.0 completion too — the manager should use a low threshold for experiments
-      // Behavior depends on implementation: either null or a very low strength entry
-      // For experiments, we want to record all outcomes
+      // promotion_threshold is 0.0 for experiments, and Math.max(0.0, 0.1) = 0.1
       expect(entry).not.toBeNull();
       expect(entry!.type).toBe("failure");
+      expect(entry!.signal_strength).toBeCloseTo(0.1);
     });
 
     it("includes task description in trigger field", () => {

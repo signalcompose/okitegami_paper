@@ -20,7 +20,7 @@ import { ReportGenerator } from "../harness/report-generator.js";
 import { SessionOrchestrator, OrchestratorOptions } from "./session-orchestrator.js";
 import { ExperienceManager } from "./experience-manager.js";
 import { RunMatrix } from "./run-matrix.js";
-import { MilestoneFilter, TASK_DIRS } from "./types.js";
+import { MilestoneFilter, TASK_DIRS, isAcmCondition } from "./types.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve } from "node:path";
@@ -163,7 +163,7 @@ export class ExperimentRunner {
       }
 
       // 8. Generate and store experience for ACM conditions
-      if (spec.condition !== "control" && spec.condition !== "baseline-compact") {
+      if (isAcmCondition(spec.condition)) {
         const experience = this.experienceManager.generateExperience({
           sessionId: spec.run_id,
           completionRate,

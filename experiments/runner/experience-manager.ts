@@ -8,12 +8,13 @@
  * across sessions within the same experiment.
  */
 
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { formatInjection } from "../../src/retrieval/injector.js";
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
 import type { ConditionName, TaskName, ContextSize } from "../harness/types.js";
+import { isAcmCondition } from "./types.js";
 
 export interface GenerateInput {
   sessionId: string;
@@ -55,10 +56,7 @@ export class ExperienceManager {
     const existing = this.stores.get(dbPath);
     if (existing) return existing;
 
-    const dir = dirname(dbPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+    mkdirSync(dirname(dbPath), { recursive: true });
 
     const config: AcmConfig = { ...EXPERIMENT_ACM_CONFIG, db_path: dbPath };
     const store = new ExperienceStore(config);
@@ -127,13 +125,12 @@ export class ExperienceManager {
     taskDescription: string,
     condition?: ConditionName | string
   ): string {
-    // Control condition never gets injection
-    if (condition === "control" || condition === "baseline-compact") {
+    if (condition !== undefined && !isAcmCondition(condition)) {
       return "";
     }
 
     const store = this.getStore(dbPath);
-    const experiences = store.list();
+    const experiences = store.list({ limit: 50 });
 
     if (experiences.length === 0) return "";
 

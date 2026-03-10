@@ -35,6 +35,12 @@ export const TASK_DIRS: Record<string, string> = {
   "task-c": "task-c-refactor",
 };
 
+const NON_ACM_CONDITIONS: ReadonlySet<string> = new Set(["control", "baseline-compact"]);
+
+export function isAcmCondition(condition: ConditionName | string): boolean {
+  return !NON_ACM_CONDITIONS.has(condition);
+}
+
 export const CONDITION_CONFIGS: Record<string, string> = {
   control: "control.json",
   "baseline-compact": "baseline-compact.json",
