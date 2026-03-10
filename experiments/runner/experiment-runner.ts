@@ -44,8 +44,13 @@ export class ExperimentRunner {
       return stdout;
     } catch (err: unknown) {
       // vitest exits with non-zero on test failures, but still outputs JSON
-      const error = err as { stdout?: string };
-      return error.stdout ?? "";
+      const error = err as { stdout?: string; stderr?: string; code?: string | number };
+      if (error.stdout && error.stdout.includes('"numTotalTests"')) {
+        return error.stdout;
+      }
+      // Genuine process error (ENOENT, timeout, etc.) — propagate
+      const detail = error.stderr || error.code || String(err);
+      throw new Error(`vitest process failed in ${taskDir}: ${detail}`, { cause: err });
     }
   }
 
@@ -62,8 +67,13 @@ export class ExperimentRunner {
       });
       return stdout;
     } catch (err: unknown) {
-      const error = err as { stdout?: string };
-      return error.stdout ?? "";
+      // ESLint exits with non-zero when lint errors exist, but still outputs JSON
+      const error = err as { stdout?: string; stderr?: string; code?: string | number };
+      if (error.stdout && error.stdout.trimStart().startsWith("[")) {
+        return error.stdout;
+      }
+      const detail = error.stderr || error.code || String(err);
+      throw new Error(`ESLint process failed in ${taskDir}: ${detail}`, { cause: err });
     }
   }
 
@@ -78,7 +88,12 @@ export class ExperimentRunner {
       await this.orchestrator.resetTask(spec.task);
 
       // 2. Execute Claude session
-      await this.orchestrator.executeSession(spec);
+      const sessionResult = await this.orchestrator.executeSession(spec);
+      if (sessionResult.exit_code !== 0) {
+        throw new Error(
+          `Claude session failed (exit ${sessionResult.exit_code}): ${sessionResult.stderr.slice(0, 500)}`
+        );
+      }
 
       // 3. Run tests / lint to evaluate
       const vitestOutput = await this.runTaskTests(spec.task);
@@ -160,8 +175,15 @@ export class ExperimentRunner {
     const jsonPath = resolve(this.options.results_dir, `${id}.json`);
     const csvPath = resolve(this.options.results_dir, `${id}.csv`);
 
-    writeFileSync(jsonPath, this.reportGenerator.exportJSON(report));
-    writeFileSync(csvPath, this.reportGenerator.exportCSV(results));
+    try {
+      writeFileSync(jsonPath, this.reportGenerator.exportJSON(report));
+      writeFileSync(csvPath, this.reportGenerator.exportCSV(results));
+    } catch (writeErr) {
+      console.error(`Failed to write results to disk: ${writeErr}`);
+      console.error("Dumping JSON results to stdout as fallback:");
+      console.log(this.reportGenerator.exportJSON(report));
+      throw writeErr;
+    }
 
     console.log(`\nExperiment complete. Results saved to:`);
     console.log(`  JSON: ${jsonPath}`);

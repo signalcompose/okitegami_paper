@@ -62,7 +62,6 @@ export function validateToken(token: string, secret: string): ValidationResult {
   // exp is in seconds (Unix timestamp), Date.now() is in milliseconds
   const nowSeconds = Math.floor(Date.now() / 1000);
 
-  // BUG: Using >= instead of >. When exp === now, token should be INVALID.
   if (payload.exp >= nowSeconds) {
     logger.debug(`Token valid for subject: ${payload.sub}`);
     return { valid: true, payload };

@@ -20,10 +20,8 @@ const tokenCache = new TokenStore();
  * Authentication middleware that validates JWT tokens from the
  * Authorization header.
  *
- * Status codes:
- * - 200: Valid token, request allowed
- * - 401: Missing or invalid token (Unauthorized)
- * - 403: Expired token (Forbidden)
+ * Validates JWT tokens and returns an AuthResult indicating
+ * whether the request is allowed.
  */
 export function authMiddleware(req: AuthRequest, secret: string = config.jwtSecret): AuthResult {
   const authHeader = req.headers["authorization"];
@@ -76,7 +74,6 @@ export function authMiddleware(req: AuthRequest, secret: string = config.jwtSecr
 
   // Handle different error cases
   if (result.error === "Token has expired") {
-    // BUG: Returns 401 for expired tokens. Should return 403.
     logger.warn(`Expired token used for ${req.path}`);
     return {
       allowed: false,

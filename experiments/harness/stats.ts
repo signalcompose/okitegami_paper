@@ -11,13 +11,14 @@ export function mean(values: number[]): number {
 }
 
 /**
- * Calculate population standard deviation.
+ * Calculate sample standard deviation (Bessel's correction, n-1).
+ * Used for experiment analysis where each run is a sample.
  */
 export function standardDeviation(values: number[]): number {
   if (values.length <= 1) return 0;
   const avg = mean(values);
   const squaredDiffs = values.map((v) => (v - avg) ** 2);
-  return Math.sqrt(mean(squaredDiffs));
+  return Math.sqrt(squaredDiffs.reduce((sum, v) => sum + v, 0) / (values.length - 1));
 }
 
 /**

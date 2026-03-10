@@ -45,7 +45,14 @@ export class SessionOrchestrator {
       return;
     }
 
-    await execFileAsync("bash", [resetScript], { cwd: taskDir });
+    try {
+      await execFileAsync("bash", [resetScript], { cwd: taskDir });
+    } catch (err) {
+      throw new Error(
+        `Failed to reset task ${task}: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
+    }
   }
 
   /**

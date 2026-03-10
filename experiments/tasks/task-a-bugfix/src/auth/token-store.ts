@@ -30,8 +30,6 @@ export class TokenStore {
       return undefined;
     }
 
-    // BUG: Using > instead of >=. When Date.now() === expiresAt,
-    // the entry should be considered expired (return undefined).
     if (Date.now() > entry.expiresAt) {
       this.store.delete(key);
       logger.debug(`Cache expired: ${key}`);

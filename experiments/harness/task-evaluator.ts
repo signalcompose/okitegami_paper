@@ -42,7 +42,10 @@ export class TaskEvaluator {
 
     const totalFiles = eslint.length;
     const cleanFiles = eslint.filter((f) => f.errorCount === 0).length;
-    const lintRate = totalFiles === 0 ? 1.0 : cleanFiles / totalFiles;
+    if (totalFiles === 0) {
+      throw new Error("ESLint reported zero files — check src/ path and ESLint configuration");
+    }
+    const lintRate = cleanFiles / totalFiles;
 
     const combinedRate = testRate * 0.5 + lintRate * 0.5;
     const totalChecks = testTotal + totalFiles;
@@ -93,8 +96,13 @@ export class TaskEvaluator {
     const jsonStr = raw.slice(jsonStart, jsonEnd + 1);
     try {
       return JSON.parse(jsonStr) as VitestJsonResult;
-    } catch {
-      throw new Error("Failed to parse vitest JSON output");
+    } catch (err) {
+      const snippet = jsonStr.slice(0, 200);
+      const originalMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Failed to parse vitest JSON output: ${originalMsg}\nFirst 200 chars: ${snippet}`,
+        { cause: err }
+      );
     }
   }
 
@@ -104,8 +112,13 @@ export class TaskEvaluator {
   private parseEslintJson(raw: string): EslintJsonResult[] {
     try {
       return JSON.parse(raw) as EslintJsonResult[];
-    } catch {
-      throw new Error("Failed to parse ESLint JSON output");
+    } catch (err) {
+      const snippet = raw.slice(0, 200);
+      const originalMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Failed to parse ESLint JSON output: ${originalMsg}\nFirst 200 chars: ${snippet}`,
+        { cause: err }
+      );
     }
   }
 }

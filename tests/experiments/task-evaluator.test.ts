@@ -155,12 +155,27 @@ describe("TaskEvaluator", () => {
         numFailedTests: 0,
         testResults: [],
       });
-      const eslintOut = JSON.stringify([]);
+      const eslintOut = JSON.stringify([
+        { filePath: "a.ts", messages: [], errorCount: 0, warningCount: 0 },
+      ]);
       const result = evaluator.evaluate("task-c", {
         vitest: vitestOut,
         eslint: eslintOut,
       });
       expect(result.task).toBe("task-c");
+    });
+
+    it("throws when ESLint reports zero files", () => {
+      const vitestOut = JSON.stringify({
+        numTotalTests: 5,
+        numPassedTests: 5,
+        numFailedTests: 0,
+        testResults: [],
+      });
+      const eslintOut = JSON.stringify([]);
+      expect(() => evaluator.evaluate("task-c", { vitest: vitestOut, eslint: eslintOut })).toThrow(
+        "ESLint reported zero files"
+      );
     });
 
     it("throws when task-a missing vitest output", () => {
