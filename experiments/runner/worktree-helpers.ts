@@ -116,31 +116,26 @@ export function readSessionSignals(dbPath: string, sessionId: string): SignalDat
 
   const Database = esmRequire("better-sqlite3");
 
+  // Let DB errors propagate — measurement failures should not produce fake zero data
+  const db = new Database(dbPath, { readonly: true });
+
   try {
-    const db = new Database(dbPath, { readonly: true });
+    const rows = db
+      .prepare(
+        "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN ('interrupt', 'corrective_instruction') GROUP BY event_type"
+      )
+      .all(sessionId) as Array<{ event_type: string; count: number }>;
 
-    try {
-      const rows = db
-        .prepare(
-          "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN ('interrupt', 'corrective_instruction') GROUP BY event_type"
-        )
-        .all(sessionId) as Array<{ event_type: string; count: number }>;
-
-      for (const row of rows) {
-        if (row.event_type === "interrupt") {
-          defaultResult.interrupt_count = row.count;
-        } else if (row.event_type === "corrective_instruction") {
-          defaultResult.corrective_instruction_count = row.count;
-        }
+    const result: SignalData = { ...defaultResult };
+    for (const row of rows) {
+      if (row.event_type === "interrupt") {
+        result.interrupt_count = row.count;
+      } else if (row.event_type === "corrective_instruction") {
+        result.corrective_instruction_count = row.count;
       }
-    } finally {
-      db.close();
     }
-  } catch (err) {
-    console.warn(
-      `[ACM] Failed to read signals from ${dbPath} for session ${sessionId}: ${err instanceof Error ? err.message : String(err)}`
-    );
+    return result;
+  } finally {
+    db.close();
   }
-
-  return defaultResult;
 }
