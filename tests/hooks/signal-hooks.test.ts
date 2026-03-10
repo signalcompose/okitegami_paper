@@ -193,6 +193,23 @@ describe("post-tool-use hook", () => {
     ctx!.cleanup();
   });
 
+  it("handles missing tool_input gracefully", () => {
+    setupEnv();
+    handlePostToolUse(
+      JSON.stringify({
+        session_id: "s6b",
+        tool_name: "Read",
+        result: "file contents",
+      })
+    );
+
+    const ctx = bootstrapHook('{"session_id":"s6b"}');
+    const signals = ctx!.signalStore.getBySession("s6b");
+    expect(signals).toHaveLength(1);
+    expect(signals[0].event_type).toBe("tool_success");
+    ctx!.cleanup();
+  });
+
   it("does nothing when mode is disabled", () => {
     setupEnv("disabled");
     handlePostToolUse(

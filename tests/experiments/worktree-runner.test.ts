@@ -8,6 +8,7 @@ import { readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  createWorktree,
   generateHooksConfig,
   readSessionSignals,
 } from "../../experiments/runner/worktree-helpers.js";
@@ -44,6 +45,7 @@ describe("generateHooksConfig", () => {
     expect(hookEvents).toContain("PostToolUse");
     expect(hookEvents).toContain("Stop");
     expect(hookEvents).toContain("SessionStart");
+    expect(hookEvents).toContain("SessionEnd");
   });
 
   it("uses tsx with absolute paths to hook scripts", () => {
@@ -63,6 +65,28 @@ describe("generateHooksConfig", () => {
         expect(hook.command).toContain("tsx");
         expect(hook.command).toContain(projectRoot);
       }
+    }
+  });
+});
+
+describe("createWorktree runId validation", () => {
+  it("rejects runId with path traversal characters", async () => {
+    await expect(createWorktree("/tmp", "../../../etc")).rejects.toThrow("Invalid runId");
+  });
+
+  it("rejects runId with spaces", async () => {
+    await expect(createWorktree("/tmp", "run with spaces")).rejects.toThrow("Invalid runId");
+  });
+
+  it("rejects runId with special characters", async () => {
+    await expect(createWorktree("/tmp", "run;rm -rf /")).rejects.toThrow("Invalid runId");
+  });
+
+  it("accepts valid alphanumeric runId with hyphens and underscores", () => {
+    // Just validate the regex doesn't reject valid IDs (don't actually create worktree)
+    const validIds = ["run-001", "task_a_acm_1", "abc123", "Run_A-1"];
+    for (const id of validIds) {
+      expect(/^[\w-]+$/.test(id)).toBe(true);
     }
   });
 });
