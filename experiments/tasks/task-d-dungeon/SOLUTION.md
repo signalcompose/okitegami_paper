@@ -48,7 +48,9 @@ Build degree map from corridors (each corridor increments degree of both `from` 
    - Start with rooms[0], add to connected set
    - Iteratively connect nearest unconnected room to connected set via corridor
    - This guarantees connectivity (spanning tree)
-6. Add extra corridors to reduce dead-end ratio if below 30% or remove if above 50%
+6. Adjust dead-end ratio to stay within 30-50%:
+   - If ratio < 30% (too few dead ends): remove some non-essential corridors to increase dead-end count
+   - If ratio > 50% (too many dead ends): add extra corridors connecting pairs of dead-end rooms
    - Target: 30-50% of rooms have exactly 1 connection
 7. Set gridWidth/gridHeight to bounding box of all rooms
 
