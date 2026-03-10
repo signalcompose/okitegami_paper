@@ -241,4 +241,15 @@ Task A/B は天井効果により ACM の効果測定不可。Task C は ACM-SF 
 
 **重要な注記**: これは探索的な追試であり、null result も「アルゴリズム実装タスクでは ACM の効果が限定的」という知見として有意義。
 
+#### 実装
+
+Issues #49-#53 作成、PR #54 で実装。
+- #49: scaffold dungeon generator task directory
+- #50: 23 test cases for dungeon generation constraints
+- #51: TASK.md and SOLUTION.md
+- #52: runner infrastructure (task-d support)
+- #53: ROADMAP and SPECIFICATION update
+
+コードレビュー 2 round で 4 件の Important を修正（boss room test bound, cross-type test fragility, PRNG float divisor, dead-end adjustment logic）。
+
 ---
