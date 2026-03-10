@@ -1,0 +1,73 @@
+import { resolve } from "node:path";
+import { ExperimentRunner } from "./experiment-runner.js";
+import { MILESTONE_6A, FULL_EXPERIMENT, MilestoneFilter } from "./types.js";
+
+function parseArgs(args: string[]): {
+  milestone: string;
+  dry_run: boolean;
+  experiment_id?: string;
+} {
+  let milestone = "6a";
+  let dry_run = false;
+  let experiment_id: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--milestone":
+        milestone = args[++i] ?? "6a";
+        break;
+      case "--dry-run":
+        dry_run = true;
+        break;
+      case "--id":
+        experiment_id = args[++i];
+        break;
+      case "--help":
+        console.log(`
+ACM Experiment Runner
+
+Usage: npx tsx experiments/runner/cli.ts [options]
+
+Options:
+  --milestone <6a|full>  Experiment milestone (default: 6a)
+  --dry-run              Skip actual Claude sessions
+  --id <string>          Custom experiment ID
+  --help                 Show this help
+`);
+        process.exit(0);
+    }
+  }
+
+  return { milestone, dry_run, experiment_id };
+}
+
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+
+  const filter: MilestoneFilter = args.milestone === "full" ? FULL_EXPERIMENT : MILESTONE_6A;
+
+  const rootDir = resolve(import.meta.dirname ?? ".", "../..");
+  const runner = new ExperimentRunner({
+    tasks_dir: resolve(rootDir, "experiments/tasks"),
+    config_dir: resolve(rootDir, "experiments/config"),
+    results_dir: resolve(rootDir, "experiments/results"),
+    dry_run: args.dry_run,
+  });
+
+  console.log(`Milestone: ${args.milestone}`);
+  console.log(`Dry run: ${args.dry_run}`);
+  console.log(
+    `Filter: ${filter.conditions.length} conditions × ${filter.tasks.length} tasks × ${filter.context_sizes.length} contexts × ${filter.sessions} sessions`
+  );
+  console.log(
+    `Total runs: ${filter.conditions.length * filter.tasks.length * filter.context_sizes.length * filter.sessions}`
+  );
+  console.log("");
+
+  await runner.run(filter, args.experiment_id);
+}
+
+main().catch((err) => {
+  console.error("Experiment failed:", err);
+  process.exit(1);
+});

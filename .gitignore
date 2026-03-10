@@ -22,3 +22,7 @@ dist/
 credentials*
 !credentials.example.*
 # [/code:security-patterns]
+
+# Experiment results (generated, not tracked)
+experiments/results/*
+!experiments/results/.gitkeep

@@ -1,0 +1,13 @@
+{
+  "name": "task-a-bugfix",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.0",
+    "typescript": "^5.9.0"
+  }
+}

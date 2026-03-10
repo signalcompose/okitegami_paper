@@ -1,0 +1,6 @@
+{
+  "mode": "failure_only",
+  "top_k": 5,
+  "capture_turns": 5,
+  "promotion_threshold": 0.3
+}
