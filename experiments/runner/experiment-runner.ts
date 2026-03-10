@@ -7,7 +7,7 @@ import { RunMatrix } from "./run-matrix.js";
 import { MilestoneFilter, TASK_DIRS } from "./types.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const execFileAsync = promisify(execFile);
@@ -78,16 +78,23 @@ export class ExperimentRunner {
   }
 
   /**
-   * Execute a single run: reset → session → evaluate → collect metrics
+   * Execute a single run: worktree → reset → session → evaluate → signals → metrics → cleanup
    */
   async executeRun(spec: RunSpec): Promise<RunResult> {
     const startTime = Date.now();
+    let worktreePath: string | null = null;
 
     try {
-      // 1. Reset task codebase
+      // 1. Create isolated worktree
+      worktreePath = await this.orchestrator.createWorktree(spec.run_id);
+
+      // 2. Setup hooks in worktree
+      this.orchestrator.setupHooksInWorktree(worktreePath);
+
+      // 3. Reset task codebase
       await this.orchestrator.resetTask(spec.task);
 
-      // 2. Execute Claude session
+      // 4. Execute Claude session
       const sessionResult = await this.orchestrator.executeSession(spec);
       if (sessionResult.exit_code !== 0) {
         throw new Error(
@@ -95,17 +102,21 @@ export class ExperimentRunner {
         );
       }
 
-      // 3. Run tests / lint to evaluate
+      // 5. Run tests / lint to evaluate
       const vitestOutput = await this.runTaskTests(spec.task);
       const eslintOutput = spec.task === "task-c" ? await this.runLint(spec.task) : undefined;
 
-      // 4. Evaluate results
+      // 6. Evaluate results
       const evaluation = this.evaluator.evaluate(spec.task, {
         vitest: vitestOutput || undefined,
         eslint: eslintOutput,
       });
 
-      // 5. Collect metrics
+      // 7. Read signal data from worktree DB
+      const dbPath = join(worktreePath, ".acm", "experiences.db");
+      const signals = this.orchestrator.readSignals(dbPath, spec.run_id);
+
+      // 8. Collect metrics with signal data
       const metrics = this.collector.collect({
         run_id: spec.run_id,
         condition: spec.condition,
@@ -113,6 +124,7 @@ export class ExperimentRunner {
         context_size: spec.context_size,
         session_number: spec.session_number,
         completion_rate: evaluation.completion_rate,
+        signals,
       });
 
       return {
@@ -137,6 +149,19 @@ export class ExperimentRunner {
         duration_ms: Date.now() - startTime,
         error: err instanceof Error ? err.message : String(err),
       };
+    } finally {
+      // 9. Cleanup worktree
+      if (worktreePath) {
+        try {
+          await this.orchestrator.cleanupWorktree(spec.run_id);
+        } catch (cleanupErr) {
+          const msg =
+            cleanupErr instanceof Error
+              ? (cleanupErr.stack ?? cleanupErr.message)
+              : String(cleanupErr);
+          console.warn(`[ACM] Failed to cleanup worktree for ${spec.run_id}: ${msg}`);
+        }
+      }
     }
   }
 
