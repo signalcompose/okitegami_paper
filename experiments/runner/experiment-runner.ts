@@ -1,19 +1,34 @@
+/**
+ * ExperimentRunner — Hook-free experiment execution with prompt-level experience injection.
+ *
+ * Flow per run:
+ *   1. Create worktree for isolation
+ *   2. Symlink node_modules
+ *   3. Reset task codebase
+ *   4. [ACM] Retrieve past experiences → format injection text
+ *   5. Execute Claude session (with injection text prepended to TASK.md)
+ *   6. Run tests → evaluate completion_rate
+ *   7. [ACM] Generate experience → store in shared DB
+ *   8. Collect metrics
+ */
+
 import { RunSpec, RunResult } from "../harness/types.js";
 import { TaskEvaluator } from "../harness/task-evaluator.js";
 import { MetricCollector } from "../harness/metric-collector.js";
 import { ReportGenerator } from "../harness/report-generator.js";
 import { SessionOrchestrator, OrchestratorOptions } from "./session-orchestrator.js";
+import { ExperienceManager } from "./experience-manager.js";
 import { RunMatrix } from "./run-matrix.js";
-import { MilestoneFilter, TASK_DIRS } from "./types.js";
+import { MilestoneFilter, TASK_DIRS, isAcmCondition } from "./types.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { resolve, join } from "node:path";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { resolve } from "node:path";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 
 const execFileAsync = promisify(execFile);
 
 export interface ExperimentOptions extends OrchestratorOptions {
-  results_dir: string; // Path to experiments/results/
+  results_dir: string;
 }
 
 export class ExperimentRunner {
@@ -21,6 +36,7 @@ export class ExperimentRunner {
   private evaluator: TaskEvaluator;
   private collector: MetricCollector;
   private reportGenerator: ReportGenerator;
+  private experienceManager: ExperienceManager;
   private options: ExperimentOptions;
 
   constructor(options: ExperimentOptions) {
@@ -29,13 +45,14 @@ export class ExperimentRunner {
     this.evaluator = new TaskEvaluator();
     this.collector = new MetricCollector();
     this.reportGenerator = new ReportGenerator();
+    this.experienceManager = new ExperienceManager(options.results_dir);
   }
 
-  /**
-   * Run the vitest tests in a task directory and return JSON output
-   */
-  private async runTaskTests(task: string): Promise<string> {
-    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+  private async runTaskTests(task: string, worktreePath?: string): Promise<string> {
+    const taskDirName = TASK_DIRS[task] ?? task;
+    const taskDir = worktreePath
+      ? resolve(worktreePath, "experiments", "tasks", taskDirName)
+      : resolve(this.options.tasks_dir, taskDirName);
     try {
       const { stdout } = await execFileAsync("npx", ["vitest", "run", "--reporter=json"], {
         cwd: taskDir,
@@ -43,23 +60,21 @@ export class ExperimentRunner {
       });
       return stdout;
     } catch (err: unknown) {
-      // vitest exits with non-zero on test failures, but still outputs JSON
       const error = err as { stdout?: string; stderr?: string; code?: string | number };
       if (error.stdout && error.stdout.includes('"numTotalTests"')) {
         return error.stdout;
       }
-      // Genuine process error (ENOENT, timeout, etc.) — propagate
       const detail = error.stderr || error.code || String(err);
       throw new Error(`vitest process failed in ${taskDir}: ${detail}`, { cause: err });
     }
   }
 
-  /**
-   * Run ESLint on task-c and return JSON output
-   */
-  private async runLint(task: string): Promise<string> {
+  private async runLint(task: string, worktreePath?: string): Promise<string> {
     if (task !== "task-c") return "";
-    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+    const taskDirName = TASK_DIRS[task] ?? task;
+    const taskDir = worktreePath
+      ? resolve(worktreePath, "experiments", "tasks", taskDirName)
+      : resolve(this.options.tasks_dir, taskDirName);
     try {
       const { stdout } = await execFileAsync("npx", ["eslint", "src/", "--format", "json"], {
         cwd: taskDir,
@@ -67,7 +82,6 @@ export class ExperimentRunner {
       });
       return stdout;
     } catch (err: unknown) {
-      // ESLint exits with non-zero when lint errors exist, but still outputs JSON
       const error = err as { stdout?: string; stderr?: string; code?: string | number };
       if (error.stdout && error.stdout.trimStart().startsWith("[")) {
         return error.stdout;
@@ -78,53 +92,121 @@ export class ExperimentRunner {
   }
 
   /**
-   * Execute a single run: worktree → reset → session → evaluate → signals → metrics → cleanup
+   * Read task description for experience generation / retrieval
    */
-  async executeRun(spec: RunSpec): Promise<RunResult> {
+  private readTaskDescription(task: string): string {
+    const taskDir = resolve(this.options.tasks_dir, TASK_DIRS[task] ?? task);
+    const taskMdPath = resolve(taskDir, "TASK.md");
+    try {
+      return readFileSync(taskMdPath, "utf-8");
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        console.warn(`[ACM] TASK.md not found at ${taskMdPath}, using task name as fallback`);
+        return task;
+      }
+      throw new Error(`Failed to read task description from ${taskMdPath}`, { cause: err });
+    }
+  }
+
+  /**
+   * Execute a single run with hook-free experience lifecycle.
+   */
+  async executeRun(spec: RunSpec, experimentId: string): Promise<RunResult> {
     const startTime = Date.now();
     let worktreePath: string | null = null;
+    const dbPath = this.experienceManager.getDbPath(
+      experimentId,
+      spec.condition,
+      spec.task,
+      spec.context_size
+    );
 
     try {
       // 1. Create isolated worktree
       worktreePath = await this.orchestrator.createWorktree(spec.run_id);
 
-      // 2. Setup hooks in worktree
-      this.orchestrator.setupHooksInWorktree(worktreePath);
+      // 2. Symlink node_modules (no hooks setup needed)
+      this.orchestrator.setupWorktreeNodeModules(worktreePath, spec.task);
 
-      // 3. Reset task codebase
-      await this.orchestrator.resetTask(spec.task);
+      // 3. Reset task codebase in worktree
+      await this.orchestrator.resetTask(spec.task, worktreePath ?? undefined);
 
-      // 4. Execute Claude session
-      const sessionResult = await this.orchestrator.executeSession(spec);
+      // 4. Retrieve past experiences for ACM conditions
+      const taskDescription = this.readTaskDescription(spec.task);
+      const injectionText = this.experienceManager.retrieveInjection(
+        dbPath,
+        taskDescription,
+        spec.condition
+      );
+
+      if (injectionText) {
+        console.log(`  [ACM] Injecting ${injectionText.length} chars of past experience`);
+      }
+
+      // 5. Execute Claude session
+      const sessionResult = await this.orchestrator.executeSession(spec, {
+        worktreePath,
+        injectionText: injectionText || undefined,
+      });
+
       if (sessionResult.exit_code !== 0) {
         throw new Error(
           `Claude session failed (exit ${sessionResult.exit_code}): ${sessionResult.stderr.slice(0, 500)}`
         );
       }
 
-      // 5. Run tests / lint to evaluate
-      const vitestOutput = await this.runTaskTests(spec.task);
-      const eslintOutput = spec.task === "task-c" ? await this.runLint(spec.task) : undefined;
+      // 6. Run tests to evaluate (skip in dry-run — worktree doesn't exist)
+      let completionRate = 0;
+      if (this.options.dry_run) {
+        completionRate = 1.0; // Simulated result for dry-run
+      } else {
+        const vitestOutput = await this.runTaskTests(spec.task, worktreePath);
+        const eslintOutput =
+          spec.task === "task-c" ? await this.runLint(spec.task, worktreePath) : undefined;
+        const evaluation = this.evaluator.evaluate(spec.task, {
+          vitest: vitestOutput || undefined,
+          eslint: eslintOutput,
+        });
+        completionRate = evaluation.completion_rate;
+      }
 
-      // 6. Evaluate results
-      const evaluation = this.evaluator.evaluate(spec.task, {
-        vitest: vitestOutput || undefined,
-        eslint: eslintOutput,
-      });
+      // 7. Generate and store experience for ACM conditions
+      if (isAcmCondition(spec.condition)) {
+        try {
+          const experience = this.experienceManager.generateExperience({
+            sessionId: spec.run_id,
+            completionRate,
+            taskDescription,
+            claudeOutput: sessionResult.stdout.slice(0, 500),
+          });
+          if (experience) {
+            const stored = this.experienceManager.storeExperience(dbPath, experience);
+            if (stored) {
+              console.log(
+                `  [ACM] Stored ${experience.type} experience (strength: ${experience.signal_strength.toFixed(2)})`
+              );
+            } else {
+              console.warn(
+                `  [ACM] Experience below threshold — not stored (strength: ${experience.signal_strength.toFixed(2)})`
+              );
+            }
+          }
+        } catch (expErr) {
+          console.error(
+            `[ACM] Failed to store experience for run ${spec.run_id}: ${expErr instanceof Error ? expErr.message : String(expErr)}`
+          );
+        }
+      }
 
-      // 7. Read signal data from worktree DB
-      const dbPath = join(worktreePath, ".acm", "experiences.db");
-      const signals = this.orchestrator.readSignals(dbPath, spec.run_id);
-
-      // 8. Collect metrics with signal data
+      // 8. Collect metrics (no signal data in hook-free mode)
       const metrics = this.collector.collect({
         run_id: spec.run_id,
         condition: spec.condition,
         task: spec.task,
         context_size: spec.context_size,
         session_number: spec.session_number,
-        completion_rate: evaluation.completion_rate,
-        signals,
+        completion_rate: completionRate,
       });
 
       return {
@@ -133,7 +215,9 @@ export class ExperimentRunner {
         duration_ms: Date.now() - startTime,
       };
     } catch (err) {
-      // Collect error result
+      const errDetail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      console.error(`[ACM] Run ${spec.run_id} failed:\n${errDetail}`);
+
       const metrics = this.collector.collect({
         run_id: spec.run_id,
         condition: spec.condition,
@@ -150,7 +234,6 @@ export class ExperimentRunner {
         error: err instanceof Error ? err.message : String(err),
       };
     } finally {
-      // 9. Cleanup worktree
       if (worktreePath) {
         try {
           await this.orchestrator.cleanupWorktree(spec.run_id);
@@ -159,14 +242,16 @@ export class ExperimentRunner {
             cleanupErr instanceof Error
               ? (cleanupErr.stack ?? cleanupErr.message)
               : String(cleanupErr);
-          console.warn(`[ACM] Failed to cleanup worktree for ${spec.run_id}: ${msg}`);
+          console.error(
+            `[ACM] Failed to cleanup worktree for ${spec.run_id} at ${worktreePath}: ${msg}`
+          );
         }
       }
     }
   }
 
   /**
-   * Run the full experiment for a given filter
+   * Run the full experiment for a given filter.
    */
   async run(filter: MilestoneFilter, experimentId?: string): Promise<void> {
     const id = experimentId ?? `exp_${Date.now()}`;
@@ -180,7 +265,7 @@ export class ExperimentRunner {
       const spec = specs[i];
       console.log(`[${i + 1}/${specs.length}] Running: ${spec.run_id}`);
 
-      const result = await this.executeRun(spec);
+      const result = await this.executeRun(spec, id);
       results.push(result);
 
       if (result.error) {
@@ -192,13 +277,17 @@ export class ExperimentRunner {
       }
     }
 
+    // Close all experience DBs
+    this.experienceManager.closeAll();
+
     // Generate report
     const report = this.reportGenerator.generateReport(id, results);
 
     // Save results
-    mkdirSync(this.options.results_dir, { recursive: true });
-    const jsonPath = resolve(this.options.results_dir, `${id}.json`);
-    const csvPath = resolve(this.options.results_dir, `${id}.csv`);
+    const expDir = resolve(this.options.results_dir, id);
+    mkdirSync(expDir, { recursive: true });
+    const jsonPath = resolve(expDir, `${id}.json`);
+    const csvPath = resolve(expDir, `${id}.csv`);
 
     try {
       writeFileSync(jsonPath, this.reportGenerator.exportJSON(report));
