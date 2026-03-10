@@ -91,7 +91,7 @@ export class ExperimentRunner {
       // 2. Setup hooks in worktree
       this.orchestrator.setupHooksInWorktree(worktreePath);
 
-      // 3. Reset task codebase (within worktree context)
+      // 3. Reset task codebase
       await this.orchestrator.resetTask(spec.task);
 
       // 4. Execute Claude session
@@ -155,7 +155,11 @@ export class ExperimentRunner {
         try {
           await this.orchestrator.cleanupWorktree(spec.run_id);
         } catch (cleanupErr) {
-          console.warn(`[ACM] Failed to cleanup worktree for ${spec.run_id}: ${cleanupErr}`);
+          const msg =
+            cleanupErr instanceof Error
+              ? (cleanupErr.stack ?? cleanupErr.message)
+              : String(cleanupErr);
+          console.warn(`[ACM] Failed to cleanup worktree for ${spec.run_id}: ${msg}`);
         }
       }
     }

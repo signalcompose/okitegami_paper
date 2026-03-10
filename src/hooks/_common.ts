@@ -63,6 +63,7 @@ export function bootstrapHook(stdin: string): HookContext | null {
       experienceStore,
       collector,
       cleanup: () => {
+        experienceStore.close();
         db.close();
       },
     };
@@ -73,9 +74,29 @@ export function bootstrapHook(stdin: string): HookContext | null {
 }
 
 /**
+ * Validate that a required string field exists in hook input.
+ * Throws a descriptive error if the field is missing or not a string.
+ */
+export function requireInputString(
+  input: Record<string, unknown>,
+  field: string,
+  hookName: string
+): string {
+  const value = input[field];
+  if (typeof value !== "string" || !value) {
+    throw new Error(
+      `${hookName}: missing or invalid "${field}" in input. ` +
+        `Got: ${JSON.stringify(value)}. Keys present: ${Object.keys(input).join(", ")}`
+    );
+  }
+  return value;
+}
+
+/**
  * Shared entry point for hook scripts.
  * Reads stdin, calls handler, handles errors.
  * Supports both sync and async handlers.
+ * Exits with code 0 on success, code 1 on unhandled errors.
  */
 export function runAsHookScript(
   handler: (stdin: string) => void | Promise<void>,
@@ -83,14 +104,22 @@ export function runAsHookScript(
 ): void {
   let stdin = "";
   process.stdin.setEncoding("utf-8");
+  process.stdin.on("error", (err) => {
+    console.error(`[ACM hook error] ${hookName}: stdin error: ${err.message}`);
+    process.exit(1);
+  });
   process.stdin.on("data", (chunk) => {
     stdin += chunk;
   });
   process.stdin.on("end", () => {
-    Promise.resolve(handler(stdin)).catch((err) => {
-      const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
-      console.error(`[ACM hook error] ${hookName}: ${message}`);
-      process.exit(1);
-    });
+    Promise.resolve(handler(stdin))
+      .then(() => {
+        process.exit(0);
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+        console.error(`[ACM hook error] ${hookName}: ${message}`);
+        process.exit(1);
+      });
   });
 }

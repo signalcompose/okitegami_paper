@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   createWorktree,
+  cleanupWorktree,
   generateHooksConfig,
   readSessionSignals,
 } from "../../experiments/runner/worktree-helpers.js";
@@ -88,6 +89,16 @@ describe("createWorktree runId validation", () => {
     for (const id of validIds) {
       expect(/^[\w-]+$/.test(id)).toBe(true);
     }
+  });
+});
+
+describe("cleanupWorktree runId validation", () => {
+  it("rejects runId with path traversal characters", async () => {
+    await expect(cleanupWorktree("/tmp", "../../../etc")).rejects.toThrow("Invalid runId");
+  });
+
+  it("rejects runId with special characters", async () => {
+    await expect(cleanupWorktree("/tmp", "run;rm -rf /")).rejects.toThrow("Invalid runId");
   });
 });
 

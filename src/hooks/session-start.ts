@@ -6,7 +6,7 @@
  * The injection text is appended to the session context by Claude Code.
  */
 
-import { bootstrapHook, runAsHookScript, type HookContext } from "./_common.js";
+import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
 
@@ -35,7 +35,7 @@ export async function handleSessionStart(stdin: string): Promise<void> {
       await embedder.initialize();
 
       // Build query from session context
-      const sessionId = ctx.input.session_id as string;
+      const sessionId = requireInputString(ctx.input, "session_id", "SessionStart");
       const cwd = (ctx.input.cwd as string) ?? "";
       const queryText = `session ${sessionId} working in ${cwd}`;
 

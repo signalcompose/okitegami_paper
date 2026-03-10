@@ -3,7 +3,7 @@
  * Issue #38: feat(hooks): signal recording hooks
  */
 
-import { bootstrapHook, runAsHookScript } from "./_common.js";
+import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 
 export function handleStop(stdin: string): void {
   const ctx = bootstrapHook(stdin);
@@ -11,7 +11,7 @@ export function handleStop(stdin: string): void {
 
   try {
     const { input, collector } = ctx;
-    const sessionId = input.session_id as string;
+    const sessionId = requireInputString(input, "session_id", "Stop");
     collector.handleStop(sessionId);
   } finally {
     ctx.cleanup();

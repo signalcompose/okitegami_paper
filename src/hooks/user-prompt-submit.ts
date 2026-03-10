@@ -3,7 +3,7 @@
  * Issue #38: feat(hooks): signal recording hooks
  */
 
-import { bootstrapHook, runAsHookScript } from "./_common.js";
+import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 
 export function handleUserPromptSubmit(stdin: string): void {
   const ctx = bootstrapHook(stdin);
@@ -11,8 +11,8 @@ export function handleUserPromptSubmit(stdin: string): void {
 
   try {
     const { input, collector } = ctx;
-    const sessionId = input.session_id as string;
-    const prompt = input.prompt as string;
+    const sessionId = requireInputString(input, "session_id", "UserPromptSubmit");
+    const prompt = requireInputString(input, "prompt", "UserPromptSubmit");
 
     collector.handleUserPrompt(sessionId, prompt);
   } finally {

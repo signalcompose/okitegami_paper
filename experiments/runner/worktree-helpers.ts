@@ -41,6 +41,9 @@ export async function cleanupWorktree(
   runId: string,
   basePath: string = "/tmp"
 ): Promise<void> {
+  if (!/^[\w-]+$/.test(runId)) {
+    throw new Error(`Invalid runId "${runId}": must contain only word characters and hyphens`);
+  }
   const worktreePath = join(basePath, `acm_exp_${runId}`);
 
   await execFileAsync("git", ["worktree", "remove", "--force", worktreePath], {
@@ -102,13 +105,18 @@ export function readSessionSignals(dbPath: string, sessionId: string): SignalDat
   };
 
   if (!existsSync(dbPath)) {
+    console.warn(
+      `[ACM] Signal DB not found at ${dbPath} for session ${sessionId} — hooks may not have run`
+    );
     return defaultResult;
   }
 
+  // Load dependency — fail hard if missing (infrastructure misconfiguration)
+  const esmRequire = createRequire(import.meta.url);
+
+  const Database = esmRequire("better-sqlite3");
+
   try {
-    // Synchronous require to avoid top-level dependency on better-sqlite3
-    const esmRequire = createRequire(import.meta.url);
-    const Database = esmRequire("better-sqlite3");
     const db = new Database(dbPath, { readonly: true });
 
     try {

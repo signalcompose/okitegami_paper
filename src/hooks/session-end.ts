@@ -6,7 +6,7 @@
  * Embedding is deferred (requires async Embedder, handled separately).
  */
 
-import { bootstrapHook, runAsHookScript } from "./_common.js";
+import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { ExperienceGenerator } from "../experience/generator.js";
 
 export function handleSessionEnd(stdin: string): void {
@@ -15,7 +15,7 @@ export function handleSessionEnd(stdin: string): void {
 
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
-    const sessionId = input.session_id as string;
+    const sessionId = requireInputString(input, "session_id", "SessionEnd");
 
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);

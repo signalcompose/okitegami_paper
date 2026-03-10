@@ -1,5 +1,5 @@
 /**
- * Tests for session-end hook — experience generation and embedding
+ * Tests for session-end hook — experience generation
  * Issue #39: feat(hooks): session-end hook
  */
 
