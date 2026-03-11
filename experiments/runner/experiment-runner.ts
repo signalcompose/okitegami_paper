@@ -158,14 +158,18 @@ export class ExperimentRunner {
 
       // 6. Run tests to evaluate (skip in dry-run — worktree doesn't exist)
       let completionRate = 0;
+      let vitestOutput: string | undefined;
+      let eslintOutput: string | undefined;
       if (this.options.dry_run) {
         completionRate = 1.0; // Simulated result for dry-run
       } else {
-        const vitestOutput = await this.runTaskTests(spec.task, worktreePath);
-        const eslintOutput =
-          spec.task === "task-c" ? await this.runLint(spec.task, worktreePath) : undefined;
+        vitestOutput = (await this.runTaskTests(spec.task, worktreePath)) || undefined;
+        eslintOutput =
+          spec.task === "task-c"
+            ? (await this.runLint(spec.task, worktreePath)) || undefined
+            : undefined;
         const evaluation = this.evaluator.evaluate(spec.task, {
-          vitest: vitestOutput || undefined,
+          vitest: vitestOutput,
           eslint: eslintOutput,
         });
         completionRate = evaluation.completion_rate;
@@ -179,6 +183,7 @@ export class ExperimentRunner {
             completionRate,
             taskDescription,
             claudeOutput: sessionResult.stdout.slice(0, 500),
+            vitestOutput,
           });
           if (experience) {
             const stored = this.experienceManager.storeExperience(dbPath, experience);

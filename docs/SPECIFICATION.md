@@ -200,6 +200,28 @@ Details: ~/.acm/experiences/{id}.json
 5. Persist entries to experience DB
 6. Log to session log
 
+### 3.7 Hook-Free Experience Generation (Experiment Runner)
+
+**Purpose**: In `--print` mode (experiment runner), hooks do not fire. Experience entries are generated programmatically from test results.
+
+**Behavior**:
+1. After Claude session completes, run vitest and (for task-c) eslint
+2. Parse vitest JSON output to extract:
+   - Total/passed/failed test counts
+   - Failed test names (from `assertionResults[].fullName` where `status === "failed"`)
+3. Generate experience entry:
+   - `type`: `"success"` if completion_rate >= 0.8, else `"failure"`
+   - `trigger`: Task description (TASK.md first 200 chars)
+   - `action`: Claude's output summary (first 200 chars, stripped of CVI Voice patterns)
+   - `outcome`: Actionable result description including:
+     - For failures: list of failed test names (e.g., `"Failed tests: auth/token-refresh, auth/logout. 6/8 passed."`)
+     - For successes: `"All tests passed (8/8)."`
+   - `signal_strength`: completion_rate (minimum 0.1 for failures)
+   - `signal_type`: `"uninterrupted_completion"` (no interrupt signals in --print mode)
+4. Store entry in shared experiment DB (per condition × task × context_size)
+
+**Rationale**: Including failed test names in `outcome` provides actionable information for subsequent sessions. Generic outcomes like "75% test pass rate" do not help the agent avoid repeating the same mistakes.
+
 ---
 
 ## 4. Experience Store
@@ -300,7 +322,16 @@ ACM itself should minimize context consumption. Injection text target: <500 toke
 - Evaluation: automated linting only (eslint / tsc). Human consistency review is deferred to paper revision phase.
 - 5 repeated sessions per condition
 
-### 6.4 Evaluation Metrics
+### 6.4 Task D — Algorithmic Generation
+
+- **Domain**: 2D dungeon generation algorithm
+- **Type**: Implementation from specification (seeded PRNG, two dungeon types, graph connectivity, distribution constraints)
+- **Complexity**: Higher than Tasks A–C. Requires seeded PRNG, room placement without overlap, graph connectivity verification, and distribution constraint satisfaction.
+- **Evaluation**: vitest (23 tests), completion_rate = passed/total
+- **Background**: Added in Phase 6-D to address ceiling effect observed in Tasks A/B (completion_rate = 1.0 for both conditions). Task D targets completion_rate in the 0.5–0.8 range.
+- 5 repeated sessions per condition
+
+### 6.5 Evaluation Metrics
 
 | Metric | Measurement | Primary RQ |
 |--------|-------------|-----------|

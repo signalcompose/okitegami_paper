@@ -13,7 +13,7 @@ import { join, dirname } from "node:path";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { formatInjection } from "../../src/retrieval/injector.js";
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
-import type { ConditionName, TaskName, ContextSize } from "../harness/types.js";
+import type { ConditionName, TaskName, ContextSize, VitestJsonResult } from "../harness/types.js";
 import { isAcmCondition } from "./types.js";
 
 export interface GenerateInput {
@@ -21,6 +21,7 @@ export interface GenerateInput {
   completionRate: number; // 0.0–1.0
   taskDescription: string; // TASK.md content summary
   claudeOutput: string; // Claude's response (for action/outcome)
+  vitestOutput?: string; // vitest JSON reporter output
 }
 
 const EXPERIMENT_ACM_CONFIG: AcmConfig = {
@@ -75,7 +76,7 @@ export class ExperienceManager {
    * Uses completion_rate as signal_strength (no hook-based signals needed).
    */
   generateExperience(input: GenerateInput): Omit<ExperienceEntry, "id"> | null {
-    const { sessionId, completionRate, taskDescription, claudeOutput } = input;
+    const { sessionId, completionRate, taskDescription, claudeOutput, vitestOutput } = input;
 
     const isSuccess = completionRate >= 0.8;
     const type: "success" | "failure" = isSuccess ? "success" : "failure";
@@ -90,16 +91,15 @@ export class ExperienceManager {
     // Build trigger from task description (first 200 chars)
     const trigger = taskDescription.slice(0, 200);
 
-    // Build action from claude output (first 200 chars)
-    const outputSummary = claudeOutput.slice(0, 200) || "(no output)";
+    // Build action from claude output (strip CVI noise, first 200 chars)
+    const cleanOutput = stripCviContent(claudeOutput);
+    const outputSummary = cleanOutput.slice(0, 200) || "(no output)";
     const action = isSuccess
       ? `Agent completed task: ${outputSummary}`
       : `Agent attempted task: ${outputSummary}`;
 
-    // Build outcome
-    const outcome = isSuccess
-      ? `Task completed with ${(completionRate * 100).toFixed(0)}% test pass rate`
-      : `Task incomplete: ${(completionRate * 100).toFixed(0)}% test pass rate`;
+    // Build outcome with actionable detail from vitest output
+    const outcome = buildOutcome(isSuccess, completionRate, vitestOutput);
 
     return {
       type,
@@ -185,4 +185,92 @@ function extractSimpleKeys(text: string): string[] {
 
   // Deduplicate and take first 10
   return [...new Set(words)].slice(0, 10);
+}
+
+const MAX_FAILED_TESTS = 5;
+
+interface ParsedVitest {
+  total: number;
+  passed: number;
+  failed: string[];
+}
+
+/**
+ * Parse vitest JSON output into structured result.
+ * Returns null on parse failure (graceful degradation).
+ */
+function parseVitestOutput(vitestOutput: string): ParsedVitest | null {
+  if (!vitestOutput) return null;
+
+  let parsed: VitestJsonResult;
+  try {
+    parsed = JSON.parse(vitestOutput) as VitestJsonResult;
+  } catch (err) {
+    console.warn(
+      `[ACM] parseVitestOutput: failed to parse vitest JSON (${vitestOutput.length} chars): ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+
+  const total = parsed.numTotalTests;
+  const passed = parsed.numPassedTests;
+  if (typeof total !== "number" || typeof passed !== "number") {
+    console.warn(
+      `[ACM] parseVitestOutput: unexpected JSON shape — numTotalTests=${typeof total}, numPassedTests=${typeof passed}`
+    );
+    return null;
+  }
+
+  const failed: string[] = [];
+  for (const suite of parsed.testResults ?? []) {
+    for (const assertion of suite.assertionResults ?? []) {
+      if (assertion.status === "failed") {
+        failed.push(assertion.fullName);
+      }
+    }
+  }
+  return { total, passed, failed: failed.slice(0, MAX_FAILED_TESTS) };
+}
+
+/**
+ * Extract failed test names from vitest JSON reporter output.
+ * Returns up to MAX_FAILED_TESTS (5) names. Returns empty array on parse failure.
+ */
+export function extractFailedTests(vitestOutput: string): string[] {
+  return parseVitestOutput(vitestOutput)?.failed ?? [];
+}
+
+/**
+ * Strip CVI Voice patterns from Claude's stdout.
+ * Removes `Voice: "..."` and `[VOICE]...[/VOICE]` patterns.
+ */
+export function stripCviContent(text: string): string {
+  return text
+    .replace(/Voice:\s*(?:"[^"]*"|'[^']*')/g, "")
+    .replace(/\[VOICE\][\s\S]*?\[\/VOICE\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Build an actionable outcome string from vitest results.
+ * Falls back to generic percentage-based outcome when vitest data is unavailable.
+ */
+function buildOutcome(isSuccess: boolean, completionRate: number, vitestOutput?: string): string {
+  if (vitestOutput) {
+    const p = parseVitestOutput(vitestOutput);
+    if (p) {
+      if (p.failed.length > 0) {
+        return `Failed tests: ${p.failed.join(", ")}. ${p.passed}/${p.total} passed.`;
+      }
+      return `All tests passed (${p.passed}/${p.total}).`;
+    }
+    console.warn(
+      "[ACM] buildOutcome: falling back to generic outcome — vitest output could not be parsed"
+    );
+  }
+
+  return isSuccess
+    ? `Task completed with ${(completionRate * 100).toFixed(0)}% test pass rate`
+    : `Task incomplete: ${(completionRate * 100).toFixed(0)}% test pass rate`;
 }

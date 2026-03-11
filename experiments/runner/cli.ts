@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import { ExperimentRunner } from "./experiment-runner.js";
-import { MILESTONE_6A, FULL_EXPERIMENT, MilestoneFilter } from "./types.js";
+import {
+  MILESTONE_6A,
+  MILESTONE_6A_C,
+  MILESTONE_6D,
+  FULL_EXPERIMENT,
+  MilestoneFilter,
+} from "./types.js";
 
 function parseArgs(args: string[]): {
   milestone: string;
@@ -29,7 +35,7 @@ ACM Experiment Runner
 Usage: npx tsx experiments/runner/cli.ts [options]
 
 Options:
-  --milestone <6a|full>  Experiment milestone (default: 6a)
+  --milestone <6a|6a-c|6d|full>  Experiment milestone (default: 6a)
   --dry-run              Skip actual Claude sessions
   --id <string>          Custom experiment ID
   --help                 Show this help
@@ -44,7 +50,19 @@ Options:
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  const filter: MilestoneFilter = args.milestone === "full" ? FULL_EXPERIMENT : MILESTONE_6A;
+  const MILESTONE_MAP: Record<string, MilestoneFilter> = {
+    "6a": MILESTONE_6A,
+    "6a-c": MILESTONE_6A_C,
+    "6d": MILESTONE_6D,
+    full: FULL_EXPERIMENT,
+  };
+  const filter = MILESTONE_MAP[args.milestone];
+  if (!filter) {
+    console.error(
+      `Error: unknown milestone "${args.milestone}". Valid values: ${Object.keys(MILESTONE_MAP).join(", ")}`
+    );
+    process.exit(1);
+  }
 
   const rootDir = resolve(import.meta.dirname ?? ".", "../..");
   const runner = new ExperimentRunner({

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { ExperienceManager } from "../experience-manager.js";
+import { ExperienceManager, extractFailedTests, stripCviContent } from "../experience-manager.js";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "__test_results__");
 
@@ -214,6 +214,230 @@ describe("ExperienceManager", () => {
       expect(injection).toBe("");
 
       mgr.closeAll();
+    });
+  });
+
+  describe("extractFailedTests", () => {
+    it("extracts failed test names from vitest JSON output", () => {
+      const vitestJson = JSON.stringify({
+        numTotalTests: 8,
+        numPassedTests: 6,
+        numFailedTests: 2,
+        testResults: [
+          {
+            name: "auth.test.ts",
+            status: "failed",
+            assertionResults: [
+              {
+                fullName: "auth > validates token expiry",
+                status: "failed",
+                failureMessages: ["Expected true"],
+              },
+              { fullName: "auth > checks signature", status: "passed" },
+            ],
+          },
+          {
+            name: "middleware.test.ts",
+            status: "failed",
+            assertionResults: [
+              {
+                fullName: "middleware > rejects invalid token",
+                status: "failed",
+                failureMessages: ["Timeout"],
+              },
+            ],
+          },
+        ],
+      });
+      const failed = extractFailedTests(vitestJson);
+      expect(failed).toEqual([
+        "auth > validates token expiry",
+        "middleware > rejects invalid token",
+      ]);
+    });
+
+    it("returns empty array when all tests pass", () => {
+      const vitestJson = JSON.stringify({
+        numTotalTests: 3,
+        numPassedTests: 3,
+        numFailedTests: 0,
+        testResults: [
+          {
+            name: "auth.test.ts",
+            status: "passed",
+            assertionResults: [{ fullName: "auth > works", status: "passed" }],
+          },
+        ],
+      });
+      expect(extractFailedTests(vitestJson)).toEqual([]);
+    });
+
+    it("returns empty array for invalid JSON", () => {
+      expect(extractFailedTests("not valid json")).toEqual([]);
+    });
+
+    it("returns empty array for empty string", () => {
+      expect(extractFailedTests("")).toEqual([]);
+    });
+
+    it("truncates to 5 failed test names", () => {
+      const results = Array.from({ length: 10 }, (_, i) => ({
+        name: `test${i}.ts`,
+        status: "failed" as const,
+        assertionResults: [
+          { fullName: `test ${i} > fails`, status: "failed" as const, failureMessages: ["err"] },
+        ],
+      }));
+      const vitestJson = JSON.stringify({
+        numTotalTests: 10,
+        numPassedTests: 0,
+        numFailedTests: 10,
+        testResults: results,
+      });
+      const failed = extractFailedTests(vitestJson);
+      expect(failed).toHaveLength(5);
+    });
+  });
+
+  describe("stripCviContent", () => {
+    it("removes Voice: pattern", () => {
+      const input = 'Voice: "Task completed successfully." Fixed the bug in jwt.ts';
+      expect(stripCviContent(input)).toBe("Fixed the bug in jwt.ts");
+    });
+
+    it("removes [VOICE] tags", () => {
+      const input = "[VOICE]Task done.[/VOICE] Modified the auth module.";
+      expect(stripCviContent(input)).toBe("Modified the auth module.");
+    });
+
+    it("removes multiline [VOICE] tags", () => {
+      const input = "[VOICE]Task\ncompleted\nsuccessfully.[/VOICE]\nFixed jwt.ts";
+      expect(stripCviContent(input)).toBe("Fixed jwt.ts");
+    });
+
+    it("handles text without CVI content", () => {
+      const input = "Fixed all authentication bugs";
+      expect(stripCviContent(input)).toBe("Fixed all authentication bugs");
+    });
+
+    it("handles empty string", () => {
+      expect(stripCviContent("")).toBe("");
+    });
+
+    it("removes multiple CVI patterns", () => {
+      const input = 'Voice: "Done." [VOICE]Also done[/VOICE] Real output here.';
+      expect(stripCviContent(input)).toBe("Real output here.");
+    });
+
+    it("removes single-quoted Voice pattern", () => {
+      const input = "Voice: 'Task completed.' Fixed the bug in jwt.ts";
+      expect(stripCviContent(input)).toBe("Fixed the bug in jwt.ts");
+    });
+  });
+
+  describe("generateExperience with vitestOutput", () => {
+    it("includes failed test names in outcome when vitestOutput is provided", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const vitestJson = JSON.stringify({
+        numTotalTests: 8,
+        numPassedTests: 6,
+        numFailedTests: 2,
+        testResults: [
+          {
+            name: "auth.test.ts",
+            status: "failed",
+            assertionResults: [
+              {
+                fullName: "auth > validates token expiry",
+                status: "failed",
+                failureMessages: ["Expected true"],
+              },
+            ],
+          },
+          {
+            name: "middleware.test.ts",
+            status: "passed",
+            assertionResults: [{ fullName: "middleware > works", status: "passed" }],
+          },
+        ],
+      });
+
+      const entry = mgr.generateExperience({
+        sessionId: "s-vt",
+        completionRate: 0.75,
+        taskDescription: "Fix JWT bugs",
+        claudeOutput: "Attempted fix",
+        vitestOutput: vitestJson,
+      });
+
+      expect(entry).not.toBeNull();
+      expect(entry!.outcome).toContain("auth > validates token expiry");
+      expect(entry!.outcome).toContain("6/8");
+    });
+
+    it("generates success outcome with test count when all pass", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const vitestJson = JSON.stringify({
+        numTotalTests: 8,
+        numPassedTests: 8,
+        numFailedTests: 0,
+        testResults: [
+          {
+            name: "auth.test.ts",
+            status: "passed",
+            assertionResults: [{ fullName: "auth > works", status: "passed" }],
+          },
+        ],
+      });
+
+      const entry = mgr.generateExperience({
+        sessionId: "s-vt-ok",
+        completionRate: 1.0,
+        taskDescription: "Fix bugs",
+        claudeOutput: "Done",
+        vitestOutput: vitestJson,
+      });
+
+      expect(entry!.outcome).toContain("All tests passed");
+      expect(entry!.outcome).toContain("8/8");
+    });
+
+    it("falls back to generic outcome when vitestOutput is not provided", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const entry = mgr.generateExperience({
+        sessionId: "s-no-vt",
+        completionRate: 0.5,
+        taskDescription: "Fix bugs",
+        claudeOutput: "Tried",
+      });
+
+      expect(entry!.outcome).toBe("Task incomplete: 50% test pass rate");
+    });
+
+    it("falls back to generic outcome when vitestOutput is invalid JSON", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const entry = mgr.generateExperience({
+        sessionId: "s-bad-vt",
+        completionRate: 0.5,
+        taskDescription: "Fix bugs",
+        claudeOutput: "Tried",
+        vitestOutput: "invalid json",
+      });
+
+      expect(entry!.outcome).toBe("Task incomplete: 50% test pass rate");
+    });
+
+    it("strips CVI content from claudeOutput before using in action", () => {
+      const mgr = new ExperienceManager(TEST_DIR);
+      const entry = mgr.generateExperience({
+        sessionId: "s-cvi",
+        completionRate: 0.5,
+        taskDescription: "Fix bugs",
+        claudeOutput: 'Voice: "Task completed." Fixed the authentication module',
+      });
+
+      expect(entry!.action).not.toContain("Voice:");
+      expect(entry!.action).toContain("authentication module");
     });
   });
 
