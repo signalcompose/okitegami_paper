@@ -23,6 +23,10 @@ credentials*
 !credentials.example.*
 # [/code:security-patterns]
 
-# Experiment results (generated, not tracked)
+# Experiment results — track JSON/CSV for reproducibility, exclude binaries
 experiments/results/*
 !experiments/results/.gitkeep
+!experiments/results/*/
+experiments/results/**/*.db
+experiments/results/**/*.db-shm
+experiments/results/**/*.db-wal
