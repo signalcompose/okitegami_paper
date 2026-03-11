@@ -47,7 +47,7 @@ export const TASK_DIRS: Record<string, string> = {
   "task-a": "task-a-bugfix",
   "task-b": "task-b-feature",
   "task-c": "task-c-refactor",
-  "task-d": "task-d-orbitscore",
+  "task-d": "task-d-orbitscore", // supersedes task-d-dungeon (retained for reference)
 };
 
 const NON_ACM_CONDITIONS: ReadonlySet<string> = new Set(["control", "baseline-compact"]);

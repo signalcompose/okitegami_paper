@@ -41,14 +41,6 @@ export function calculateEventTiming(
         duration: elementDuration,
         depth,
       });
-    } else if (Array.isArray(element)) {
-      const nestedEvents = calculateEventTiming(
-        element,
-        elementDuration,
-        elementStartTime,
-        depth + 1
-      );
-      events.push(...nestedEvents);
     } else if (element && typeof element === "object") {
       if (element.type === "nested") {
         const nestedEvents = calculateEventTiming(
