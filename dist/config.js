@@ -32,31 +32,33 @@ function validate(config) {
         throw new Error(`capture_turns must be >= 1, got ${config.capture_turns}`);
     }
 }
-export function loadConfig(path) {
+export function loadConfig(pathOrOptions) {
+    const opts = typeof pathOrOptions === "string" ? { path: pathOrOptions } : (pathOrOptions ?? {});
     let overrides = {};
-    if (path) {
+    if (opts.path) {
         let raw;
         try {
-            raw = readFileSync(path, "utf-8");
+            raw = readFileSync(opts.path, "utf-8");
         }
         catch (err) {
-            throw new Error(`Cannot read config file "${path}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+            throw new Error(`Cannot read config file "${opts.path}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
         }
         try {
             overrides = JSON.parse(raw);
         }
         catch (err) {
-            throw new Error(`Invalid JSON in config file "${path}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+            throw new Error(`Invalid JSON in config file "${opts.path}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
         }
         const unknownKeys = Object.keys(overrides).filter((k) => !KNOWN_CONFIG_KEYS.has(k));
         if (unknownKeys.length > 0) {
             throw new Error(`Unknown config keys: ${unknownKeys.join(", ")}. Valid keys: ${[...KNOWN_CONFIG_KEYS].join(", ")}`);
         }
     }
+    const dbPath = opts.dbPathOverride ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
     const config = {
         ...DEFAULT_CONFIG,
         ...overrides,
-        db_path: expandTilde(overrides.db_path ?? DEFAULT_CONFIG.db_path),
+        db_path: expandTilde(dbPath),
     };
     validate(config);
     return config;

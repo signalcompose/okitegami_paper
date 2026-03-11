@@ -11,11 +11,7 @@
   "mcpServers": {
     "acm": {
       "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/start-mcp.sh"],
-      "env": {
-        "ACM_CONFIG_PATH": "",
-        "ACM_DB_PATH": ""
-      }
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/start-mcp.sh"]
     }
   }
 }

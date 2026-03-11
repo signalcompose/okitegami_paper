@@ -1,13 +1,13 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createAcmServer } from "./server/tools.js";
-import { loadConfig, expandTilde } from "./config.js";
+import { loadConfig } from "./config.js";
 import { ExperienceStore } from "./store/experience-store.js";
 import { Embedder } from "./retrieval/embedder.js";
 async function main() {
-    const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
-    if (process.env.ACM_DB_PATH) {
-        config.db_path = expandTilde(process.env.ACM_DB_PATH);
-    }
+    const config = loadConfig({
+        path: process.env.ACM_CONFIG_PATH || undefined,
+        dbPathOverride: process.env.ACM_DB_PATH || undefined,
+    });
     const experienceStore = new ExperienceStore(config);
     const embedder = new Embedder();
     const server = createAcmServer({
