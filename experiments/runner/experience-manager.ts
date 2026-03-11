@@ -22,7 +22,6 @@ export interface GenerateInput {
   taskDescription: string; // TASK.md content summary
   claudeOutput: string; // Claude's response (for action/outcome)
   vitestOutput?: string; // vitest JSON reporter output
-  eslintOutput?: string; // ESLint JSON output (task-c)
 }
 
 const EXPERIMENT_ACM_CONFIG: AcmConfig = {
@@ -190,26 +189,44 @@ function extractSimpleKeys(text: string): string[] {
 
 const MAX_FAILED_TESTS = 5;
 
+interface ParsedVitest {
+  total: number;
+  passed: number;
+  failed: string[];
+}
+
 /**
- * Extract failed test names from vitest JSON reporter output.
- * Returns empty array on parse failure (graceful degradation).
+ * Parse vitest JSON output into structured result.
+ * Returns null on parse failure (graceful degradation).
  */
-export function extractFailedTests(vitestOutput: string): string[] {
-  if (!vitestOutput) return [];
+function parseVitestOutput(vitestOutput: string): ParsedVitest | null {
+  if (!vitestOutput) return null;
   try {
     const parsed = JSON.parse(vitestOutput) as VitestJsonResult;
+    const total = parsed.numTotalTests;
+    const passed = parsed.numPassedTests;
+    if (typeof total !== "number" || typeof passed !== "number") return null;
+
     const failed: string[] = [];
-    for (const suite of parsed.testResults) {
-      for (const assertion of suite.assertionResults) {
+    for (const suite of parsed.testResults ?? []) {
+      for (const assertion of suite.assertionResults ?? []) {
         if (assertion.status === "failed") {
           failed.push(assertion.fullName);
         }
       }
     }
-    return failed.slice(0, MAX_FAILED_TESTS);
+    return { total, passed, failed: failed.slice(0, MAX_FAILED_TESTS) };
   } catch {
-    return [];
+    return null;
   }
+}
+
+/**
+ * Extract failed test names from vitest JSON reporter output.
+ * Returns empty array on parse failure (graceful degradation).
+ */
+export function extractFailedTests(vitestOutput: string): string[] {
+  return parseVitestOutput(vitestOutput)?.failed ?? [];
 }
 
 /**
@@ -230,31 +247,12 @@ export function stripCviContent(text: string): string {
  */
 function buildOutcome(isSuccess: boolean, completionRate: number, vitestOutput?: string): string {
   if (vitestOutput) {
-    try {
-      const parsed = JSON.parse(vitestOutput) as VitestJsonResult;
-      const total = parsed.numTotalTests;
-      const passed = parsed.numPassedTests;
-
-      if (typeof total !== "number" || typeof passed !== "number") {
-        // Missing numeric fields — fall through to generic outcome
-      } else {
-        const failed: string[] = [];
-        for (const suite of parsed.testResults ?? []) {
-          for (const assertion of suite.assertionResults ?? []) {
-            if (assertion.status === "failed") {
-              failed.push(assertion.fullName);
-            }
-          }
-        }
-        const capped = failed.slice(0, MAX_FAILED_TESTS);
-
-        if (capped.length > 0) {
-          return `Failed tests: ${capped.join(", ")}. ${passed}/${total} passed.`;
-        }
-        return `All tests passed (${passed}/${total}).`;
+    const p = parseVitestOutput(vitestOutput);
+    if (p) {
+      if (p.failed.length > 0) {
+        return `Failed tests: ${p.failed.join(", ")}. ${p.passed}/${p.total} passed.`;
       }
-    } catch {
-      // Fall through to generic outcome
+      return `All tests passed (${p.passed}/${p.total}).`;
     }
   }
 

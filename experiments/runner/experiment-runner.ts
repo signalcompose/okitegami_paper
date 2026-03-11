@@ -184,7 +184,6 @@ export class ExperimentRunner {
             taskDescription,
             claudeOutput: sessionResult.stdout.slice(0, 500),
             vitestOutput,
-            eslintOutput,
           });
           if (experience) {
             const stored = this.experienceManager.storeExperience(dbPath, experience);
