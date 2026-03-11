@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "acm",
+  "owner": {
+    "name": "Signal compose",
+    "email": "contact@signalcompose.com"
+  },
+  "plugins": [
+    {
+      "name": "acm",
+      "description": "Associative Context Memory (ACM) — an MCP server that captures implicit feedback signals and builds cross-session experience memory for Claude Code.",
+      "source": "./",
+      "category": "developer-tools",
+      "homepage": "https://github.com/signalcompose/okitegami_paper",
+      "keywords": ["acm", "memory", "experience", "mcp", "signals"],
+      "license": "MIT",
+      "author": {
+        "name": "Signal compose"
+      }
+    }
+  ]
+}

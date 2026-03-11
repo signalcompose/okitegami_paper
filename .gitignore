@@ -7,7 +7,6 @@
 
 # Node.js
 node_modules/
-dist/
 
 # [code:security-patterns:fbe2794b]
 .env

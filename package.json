@@ -15,7 +15,7 @@
     "start": "node dist/index.js",
     "experiment": "tsx experiments/runner/cli.ts",
     "experiment:dry": "tsx experiments/runner/cli.ts --dry-run",
-    "prepare": "husky"
+    "prepare": "[ -f node_modules/.bin/husky ] && husky || true"
   },
   "author": "Hiroshi Yamato <yamato@signalcompose.com>",
   "license": "MIT",

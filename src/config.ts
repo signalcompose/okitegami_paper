@@ -11,7 +11,7 @@ const KNOWN_CONFIG_KEYS = new Set<string>([
   "db_path",
 ]);
 
-function expandTilde(filePath: string): string {
+export function expandTilde(filePath: string): string {
   if (filePath === "~") {
     return homedir();
   }
