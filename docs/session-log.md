@@ -276,3 +276,40 @@ Issues #49-#53 作成、PR #54 で実装。
 - .claude/plans/scalable-drifting-walrus.md
 
 ---
+
+### ACM Experience Quality Improvement + Task C Re-experiment (2026-03-11)
+
+#### 経験エントリ品質の問題
+
+Milestone 6-A（exp_6ac）の acm-sf 条件で null result が出た。DB 調査の結果:
+1. outcome が `"Task incomplete: 75% test pass rate"` のみで actionable 情報がない
+2. action に CVI Voice 出力が混入（`"Agent attempted task: Voice: ..."`）
+3. vitest JSON は取得済みだが経験生成に渡されていなかった
+
+#### 改善内容（PR #54 に含む）
+
+- `parseVitestOutput()`: vitest JSON を1回だけ parse し、失敗テスト名を抽出
+- `extractFailedTests()`: 失敗テスト名を最大5件収集
+- `stripCviContent()`: CVI Voice パターンを除去
+- `buildOutcome()`: 失敗時 `"Failed tests: xxx. 6/8 passed."`、成功時 `"All tests passed (8/8)."`
+- 17 新テスト追加（379件全パス）
+
+#### 再実験結果（exp_6ac_improved）
+
+| 条件 | s1 | s2 | s3 | s4 | s5 | mean | std |
+|------|------|------|------|------|------|------|-----|
+| control | 0.9375 | 0.9375 | 0.9375 | 0.9375 | 0.9375 | 0.938 | 0.000 |
+| acm-sf | 1.0000 | 0.9375 | 0.9375 | 0.9375 | 0.9375 | 0.950 | 0.028 |
+
+- ACM-SF が +0.012 だが、s1 の 1 セッションのみの差
+- Task C は天井効果が強い（baseline 0.9375）
+- 経験エントリの outcome は改善済み: `"All tests passed (11/11)."`
+- action は `"(no output)"` — `claude --print` の stdout が空のため
+
+#### 改善前後の注入テキスト比較
+
+**改善前（exp_6ac）**: 注入なし（null result のため s2 以降で experience が蓄積されなかった）
+
+**改善後（exp_6ac_improved）**: s2 以降で 376→713→1050→1387 chars の injection が正常に蓄積
+
+---

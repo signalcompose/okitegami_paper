@@ -1,0 +1,253 @@
+{
+  "experiment_id": "exp_6ac_improved",
+  "started_at": "2026-03-11T03:53:41.646Z",
+  "completed_at": "2026-03-11T04:27:38.807Z",
+  "runs": [
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 1,
+        "run_id": "control_task-c_full_s1"
+      },
+      "metrics": {
+        "run_id": "control_task-c_full_s1",
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 1,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T03:53:41.646Z"
+      },
+      "duration_ms": 154132
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 2,
+        "run_id": "control_task-c_full_s2"
+      },
+      "metrics": {
+        "run_id": "control_task-c_full_s2",
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 2,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T03:58:02.414Z"
+      },
+      "duration_ms": 260734
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 3,
+        "run_id": "control_task-c_full_s3"
+      },
+      "metrics": {
+        "run_id": "control_task-c_full_s3",
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 3,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:01:37.442Z"
+      },
+      "duration_ms": 214994
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 4,
+        "run_id": "control_task-c_full_s4"
+      },
+      "metrics": {
+        "run_id": "control_task-c_full_s4",
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 4,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:04:01.180Z"
+      },
+      "duration_ms": 143708
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 5,
+        "run_id": "control_task-c_full_s5"
+      },
+      "metrics": {
+        "run_id": "control_task-c_full_s5",
+        "condition": "control",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 5,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:08:25.706Z"
+      },
+      "duration_ms": 264496
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 1,
+        "run_id": "acm-sf_task-c_full_s1"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-c_full_s1",
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 1,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:13:56.445Z"
+      },
+      "duration_ms": 330706
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 2,
+        "run_id": "acm-sf_task-c_full_s2"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-c_full_s2",
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 2,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:16:51.869Z"
+      },
+      "duration_ms": 175393
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 3,
+        "run_id": "acm-sf_task-c_full_s3"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-c_full_s3",
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 3,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:20:27.170Z"
+      },
+      "duration_ms": 215263
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 4,
+        "run_id": "acm-sf_task-c_full_s4"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-c_full_s4",
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 4,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:23:48.554Z"
+      },
+      "duration_ms": 201352
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 5,
+        "run_id": "acm-sf_task-c_full_s5"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-c_full_s5",
+        "condition": "acm-sf",
+        "task": "task-c",
+        "context_size": "full",
+        "session_number": 5,
+        "task_completion_rate": 0.9375,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T04:27:38.807Z"
+      },
+      "duration_ms": 230220
+    }
+  ],
+  "aggregated": [
+    {
+      "condition": "control",
+      "mean_completion_rate": 0.9375,
+      "std_completion_rate": 0,
+      "mean_interrupt_count": 0,
+      "std_interrupt_count": 0,
+      "mean_corrective_count": 0,
+      "std_corrective_count": 0,
+      "mean_context_tokens": 0,
+      "std_context_tokens": 0,
+      "run_count": 5
+    },
+    {
+      "condition": "acm-sf",
+      "mean_completion_rate": 0.95,
+      "std_completion_rate": 0.02795084971874737,
+      "mean_interrupt_count": 0,
+      "std_interrupt_count": 0,
+      "mean_corrective_count": 0,
+      "std_corrective_count": 0,
+      "mean_context_tokens": 0,
+      "std_context_tokens": 0,
+      "run_count": 5
+    }
+  ]
+}
