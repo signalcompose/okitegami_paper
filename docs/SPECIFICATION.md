@@ -212,7 +212,7 @@ Details: ~/.acm/experiences/{id}.json
 3. Generate experience entry:
    - `type`: `"success"` if completion_rate >= 0.8, else `"failure"`
    - `trigger`: Task description (TASK.md first 200 chars)
-   - `action`: Claude's output summary (first 500 chars, stripped of non-actionable content)
+   - `action`: Claude's output summary (first 200 chars, stripped of CVI Voice patterns)
    - `outcome`: Actionable result description including:
      - For failures: list of failed test names (e.g., `"Failed tests: auth/token-refresh, auth/logout. 6/8 passed."`)
      - For successes: `"All tests passed (8/8)."`

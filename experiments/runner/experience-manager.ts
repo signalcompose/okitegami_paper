@@ -201,29 +201,40 @@ interface ParsedVitest {
  */
 function parseVitestOutput(vitestOutput: string): ParsedVitest | null {
   if (!vitestOutput) return null;
-  try {
-    const parsed = JSON.parse(vitestOutput) as VitestJsonResult;
-    const total = parsed.numTotalTests;
-    const passed = parsed.numPassedTests;
-    if (typeof total !== "number" || typeof passed !== "number") return null;
 
-    const failed: string[] = [];
-    for (const suite of parsed.testResults ?? []) {
-      for (const assertion of suite.assertionResults ?? []) {
-        if (assertion.status === "failed") {
-          failed.push(assertion.fullName);
-        }
-      }
-    }
-    return { total, passed, failed: failed.slice(0, MAX_FAILED_TESTS) };
-  } catch {
+  let parsed: VitestJsonResult;
+  try {
+    parsed = JSON.parse(vitestOutput) as VitestJsonResult;
+  } catch (err) {
+    console.warn(
+      `[ACM] parseVitestOutput: failed to parse vitest JSON (${vitestOutput.length} chars): ${err instanceof Error ? err.message : String(err)}`
+    );
     return null;
   }
+
+  const total = parsed.numTotalTests;
+  const passed = parsed.numPassedTests;
+  if (typeof total !== "number" || typeof passed !== "number") {
+    console.warn(
+      `[ACM] parseVitestOutput: unexpected JSON shape — numTotalTests=${typeof total}, numPassedTests=${typeof passed}`
+    );
+    return null;
+  }
+
+  const failed: string[] = [];
+  for (const suite of parsed.testResults ?? []) {
+    for (const assertion of suite.assertionResults ?? []) {
+      if (assertion.status === "failed") {
+        failed.push(assertion.fullName);
+      }
+    }
+  }
+  return { total, passed, failed: failed.slice(0, MAX_FAILED_TESTS) };
 }
 
 /**
  * Extract failed test names from vitest JSON reporter output.
- * Returns empty array on parse failure (graceful degradation).
+ * Returns up to MAX_FAILED_TESTS (5) names. Returns empty array on parse failure.
  */
 export function extractFailedTests(vitestOutput: string): string[] {
   return parseVitestOutput(vitestOutput)?.failed ?? [];
@@ -254,6 +265,9 @@ function buildOutcome(isSuccess: boolean, completionRate: number, vitestOutput?:
       }
       return `All tests passed (${p.passed}/${p.total}).`;
     }
+    console.warn(
+      "[ACM] buildOutcome: falling back to generic outcome — vitest output could not be parsed"
+    );
   }
 
   return isSuccess

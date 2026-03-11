@@ -56,7 +56,13 @@ async function main(): Promise<void> {
     "6d": MILESTONE_6D,
     full: FULL_EXPERIMENT,
   };
-  const filter = MILESTONE_MAP[args.milestone] ?? MILESTONE_6A;
+  const filter = MILESTONE_MAP[args.milestone];
+  if (!filter) {
+    console.error(
+      `Error: unknown milestone "${args.milestone}". Valid values: ${Object.keys(MILESTONE_MAP).join(", ")}`
+    );
+    process.exit(1);
+  }
 
   const rootDir = resolve(import.meta.dirname ?? ".", "../..");
   const runner = new ExperimentRunner({
