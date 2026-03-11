@@ -21,6 +21,13 @@ export const MILESTONE_6A: MilestoneFilter = {
   sessions: 5,
 };
 
+export const MILESTONE_6A_C: MilestoneFilter = {
+  conditions: ["control", "acm-sf"],
+  tasks: ["task-c"],
+  context_sizes: ["full"],
+  sessions: 5,
+};
+
 export const MILESTONE_6D: MilestoneFilter = {
   conditions: ["control", "acm-sf"],
   tasks: ["task-d"],

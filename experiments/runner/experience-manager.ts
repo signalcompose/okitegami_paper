@@ -13,7 +13,7 @@ import { join, dirname } from "node:path";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { formatInjection } from "../../src/retrieval/injector.js";
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
-import type { ConditionName, TaskName, ContextSize } from "../harness/types.js";
+import type { ConditionName, TaskName, ContextSize, VitestJsonResult } from "../harness/types.js";
 import { isAcmCondition } from "./types.js";
 
 export interface GenerateInput {
@@ -21,6 +21,8 @@ export interface GenerateInput {
   completionRate: number; // 0.0–1.0
   taskDescription: string; // TASK.md content summary
   claudeOutput: string; // Claude's response (for action/outcome)
+  vitestOutput?: string; // vitest JSON reporter output
+  eslintOutput?: string; // ESLint JSON output (task-c)
 }
 
 const EXPERIMENT_ACM_CONFIG: AcmConfig = {
@@ -75,7 +77,7 @@ export class ExperienceManager {
    * Uses completion_rate as signal_strength (no hook-based signals needed).
    */
   generateExperience(input: GenerateInput): Omit<ExperienceEntry, "id"> | null {
-    const { sessionId, completionRate, taskDescription, claudeOutput } = input;
+    const { sessionId, completionRate, taskDescription, claudeOutput, vitestOutput } = input;
 
     const isSuccess = completionRate >= 0.8;
     const type: "success" | "failure" = isSuccess ? "success" : "failure";
@@ -90,16 +92,15 @@ export class ExperienceManager {
     // Build trigger from task description (first 200 chars)
     const trigger = taskDescription.slice(0, 200);
 
-    // Build action from claude output (first 200 chars)
-    const outputSummary = claudeOutput.slice(0, 200) || "(no output)";
+    // Build action from claude output (strip CVI noise, first 200 chars)
+    const cleanOutput = stripCviContent(claudeOutput);
+    const outputSummary = cleanOutput.slice(0, 200) || "(no output)";
     const action = isSuccess
       ? `Agent completed task: ${outputSummary}`
       : `Agent attempted task: ${outputSummary}`;
 
-    // Build outcome
-    const outcome = isSuccess
-      ? `Task completed with ${(completionRate * 100).toFixed(0)}% test pass rate`
-      : `Task incomplete: ${(completionRate * 100).toFixed(0)}% test pass rate`;
+    // Build outcome with actionable detail from vitest output
+    const outcome = buildOutcome(isSuccess, completionRate, vitestOutput);
 
     return {
       type,
@@ -185,4 +186,79 @@ function extractSimpleKeys(text: string): string[] {
 
   // Deduplicate and take first 10
   return [...new Set(words)].slice(0, 10);
+}
+
+const MAX_FAILED_TESTS = 5;
+
+/**
+ * Extract failed test names from vitest JSON reporter output.
+ * Returns empty array on parse failure (graceful degradation).
+ */
+export function extractFailedTests(vitestOutput: string): string[] {
+  if (!vitestOutput) return [];
+  try {
+    const parsed = JSON.parse(vitestOutput) as VitestJsonResult;
+    const failed: string[] = [];
+    for (const suite of parsed.testResults) {
+      for (const assertion of suite.assertionResults) {
+        if (assertion.status === "failed") {
+          failed.push(assertion.fullName);
+        }
+      }
+    }
+    return failed.slice(0, MAX_FAILED_TESTS);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Strip CVI Voice patterns from Claude's stdout.
+ * Removes `Voice: "..."` and `[VOICE]...[/VOICE]` patterns.
+ */
+export function stripCviContent(text: string): string {
+  return text
+    .replace(/Voice:\s*(?:"[^"]*"|'[^']*')/g, "")
+    .replace(/\[VOICE\][\s\S]*?\[\/VOICE\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Build an actionable outcome string from vitest results.
+ * Falls back to generic percentage-based outcome when vitest data is unavailable.
+ */
+function buildOutcome(isSuccess: boolean, completionRate: number, vitestOutput?: string): string {
+  if (vitestOutput) {
+    try {
+      const parsed = JSON.parse(vitestOutput) as VitestJsonResult;
+      const total = parsed.numTotalTests;
+      const passed = parsed.numPassedTests;
+
+      if (typeof total !== "number" || typeof passed !== "number") {
+        // Missing numeric fields — fall through to generic outcome
+      } else {
+        const failed: string[] = [];
+        for (const suite of parsed.testResults ?? []) {
+          for (const assertion of suite.assertionResults ?? []) {
+            if (assertion.status === "failed") {
+              failed.push(assertion.fullName);
+            }
+          }
+        }
+        const capped = failed.slice(0, MAX_FAILED_TESTS);
+
+        if (capped.length > 0) {
+          return `Failed tests: ${capped.join(", ")}. ${passed}/${total} passed.`;
+        }
+        return `All tests passed (${passed}/${total}).`;
+      }
+    } catch {
+      // Fall through to generic outcome
+    }
+  }
+
+  return isSuccess
+    ? `Task completed with ${(completionRate * 100).toFixed(0)}% test pass rate`
+    : `Task incomplete: ${(completionRate * 100).toFixed(0)}% test pass rate`;
 }

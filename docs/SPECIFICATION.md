@@ -200,6 +200,28 @@ Details: ~/.acm/experiences/{id}.json
 5. Persist entries to experience DB
 6. Log to session log
 
+### 3.7 Hook-Free Experience Generation (Experiment Runner)
+
+**Purpose**: In `--print` mode (experiment runner), hooks do not fire. Experience entries are generated programmatically from test results.
+
+**Behavior**:
+1. After Claude session completes, run vitest and (for task-c) eslint
+2. Parse vitest JSON output to extract:
+   - Total/passed/failed test counts
+   - Failed test names (from `assertionResults[].fullName` where `status === "failed"`)
+3. Generate experience entry:
+   - `type`: `"success"` if completion_rate >= 0.8, else `"failure"`
+   - `trigger`: Task description (TASK.md first 200 chars)
+   - `action`: Claude's output summary (first 500 chars, stripped of non-actionable content)
+   - `outcome`: Actionable result description including:
+     - For failures: list of failed test names (e.g., `"Failed tests: auth/token-refresh, auth/logout. 6/8 passed."`)
+     - For successes: `"All tests passed (8/8)."`
+   - `signal_strength`: completion_rate (minimum 0.1 for failures)
+   - `signal_type`: `"uninterrupted_completion"` (no interrupt signals in --print mode)
+4. Store entry in shared experiment DB (per condition × task × context_size)
+
+**Rationale**: Including failed test names in `outcome` provides actionable information for subsequent sessions. Generic outcomes like "75% test pass rate" do not help the agent avoid repeating the same mistakes.
+
 ---
 
 ## 4. Experience Store

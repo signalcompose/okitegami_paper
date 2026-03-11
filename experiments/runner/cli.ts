@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import { ExperimentRunner } from "./experiment-runner.js";
-import { MILESTONE_6A, MILESTONE_6D, FULL_EXPERIMENT, MilestoneFilter } from "./types.js";
+import {
+  MILESTONE_6A,
+  MILESTONE_6A_C,
+  MILESTONE_6D,
+  FULL_EXPERIMENT,
+  MilestoneFilter,
+} from "./types.js";
 
 function parseArgs(args: string[]): {
   milestone: string;
@@ -29,7 +35,7 @@ ACM Experiment Runner
 Usage: npx tsx experiments/runner/cli.ts [options]
 
 Options:
-  --milestone <6a|6d|full>  Experiment milestone (default: 6a)
+  --milestone <6a|6a-c|6d|full>  Experiment milestone (default: 6a)
   --dry-run              Skip actual Claude sessions
   --id <string>          Custom experiment ID
   --help                 Show this help
@@ -46,6 +52,7 @@ async function main(): Promise<void> {
 
   const MILESTONE_MAP: Record<string, MilestoneFilter> = {
     "6a": MILESTONE_6A,
+    "6a-c": MILESTONE_6A_C,
     "6d": MILESTONE_6D,
     full: FULL_EXPERIMENT,
   };
