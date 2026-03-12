@@ -123,6 +123,19 @@ export function createAcmServer(options) {
                     return toolError(`Error generating experience: ${errorMessage(err)}`);
                 }
             });
+            server.tool("acm_report", "Cross-project analysis and injection→outcome episode tracing", {
+                project: z.string().optional().describe("Filter by project name"),
+                limit: z.number().optional().describe("Max episodes to return (default: 10)"),
+            }, (params) => {
+                try {
+                    const summary = experienceStore.getCrossProjectReport();
+                    const episodes = experienceStore.getInjectionEpisodes(params.project, params.limit ?? 10);
+                    return toolResult({ summary, episodes });
+                }
+                catch (err) {
+                    return toolError(`Error generating report: ${errorMessage(err)}`);
+                }
+            });
         }
         if (options.experienceStore && options.embedder) {
             const experienceStore = options.experienceStore;

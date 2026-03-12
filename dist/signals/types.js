@@ -12,5 +12,6 @@ export const EVENT_TYPES = [
     "tool_success",
     "stop",
     "rewind",
+    "injection",
 ];
 //# sourceMappingURL=types.js.map

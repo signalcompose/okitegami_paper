@@ -7,6 +7,7 @@
  * Returns initialized stores + parsed input for active hooks.
  */
 
+import { basename } from "node:path";
 import { loadConfig } from "../config.js";
 import { initializeDatabase } from "../store/schema.js";
 import { SessionSignalStore } from "../signals/session-store.js";
@@ -20,6 +21,7 @@ export interface HookContext {
   signalStore: SessionSignalStore;
   experienceStore: ExperienceStore;
   collector: SignalCollector;
+  projectName: string;
   cleanup: () => void;
 }
 
@@ -56,12 +58,15 @@ export function bootstrapHook(stdin: string): HookContext | null {
       capture_turns: config.capture_turns,
     });
 
+    const projectName = basename((input.cwd as string) || "") || "unknown";
+
     return {
       input,
       config,
       signalStore,
       experienceStore,
       collector,
+      projectName,
       cleanup: () => {
         experienceStore.close();
         db.close();

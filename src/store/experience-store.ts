@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { initializeDatabase } from "./schema.js";
 import { SIGNAL_TYPES } from "./types.js";
-import type { ExperienceEntry, AcmConfig } from "./types.js";
+import type {
+  ExperienceEntry,
+  AcmConfig,
+  ProjectReportRow,
+  InjectionEpisode,
+  SessionSignalSummary,
+} from "./types.js";
 import { serializeEmbedding, deserializeEmbedding } from "../retrieval/embedding-serde.js";
 
 export interface EntryWithEmbedding {
@@ -21,6 +27,7 @@ export class ExperienceStore {
   private stmtUpdateEmbedding: Database.Statement;
   private stmtAllWithEmbedding: Database.Statement;
   private stmtAllWithEmbeddingByType: Database.Statement;
+  private stmtOutcomesBySession: Database.Statement;
 
   constructor(config: AcmConfig) {
     this.config = config;
@@ -30,8 +37,8 @@ export class ExperienceStore {
       `INSERT INTO experiences
        (id, type, trigger_text, action_text, outcome_text,
         retrieval_keys, signal_strength, signal_type,
-        session_id, timestamp, interrupt_context, embedding)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        session_id, timestamp, interrupt_context, embedding, project)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     this.stmtGetById = this.db.prepare("SELECT * FROM experiences WHERE id = ?");
     this.stmtList = this.db.prepare("SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?");
@@ -46,6 +53,7 @@ export class ExperienceStore {
     this.stmtAllWithEmbeddingByType = this.db.prepare(
       "SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?"
     );
+    this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
   }
 
   getDb(): Database.Database {
@@ -174,7 +182,8 @@ export class ExperienceStore {
       entry.session_id,
       entry.timestamp,
       entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null,
-      embeddingBlob
+      embeddingBlob,
+      entry.project ?? null
     );
 
     return entry;
@@ -185,10 +194,116 @@ export class ExperienceStore {
     return rows.map((row) => this.rowToEntry(row));
   }
 
+  getCrossProjectReport(): ProjectReportRow[] {
+    const stmt = this.db.prepare(`
+      SELECT project, COUNT(*) as total_entries,
+        SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
+        SUM(CASE WHEN type='failure' THEN 1 ELSE 0 END) as failure_count,
+        AVG(signal_strength) as avg_signal_strength,
+        MIN(timestamp) as first_entry, MAX(timestamp) as last_entry
+      FROM experiences WHERE project IS NOT NULL AND project != ''
+      GROUP BY project ORDER BY last_entry DESC
+    `);
+    return stmt.all() as ProjectReportRow[];
+  }
+
+  getInjectionEpisodes(project?: string, limit?: number): InjectionEpisode[] {
+    // Find injection events from session_signals
+    let injectionQuery = `
+      SELECT session_id, data, timestamp FROM session_signals
+      WHERE event_type = 'injection'
+    `;
+    const params: unknown[] = [];
+    if (project) {
+      injectionQuery += ` AND json_extract(data, '$.project') = ?`;
+      params.push(project);
+    }
+    injectionQuery += ` ORDER BY timestamp DESC`;
+    if (limit !== undefined) {
+      injectionQuery += ` LIMIT ?`;
+      params.push(limit);
+    }
+
+    const injectionRows = this.db.prepare(injectionQuery).all(...params) as Array<{
+      session_id: string;
+      data: string;
+      timestamp: string;
+    }>;
+
+    const episodes: InjectionEpisode[] = [];
+
+    for (const row of injectionRows) {
+      const injectionData = JSON.parse(row.data) as {
+        injected_ids: string[];
+        project?: string;
+      };
+
+      // Get injected experience entries
+      const injectedExperiences: ExperienceEntry[] = [];
+      for (const id of injectionData.injected_ids ?? []) {
+        const entry = this.getById(id);
+        if (entry) injectedExperiences.push(entry);
+      }
+
+      // Get session signals summary
+      const signalSummary = this.getSessionSignalSummary(row.session_id);
+
+      // Get outcome experiences (generated in same session)
+      const outcomeRows = this.stmtOutcomesBySession.all(row.session_id) as Record<
+        string,
+        unknown
+      >[];
+      const outcomeExperiences = outcomeRows.map((r) => this.rowToEntry(r));
+
+      episodes.push({
+        session_id: row.session_id,
+        project: injectionData.project ?? project ?? "",
+        timestamp: row.timestamp,
+        injected_experiences: injectedExperiences,
+        session_signals: signalSummary,
+        outcome_experiences: outcomeExperiences,
+      });
+    }
+
+    return episodes;
+  }
+
+  private getSessionSignalSummary(sessionId: string): SessionSignalSummary {
+    const rows = this.db
+      .prepare(
+        `SELECT event_type, COUNT(*) as count FROM session_signals
+         WHERE session_id = ? AND event_type != 'injection'
+         GROUP BY event_type`
+      )
+      .all(sessionId) as Array<{ event_type: string; count: number }>;
+
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.event_type] = row.count;
+    }
+
+    const hasTestPass =
+      this.db
+        .prepare(
+          `SELECT 1 FROM session_signals
+           WHERE session_id = ? AND event_type = 'tool_success'
+           AND json_extract(data, '$.test_passed') = 1 LIMIT 1`
+        )
+        .get(sessionId) != null;
+
+    return {
+      interrupt_count: counts["interrupt"] ?? 0,
+      corrective_count: counts["corrective_instruction"] ?? 0,
+      tool_success_count: counts["tool_success"] ?? 0,
+      had_test_pass: hasTestPass,
+      was_stopped_normally: (counts["stop"] ?? 0) > 0,
+    };
+  }
+
   private rowToEntry(row: Record<string, unknown>): ExperienceEntry {
     const id = row.id as string;
     try {
-      return {
+      const entry: ExperienceEntry = {
         id,
         type: row.type as "success" | "failure",
         trigger: row.trigger_text as string,
@@ -203,6 +318,10 @@ export class ExperienceStore {
           ? (JSON.parse(row.interrupt_context as string) as ExperienceEntry["interrupt_context"])
           : undefined,
       };
+      if (row.project) {
+        entry.project = row.project as string;
+      }
+      return entry;
     } catch (err) {
       throw new Error(
         `Failed to deserialize experience entry id="${id}": ${err instanceof Error ? err.message : String(err)}`,

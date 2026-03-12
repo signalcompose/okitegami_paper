@@ -25,9 +25,9 @@ export function handleSessionEnd(stdin) {
             promotion_threshold: config.promotion_threshold,
         });
         const entries = generator.generate({ session_id: sessionId, summary, signals });
-        // Persist each entry (without embedding for now — embedding requires async Embedder)
+        // Persist each entry with project name (without embedding — embedding requires async Embedder)
         for (const entryData of entries) {
-            experienceStore.create(entryData);
+            experienceStore.create({ ...entryData, project: ctx.projectName });
         }
     }
     finally {

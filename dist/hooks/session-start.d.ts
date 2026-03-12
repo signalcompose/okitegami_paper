@@ -7,10 +7,10 @@
  */
 import { type HookContext } from "./_common.js";
 /**
- * Core logic: retrieve experiences and format injection text.
+ * Core logic: retrieve experiences, format injection text, and log injection event.
  * Separated from async Embedder initialization for testability.
  */
-export declare function retrieveAndInject(ctx: HookContext, queryEmbedding: Float32Array): string;
+export declare function retrieveAndInject(ctx: HookContext, queryEmbedding: Float32Array, sessionId: string, queryText: string): string;
 /**
  * Full async handler: initializes Embedder, generates query embedding,
  * retrieves experiences, and writes injection text to stdout.

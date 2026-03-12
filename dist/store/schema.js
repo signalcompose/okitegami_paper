@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS experiences (
   session_id TEXT NOT NULL,
   timestamp TEXT NOT NULL,
   interrupt_context TEXT,
-  embedding BLOB
+  embedding BLOB,
+  project TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_experiences_type
@@ -40,6 +41,16 @@ CREATE INDEX IF NOT EXISTS idx_session_signals_session_id
 CREATE INDEX IF NOT EXISTS idx_session_signals_session_event
   ON session_signals(session_id, event_type);
 `;
+function migrateDatabase(db) {
+    // Additive migration: add project column if missing (backward compat with pre-report DBs)
+    const columns = db.prepare("PRAGMA table_info(experiences)").all();
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has("project")) {
+        db.exec("ALTER TABLE experiences ADD COLUMN project TEXT");
+    }
+    // Always ensure project index exists (handles both fresh and migrated DBs)
+    db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_project ON experiences(project)");
+}
 export function initializeDatabase(dbPath) {
     if (dbPath !== ":memory:") {
         mkdirSync(dirname(dbPath), { recursive: true });
@@ -48,6 +59,7 @@ export function initializeDatabase(dbPath) {
     db.pragma("journal_mode = WAL");
     db.pragma("busy_timeout = 5000");
     db.exec(SCHEMA_SQL);
+    migrateDatabase(db);
     return db;
 }
 //# sourceMappingURL=schema.js.map

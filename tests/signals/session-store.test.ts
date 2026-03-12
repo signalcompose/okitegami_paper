@@ -117,6 +117,18 @@ describe("SessionSignalStore", () => {
     expect(counts.stop).toBe(0);
     expect(counts.rewind).toBe(0);
     expect(counts.post_interrupt_turn).toBe(0);
+    expect(counts.injection).toBe(0);
+  });
+
+  it("addSignal accepts injection event type", () => {
+    const signal = store.addSignal("s1", "injection", {
+      injected_ids: ["id-1", "id-2"],
+      injected_count: 2,
+      query_text: "test query",
+      project: "my-project",
+    });
+    expect(signal.event_type).toBe("injection");
+    expect(signal.data).toMatchObject({ injected_count: 2, project: "my-project" });
   });
 
   it("clearSession removes all signals for a session", () => {

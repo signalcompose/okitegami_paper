@@ -20,7 +20,32 @@ export interface ExperienceEntry {
     signal_type: SignalType;
     session_id: string;
     timestamp: string;
+    project?: string;
     interrupt_context?: InterruptContext;
+}
+export interface ProjectReportRow {
+    project: string;
+    total_entries: number;
+    success_count: number;
+    failure_count: number;
+    avg_signal_strength: number;
+    first_entry: string;
+    last_entry: string;
+}
+export interface SessionSignalSummary {
+    interrupt_count: number;
+    corrective_count: number;
+    tool_success_count: number;
+    had_test_pass: boolean;
+    was_stopped_normally: boolean;
+}
+export interface InjectionEpisode {
+    session_id: string;
+    project: string;
+    timestamp: string;
+    injected_experiences: ExperienceEntry[];
+    session_signals: SessionSignalSummary;
+    outcome_experiences: ExperienceEntry[];
 }
 export interface AcmConfig {
     mode: AcmMode;
