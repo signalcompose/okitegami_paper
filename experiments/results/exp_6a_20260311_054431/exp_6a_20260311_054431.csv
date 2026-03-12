@@ -1,0 +1,11 @@
+run_id,condition,task,context_size,session_number,task_completion_rate,interrupt_count,corrective_instruction_count,context_tokens_used,duration_ms,error,timestamp
+control_task-a_full_s1,control,task-a,full,1,1,0,0,0,139817,,2026-03-10T20:46:52.433Z
+control_task-a_full_s2,control,task-a,full,2,1,0,0,0,159672,,2026-03-10T20:49:32.140Z
+control_task-a_full_s3,control,task-a,full,3,1,0,0,0,148193,,2026-03-10T20:52:00.365Z
+control_task-a_full_s4,control,task-a,full,4,1,0,0,0,123677,,2026-03-10T20:54:04.073Z
+control_task-a_full_s5,control,task-a,full,5,1,0,0,0,119847,,2026-03-10T20:56:03.951Z
+acm-sf_task-a_full_s1,acm-sf,task-a,full,1,1,0,0,0,214989,,2026-03-10T20:59:38.971Z
+acm-sf_task-a_full_s2,acm-sf,task-a,full,2,1,0,0,0,129907,,2026-03-10T21:01:48.912Z
+acm-sf_task-a_full_s3,acm-sf,task-a,full,3,1,0,0,0,105831,,2026-03-10T21:03:34.774Z
+acm-sf_task-a_full_s4,acm-sf,task-a,full,4,1,0,0,0,168923,,2026-03-10T21:06:23.729Z
+acm-sf_task-a_full_s5,acm-sf,task-a,full,5,1,0,0,0,132464,,2026-03-10T21:08:36.226Z
