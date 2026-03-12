@@ -28,6 +28,9 @@ export class ExperienceStore {
   private stmtAllWithEmbedding: Database.Statement;
   private stmtAllWithEmbeddingByType: Database.Statement;
   private stmtOutcomesBySession: Database.Statement;
+  private stmtCrossProjectReport: Database.Statement;
+  private stmtSignalCountsBySession: Database.Statement;
+  private stmtHasTestPassBySession: Database.Statement;
 
   constructor(config: AcmConfig) {
     this.config = config;
@@ -54,6 +57,25 @@ export class ExperienceStore {
       "SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?"
     );
     this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
+    this.stmtCrossProjectReport = this.db.prepare(`
+      SELECT project, COUNT(*) as total_entries,
+        SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
+        SUM(CASE WHEN type='failure' THEN 1 ELSE 0 END) as failure_count,
+        AVG(signal_strength) as avg_signal_strength,
+        MIN(timestamp) as first_entry, MAX(timestamp) as last_entry
+      FROM experiences WHERE project IS NOT NULL AND project != ''
+      GROUP BY project ORDER BY last_entry DESC
+    `);
+    this.stmtSignalCountsBySession = this.db.prepare(
+      `SELECT event_type, COUNT(*) as count FROM session_signals
+       WHERE session_id = ? AND event_type != 'injection'
+       GROUP BY event_type`
+    );
+    this.stmtHasTestPassBySession = this.db.prepare(
+      `SELECT 1 FROM session_signals
+       WHERE session_id = ? AND event_type = 'tool_success'
+       AND json_extract(data, '$.test_passed') = 1 LIMIT 1`
+    );
   }
 
   getDb(): Database.Database {
@@ -195,20 +217,12 @@ export class ExperienceStore {
   }
 
   getCrossProjectReport(): ProjectReportRow[] {
-    const stmt = this.db.prepare(`
-      SELECT project, COUNT(*) as total_entries,
-        SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
-        SUM(CASE WHEN type='failure' THEN 1 ELSE 0 END) as failure_count,
-        AVG(signal_strength) as avg_signal_strength,
-        MIN(timestamp) as first_entry, MAX(timestamp) as last_entry
-      FROM experiences WHERE project IS NOT NULL AND project != ''
-      GROUP BY project ORDER BY last_entry DESC
-    `);
-    return stmt.all() as ProjectReportRow[];
+    return this.stmtCrossProjectReport.all() as ProjectReportRow[];
   }
 
   getInjectionEpisodes(project?: string, limit?: number): InjectionEpisode[] {
-    // Find injection events from session_signals
+    // Dynamic SQL: project/limit filters are optional, so prepare() is called per invocation.
+    // This is acceptable — acm_report is a user-invoked tool, not a hot path.
     let injectionQuery = `
       SELECT session_id, data, timestamp FROM session_signals
       WHERE event_type = 'injection'
@@ -233,6 +247,7 @@ export class ExperienceStore {
     const episodes: InjectionEpisode[] = [];
 
     for (const row of injectionRows) {
+      if (!row.data) continue;
       const injectionData = JSON.parse(row.data) as {
         injected_ids: string[];
         project?: string;
@@ -269,27 +284,17 @@ export class ExperienceStore {
   }
 
   private getSessionSignalSummary(sessionId: string): SessionSignalSummary {
-    const rows = this.db
-      .prepare(
-        `SELECT event_type, COUNT(*) as count FROM session_signals
-         WHERE session_id = ? AND event_type != 'injection'
-         GROUP BY event_type`
-      )
-      .all(sessionId) as Array<{ event_type: string; count: number }>;
+    const rows = this.stmtSignalCountsBySession.all(sessionId) as Array<{
+      event_type: string;
+      count: number;
+    }>;
 
     const counts: Record<string, number> = {};
     for (const row of rows) {
       counts[row.event_type] = row.count;
     }
 
-    const hasTestPass =
-      this.db
-        .prepare(
-          `SELECT 1 FROM session_signals
-           WHERE session_id = ? AND event_type = 'tool_success'
-           AND json_extract(data, '$.test_passed') = 1 LIMIT 1`
-        )
-        .get(sessionId) != null;
+    const hasTestPass = this.stmtHasTestPassBySession.get(sessionId) != null;
 
     return {
       interrupt_count: counts["interrupt"] ?? 0,
