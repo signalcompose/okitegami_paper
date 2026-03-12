@@ -17,8 +17,7 @@ export declare class ExperienceStore {
     private stmtAllWithEmbeddingByType;
     private stmtOutcomesBySession;
     private stmtCrossProjectReport;
-    private stmtSignalCountsBySession;
-    private stmtHasTestPassBySession;
+    private stmtSignalSummaryBySession;
     constructor(config: AcmConfig);
     getDb(): Database.Database;
     create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null;

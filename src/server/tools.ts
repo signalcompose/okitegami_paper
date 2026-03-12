@@ -187,6 +187,9 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             );
             return toolResult({ summary, episodes });
           } catch (err) {
+            console.error(
+              `[ACM] acm_report: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`
+            );
             return toolError(`Error generating report: ${errorMessage(err)}`);
           }
         }

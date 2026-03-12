@@ -16,14 +16,20 @@ export function retrieveAndInject(ctx, queryEmbedding, sessionId, queryText) {
     const retriever = new Retriever(ctx.experienceStore);
     const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
     const injectionText = formatInjection(results);
-    // Record injection log as session signal
+    // Record injection log — best-effort, must not abort injection delivery
     if (results.length > 0) {
-        ctx.signalStore.addSignal(sessionId, "injection", {
-            injected_ids: results.map((r) => r.entry.id),
-            injected_count: results.length,
-            query_text: queryText,
-            project: ctx.projectName,
-        });
+        try {
+            ctx.signalStore.addSignal(sessionId, "injection", {
+                injected_ids: results.map((r) => r.entry.id),
+                injected_count: results.length,
+                query_text: queryText,
+                project: ctx.projectName,
+            });
+        }
+        catch (err) {
+            console.error(`[ACM] session-start: failed to record injection signal for session="${sessionId}": ` +
+                `${err instanceof Error ? err.message : String(err)}`);
+        }
     }
     return injectionText;
 }

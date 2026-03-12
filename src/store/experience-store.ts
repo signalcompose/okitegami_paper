@@ -29,8 +29,7 @@ export class ExperienceStore {
   private stmtAllWithEmbeddingByType: Database.Statement;
   private stmtOutcomesBySession: Database.Statement;
   private stmtCrossProjectReport: Database.Statement;
-  private stmtSignalCountsBySession: Database.Statement;
-  private stmtHasTestPassBySession: Database.Statement;
+  private stmtSignalSummaryBySession: Database.Statement;
 
   constructor(config: AcmConfig) {
     this.config = config;
@@ -66,15 +65,13 @@ export class ExperienceStore {
       FROM experiences WHERE project IS NOT NULL AND project != ''
       GROUP BY project ORDER BY last_entry DESC
     `);
-    this.stmtSignalCountsBySession = this.db.prepare(
-      `SELECT event_type, COUNT(*) as count FROM session_signals
+    this.stmtSignalSummaryBySession = this.db.prepare(
+      `SELECT event_type, COUNT(*) as count,
+        MAX(CASE WHEN event_type = 'tool_success'
+                  AND json_extract(data, '$.test_passed') = 1 THEN 1 ELSE 0 END) as has_test_pass
+       FROM session_signals
        WHERE session_id = ? AND event_type != 'injection'
        GROUP BY event_type`
-    );
-    this.stmtHasTestPassBySession = this.db.prepare(
-      `SELECT 1 FROM session_signals
-       WHERE session_id = ? AND event_type = 'tool_success'
-       AND json_extract(data, '$.test_passed') = 1 LIMIT 1`
     );
   }
 
@@ -247,28 +244,58 @@ export class ExperienceStore {
     const episodes: InjectionEpisode[] = [];
 
     for (const row of injectionRows) {
-      if (!row.data) continue;
-      const injectionData = JSON.parse(row.data) as {
-        injected_ids: string[];
-        project?: string;
-      };
+      if (!row.data) {
+        console.warn(
+          `[ACM] getInjectionEpisodes: skipping injection row with null data for session="${row.session_id}"`
+        );
+        continue;
+      }
+      let injectionData: { injected_ids: string[]; project?: string };
+      try {
+        injectionData = JSON.parse(row.data) as typeof injectionData;
+      } catch (err) {
+        console.warn(
+          `[ACM] Skipping injection row with corrupt data for session="${row.session_id}": ` +
+            `${err instanceof Error ? err.message : String(err)}. ` +
+            `Data preview: ${String(row.data).slice(0, 200)}`
+        );
+        continue;
+      }
 
-      // Get injected experience entries
+      // Get injected experience entries (skip corrupt entries rather than aborting)
       const injectedExperiences: ExperienceEntry[] = [];
       for (const id of injectionData.injected_ids ?? []) {
-        const entry = this.getById(id);
-        if (entry) injectedExperiences.push(entry);
+        try {
+          const entry = this.getById(id);
+          if (entry) injectedExperiences.push(entry);
+        } catch (err) {
+          console.warn(
+            `[ACM] getInjectionEpisodes: skipping corrupt injected entry id="${id}" ` +
+              `for session="${row.session_id}": ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
       }
 
       // Get session signals summary
       const signalSummary = this.getSessionSignalSummary(row.session_id);
 
-      // Get outcome experiences (generated in same session)
+      // Get outcome experiences (generated in same session, skip corrupt rows)
       const outcomeRows = this.stmtOutcomesBySession.all(row.session_id) as Record<
         string,
         unknown
       >[];
-      const outcomeExperiences = outcomeRows.map((r) => this.rowToEntry(r));
+      const outcomeExperiences: ExperienceEntry[] = [];
+      for (const r of outcomeRows) {
+        try {
+          outcomeExperiences.push(this.rowToEntry(r));
+        } catch (err) {
+          const rowId = (r.id as string) ?? "unknown";
+          console.warn(
+            `[ACM] getInjectionEpisodes: skipping corrupt outcome entry id="${rowId}" ` +
+              `for session="${row.session_id}": ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
 
       episodes.push({
         session_id: row.session_id,
@@ -284,17 +311,18 @@ export class ExperienceStore {
   }
 
   private getSessionSignalSummary(sessionId: string): SessionSignalSummary {
-    const rows = this.stmtSignalCountsBySession.all(sessionId) as Array<{
+    const rows = this.stmtSignalSummaryBySession.all(sessionId) as Array<{
       event_type: string;
       count: number;
+      has_test_pass: number;
     }>;
 
     const counts: Record<string, number> = {};
+    let hasTestPass = false;
     for (const row of rows) {
       counts[row.event_type] = row.count;
+      if (row.has_test_pass === 1) hasTestPass = true;
     }
-
-    const hasTestPass = this.stmtHasTestPassBySession.get(sessionId) != null;
 
     return {
       interrupt_count: counts["interrupt"] ?? 0,

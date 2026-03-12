@@ -394,6 +394,7 @@ When the SessionStart hook injects experiences, it records an `injection` event 
 - `injected_ids`: array of injected experience entry IDs
 - `injected_count`: number of injected entries
 - `query_text`: the query text used for retrieval
+- `project`: project name at time of injection (derived from cwd basename)
 
 This enables tracing the injection→outcome relationship via shared `session_id`.
 
