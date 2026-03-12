@@ -313,3 +313,25 @@ Milestone 6-A（exp_6ac）の acm-sf 条件で null result が出た。DB 調査
 **改善後（exp_6ac_improved）**: s2 以降で 376→713→1050→1387 chars の injection が正常に蓄積
 
 ---
+
+#### Auto-logged: 2026-03-11 16:18 (session: 8cc82205)
+
+編集ファイル:
+- .claude/plans/scalable-drifting-walrus.md
+
+---
+
+#### Auto-logged: 2026-03-12 08:17 (session: 1f1777fe)
+
+編集ファイル:
+- .claude/plans/scalable-drifting-walrus.md
+
+---
+
+#### Auto-logged: 2026-03-12 09:09 (session: 591cee68)
+
+編集ファイル:
+- scripts/start-mcp.sh
+- src/index.ts
+
+---

@@ -1,0 +1,253 @@
+{
+  "experiment_id": "exp_6a_20260311_054431",
+  "started_at": "2026-03-10T20:46:52.433Z",
+  "completed_at": "2026-03-10T21:08:36.226Z",
+  "runs": [
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 1,
+        "run_id": "control_task-a_full_s1"
+      },
+      "metrics": {
+        "run_id": "control_task-a_full_s1",
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 1,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:46:52.433Z"
+      },
+      "duration_ms": 139817
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 2,
+        "run_id": "control_task-a_full_s2"
+      },
+      "metrics": {
+        "run_id": "control_task-a_full_s2",
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 2,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:49:32.140Z"
+      },
+      "duration_ms": 159672
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 3,
+        "run_id": "control_task-a_full_s3"
+      },
+      "metrics": {
+        "run_id": "control_task-a_full_s3",
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 3,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:52:00.365Z"
+      },
+      "duration_ms": 148193
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 4,
+        "run_id": "control_task-a_full_s4"
+      },
+      "metrics": {
+        "run_id": "control_task-a_full_s4",
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 4,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:54:04.073Z"
+      },
+      "duration_ms": 123677
+    },
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 5,
+        "run_id": "control_task-a_full_s5"
+      },
+      "metrics": {
+        "run_id": "control_task-a_full_s5",
+        "condition": "control",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 5,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:56:03.951Z"
+      },
+      "duration_ms": 119847
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 1,
+        "run_id": "acm-sf_task-a_full_s1"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-a_full_s1",
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 1,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T20:59:38.971Z"
+      },
+      "duration_ms": 214989
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 2,
+        "run_id": "acm-sf_task-a_full_s2"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-a_full_s2",
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 2,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T21:01:48.912Z"
+      },
+      "duration_ms": 129907
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 3,
+        "run_id": "acm-sf_task-a_full_s3"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-a_full_s3",
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 3,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T21:03:34.774Z"
+      },
+      "duration_ms": 105831
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 4,
+        "run_id": "acm-sf_task-a_full_s4"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-a_full_s4",
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 4,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T21:06:23.729Z"
+      },
+      "duration_ms": 168923
+    },
+    {
+      "spec": {
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 5,
+        "run_id": "acm-sf_task-a_full_s5"
+      },
+      "metrics": {
+        "run_id": "acm-sf_task-a_full_s5",
+        "condition": "acm-sf",
+        "task": "task-a",
+        "context_size": "full",
+        "session_number": 5,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-10T21:08:36.226Z"
+      },
+      "duration_ms": 132464
+    }
+  ],
+  "aggregated": [
+    {
+      "condition": "control",
+      "mean_completion_rate": 1,
+      "std_completion_rate": 0,
+      "mean_interrupt_count": 0,
+      "std_interrupt_count": 0,
+      "mean_corrective_count": 0,
+      "std_corrective_count": 0,
+      "mean_context_tokens": 0,
+      "std_context_tokens": 0,
+      "run_count": 5
+    },
+    {
+      "condition": "acm-sf",
+      "mean_completion_rate": 1,
+      "std_completion_rate": 0,
+      "mean_interrupt_count": 0,
+      "std_interrupt_count": 0,
+      "mean_corrective_count": 0,
+      "std_corrective_count": 0,
+      "mean_context_tokens": 0,
+      "std_context_tokens": 0,
+      "run_count": 5
+    }
+  ]
+}

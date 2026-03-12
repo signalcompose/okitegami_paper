@@ -1,0 +1,43 @@
+{
+  "experiment_id": "probe_no_skills_6d",
+  "started_at": "2026-03-11T00:24:15.946Z",
+  "completed_at": "2026-03-11T00:24:15.946Z",
+  "runs": [
+    {
+      "spec": {
+        "condition": "control",
+        "task": "task-d",
+        "context_size": "full",
+        "session_number": 1,
+        "run_id": "control_task-d_full_s1"
+      },
+      "metrics": {
+        "run_id": "control_task-d_full_s1",
+        "condition": "control",
+        "task": "task-d",
+        "context_size": "full",
+        "session_number": 1,
+        "task_completion_rate": 1,
+        "interrupt_count": 0,
+        "corrective_instruction_count": 0,
+        "context_tokens_used": 0,
+        "timestamp": "2026-03-11T00:24:15.946Z"
+      },
+      "duration_ms": 239484
+    }
+  ],
+  "aggregated": [
+    {
+      "condition": "control",
+      "mean_completion_rate": 1,
+      "std_completion_rate": 0,
+      "mean_interrupt_count": 0,
+      "std_interrupt_count": 0,
+      "mean_corrective_count": 0,
+      "std_corrective_count": 0,
+      "mean_context_tokens": 0,
+      "std_context_tokens": 0,
+      "run_count": 1
+    }
+  ]
+}
