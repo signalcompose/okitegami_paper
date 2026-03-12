@@ -127,6 +127,33 @@ describe("session-end hook", () => {
     // Should not throw
   });
 
+  it("records project name from cwd in experience entries", () => {
+    setupEnv();
+    const sessionId = "end-proj";
+
+    // Tool success + stop with cwd
+    handlePostToolUse(
+      JSON.stringify({
+        session_id: sessionId,
+        tool_name: "Bash",
+        tool_input: { command: "echo ok" },
+        result: "ok",
+        cwd: "/home/user/my-project",
+      })
+    );
+    handleStop(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
+
+    // Session-end with cwd
+    handleSessionEnd(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
+
+    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries = ctx!.experienceStore.list();
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+    const entry = entries[0];
+    expect(entry.project).toBe("my-project");
+    ctx!.cleanup();
+  });
+
   it("respects success_only mode filtering", () => {
     setupEnv("success_only");
     const sessionId = "end-s5";

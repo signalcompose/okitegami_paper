@@ -13,14 +13,17 @@ export class ExperienceStore {
     stmtUpdateEmbedding;
     stmtAllWithEmbedding;
     stmtAllWithEmbeddingByType;
+    stmtOutcomesBySession;
+    stmtCrossProjectReport;
+    stmtSignalSummaryBySession;
     constructor(config) {
         this.config = config;
         this.db = initializeDatabase(config.db_path);
         this.stmtInsert = this.db.prepare(`INSERT INTO experiences
        (id, type, trigger_text, action_text, outcome_text,
         retrieval_keys, signal_strength, signal_type,
-        session_id, timestamp, interrupt_context, embedding)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        session_id, timestamp, interrupt_context, embedding, project)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         this.stmtGetById = this.db.prepare("SELECT * FROM experiences WHERE id = ?");
         this.stmtList = this.db.prepare("SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?");
         this.stmtListByType = this.db.prepare("SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC");
@@ -28,6 +31,22 @@ export class ExperienceStore {
         this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
         this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL");
         this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?");
+        this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
+        this.stmtCrossProjectReport = this.db.prepare(`
+      SELECT project, COUNT(*) as total_entries,
+        SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
+        SUM(CASE WHEN type='failure' THEN 1 ELSE 0 END) as failure_count,
+        AVG(signal_strength) as avg_signal_strength,
+        MIN(timestamp) as first_entry, MAX(timestamp) as last_entry
+      FROM experiences WHERE project IS NOT NULL AND project != ''
+      GROUP BY project ORDER BY last_entry DESC
+    `);
+        this.stmtSignalSummaryBySession = this.db.prepare(`SELECT event_type, COUNT(*) as count,
+        MAX(CASE WHEN event_type = 'tool_success'
+                  AND json_extract(data, '$.test_passed') = 1 THEN 1 ELSE 0 END) as has_test_pass
+       FROM session_signals
+       WHERE session_id = ? AND event_type != 'injection'
+       GROUP BY event_type`);
     }
     getDb() {
         return this.db;
@@ -119,17 +138,110 @@ export class ExperienceStore {
         }
         const id = randomUUID();
         const entry = { id, ...data };
-        this.stmtInsert.run(entry.id, entry.type, entry.trigger, entry.action, entry.outcome, JSON.stringify(entry.retrieval_keys), entry.signal_strength, entry.signal_type, entry.session_id, entry.timestamp, entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null, embeddingBlob);
+        this.stmtInsert.run(entry.id, entry.type, entry.trigger, entry.action, entry.outcome, JSON.stringify(entry.retrieval_keys), entry.signal_strength, entry.signal_type, entry.session_id, entry.timestamp, entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null, embeddingBlob, entry.project ?? null);
         return entry;
     }
     listByType(type) {
         const rows = this.stmtListByType.all(type);
         return rows.map((row) => this.rowToEntry(row));
     }
+    getCrossProjectReport() {
+        return this.stmtCrossProjectReport.all();
+    }
+    getInjectionEpisodes(project, limit) {
+        // Dynamic SQL: project/limit filters are optional, so prepare() is called per invocation.
+        // This is acceptable — acm_report is a user-invoked tool, not a hot path.
+        let injectionQuery = `
+      SELECT session_id, data, timestamp FROM session_signals
+      WHERE event_type = 'injection'
+    `;
+        const params = [];
+        if (project) {
+            injectionQuery += ` AND json_extract(data, '$.project') = ?`;
+            params.push(project);
+        }
+        injectionQuery += ` ORDER BY timestamp DESC`;
+        if (limit !== undefined) {
+            injectionQuery += ` LIMIT ?`;
+            params.push(limit);
+        }
+        const injectionRows = this.db.prepare(injectionQuery).all(...params);
+        const episodes = [];
+        for (const row of injectionRows) {
+            if (!row.data) {
+                console.warn(`[ACM] getInjectionEpisodes: skipping injection row with null data for session="${row.session_id}"`);
+                continue;
+            }
+            let injectionData;
+            try {
+                injectionData = JSON.parse(row.data);
+            }
+            catch (err) {
+                console.warn(`[ACM] Skipping injection row with corrupt data for session="${row.session_id}": ` +
+                    `${err instanceof Error ? err.message : String(err)}. ` +
+                    `Data preview: ${String(row.data).slice(0, 200)}`);
+                continue;
+            }
+            // Get injected experience entries (skip corrupt entries rather than aborting)
+            const injectedExperiences = [];
+            for (const id of injectionData.injected_ids ?? []) {
+                try {
+                    const entry = this.getById(id);
+                    if (entry)
+                        injectedExperiences.push(entry);
+                }
+                catch (err) {
+                    console.warn(`[ACM] getInjectionEpisodes: skipping corrupt injected entry id="${id}" ` +
+                        `for session="${row.session_id}": ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+            // Get session signals summary
+            const signalSummary = this.getSessionSignalSummary(row.session_id);
+            // Get outcome experiences (generated in same session, skip corrupt rows)
+            const outcomeRows = this.stmtOutcomesBySession.all(row.session_id);
+            const outcomeExperiences = [];
+            for (const r of outcomeRows) {
+                try {
+                    outcomeExperiences.push(this.rowToEntry(r));
+                }
+                catch (err) {
+                    const rowId = r.id ?? "unknown";
+                    console.warn(`[ACM] getInjectionEpisodes: skipping corrupt outcome entry id="${rowId}" ` +
+                        `for session="${row.session_id}": ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+            episodes.push({
+                session_id: row.session_id,
+                project: injectionData.project ?? project ?? "",
+                timestamp: row.timestamp,
+                injected_experiences: injectedExperiences,
+                session_signals: signalSummary,
+                outcome_experiences: outcomeExperiences,
+            });
+        }
+        return episodes;
+    }
+    getSessionSignalSummary(sessionId) {
+        const rows = this.stmtSignalSummaryBySession.all(sessionId);
+        const counts = {};
+        let hasTestPass = false;
+        for (const row of rows) {
+            counts[row.event_type] = row.count;
+            if (row.has_test_pass === 1)
+                hasTestPass = true;
+        }
+        return {
+            interrupt_count: counts["interrupt"] ?? 0,
+            corrective_count: counts["corrective_instruction"] ?? 0,
+            tool_success_count: counts["tool_success"] ?? 0,
+            had_test_pass: hasTestPass,
+            was_stopped_normally: (counts["stop"] ?? 0) > 0,
+        };
+    }
     rowToEntry(row) {
         const id = row.id;
         try {
-            return {
+            const entry = {
                 id,
                 type: row.type,
                 trigger: row.trigger_text,
@@ -144,6 +256,10 @@ export class ExperienceStore {
                     ? JSON.parse(row.interrupt_context)
                     : undefined,
             };
+            if (row.project) {
+                entry.project = row.project;
+            }
+            return entry;
         }
         catch (err) {
             throw new Error(`Failed to deserialize experience entry id="${id}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });

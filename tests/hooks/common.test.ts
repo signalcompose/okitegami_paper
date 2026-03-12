@@ -141,6 +141,28 @@ describe("bootstrapHook", () => {
     expect(signals[0].event_type).toBe("interrupt");
   });
 
+  it("derives projectName from cwd in input", () => {
+    const dbPath = join(TMP_DIR, "project.db");
+    const configPath = createTempConfig({ mode: "full", db_path: dbPath });
+    process.env.ACM_CONFIG_PATH = configPath;
+
+    const result = bootstrapHook(
+      JSON.stringify({ session_id: "s1", cwd: "/home/user/my-project" })
+    );
+    expect(result).not.toBeNull();
+    expect(result!.projectName).toBe("my-project");
+  });
+
+  it("defaults projectName to 'unknown' when cwd is missing", () => {
+    const dbPath = join(TMP_DIR, "no-cwd.db");
+    const configPath = createTempConfig({ mode: "full", db_path: dbPath });
+    process.env.ACM_CONFIG_PATH = configPath;
+
+    const result = bootstrapHook(JSON.stringify({ session_id: "s1" }));
+    expect(result).not.toBeNull();
+    expect(result!.projectName).toBe("unknown");
+  });
+
   it("closes DB via cleanup function", () => {
     const dbPath = join(TMP_DIR, "cleanup.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });

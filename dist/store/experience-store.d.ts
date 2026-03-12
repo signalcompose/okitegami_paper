@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { ExperienceEntry, AcmConfig } from "./types.js";
+import type { ExperienceEntry, AcmConfig, ProjectReportRow, InjectionEpisode } from "./types.js";
 export interface EntryWithEmbedding {
     entry: ExperienceEntry;
     embedding: Float32Array;
@@ -15,6 +15,9 @@ export declare class ExperienceStore {
     private stmtUpdateEmbedding;
     private stmtAllWithEmbedding;
     private stmtAllWithEmbeddingByType;
+    private stmtOutcomesBySession;
+    private stmtCrossProjectReport;
+    private stmtSignalSummaryBySession;
     constructor(config: AcmConfig);
     getDb(): Database.Database;
     create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null;
@@ -30,6 +33,9 @@ export declare class ExperienceStore {
     close(): void;
     private insertEntry;
     private listByType;
+    getCrossProjectReport(): ProjectReportRow[];
+    getInjectionEpisodes(project?: string, limit?: number): InjectionEpisode[];
+    private getSessionSignalSummary;
     private rowToEntry;
 }
 //# sourceMappingURL=experience-store.d.ts.map

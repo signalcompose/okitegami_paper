@@ -6,6 +6,7 @@
  * Returns null for silent exit (ACM not configured or disabled).
  * Returns initialized stores + parsed input for active hooks.
  */
+import { basename } from "node:path";
 import { loadConfig } from "../config.js";
 import { initializeDatabase } from "../store/schema.js";
 import { SessionSignalStore } from "../signals/session-store.js";
@@ -38,12 +39,14 @@ export function bootstrapHook(stdin) {
         const collector = new SignalCollector(signalStore, {
             capture_turns: config.capture_turns,
         });
+        const projectName = basename(input.cwd || "") || "unknown";
         return {
             input,
             config,
             signalStore,
             experienceStore,
             collector,
+            projectName,
             cleanup: () => {
                 experienceStore.close();
                 db.close();

@@ -13,6 +13,7 @@ export const EVENT_TYPES = [
   "tool_success",
   "stop",
   "rewind",
+  "injection",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

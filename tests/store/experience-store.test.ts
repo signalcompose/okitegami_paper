@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ExperienceStore } from "../../src/store/experience-store.js";
+import { SessionSignalStore } from "../../src/signals/session-store.js";
 import { makeEntry, makeConfig } from "../retrieval/helpers.js";
+import type { ExperienceEntry } from "../../src/store/types.js";
 
 describe("ExperienceStore", () => {
   let store: ExperienceStore;
@@ -180,6 +182,132 @@ describe("ExperienceStore", () => {
       const entries = disabledStore.listByMode();
       expect(entries).toHaveLength(0);
       disabledStore.close();
+    });
+  });
+
+  describe("project field", () => {
+    it("stores and retrieves project field", () => {
+      const entry = store.create(makeEntry({ project: "my-project" }));
+      expect(entry).not.toBeNull();
+      const retrieved = store.getById(entry!.id);
+      expect(retrieved?.project).toBe("my-project");
+    });
+
+    it("project defaults to undefined when not provided", () => {
+      const entry = store.create(makeEntry());
+      expect(entry).not.toBeNull();
+      const retrieved = store.getById(entry!.id);
+      expect(retrieved?.project).toBeUndefined();
+    });
+  });
+
+  describe("getCrossProjectReport", () => {
+    it("returns empty array when no entries with project exist", () => {
+      store.create(makeEntry()); // no project
+      expect(store.getCrossProjectReport()).toEqual([]);
+    });
+
+    it("groups entries by project with counts", () => {
+      store.create(
+        makeEntry({ project: "alpha", type: "success", timestamp: "2026-01-01T00:00:00Z" })
+      );
+      store.create(
+        makeEntry({
+          project: "alpha",
+          type: "failure",
+          signal_type: "interrupt_with_dialogue",
+          signal_strength: 0.9,
+          timestamp: "2026-01-02T00:00:00Z",
+        })
+      );
+      store.create(
+        makeEntry({ project: "beta", type: "success", timestamp: "2026-01-03T00:00:00Z" })
+      );
+
+      const report = store.getCrossProjectReport();
+      expect(report).toHaveLength(2);
+
+      // Ordered by last_entry DESC, so beta first
+      expect(report[0].project).toBe("beta");
+      expect(report[0].total_entries).toBe(1);
+      expect(report[0].success_count).toBe(1);
+      expect(report[0].failure_count).toBe(0);
+
+      expect(report[1].project).toBe("alpha");
+      expect(report[1].total_entries).toBe(2);
+      expect(report[1].success_count).toBe(1);
+      expect(report[1].failure_count).toBe(1);
+    });
+  });
+
+  describe("getInjectionEpisodes", () => {
+    it("returns empty array when no injection signals exist", () => {
+      expect(store.getInjectionEpisodes()).toEqual([]);
+    });
+
+    it("returns episodes with injected experiences and outcomes", () => {
+      // Create an experience that will be "injected"
+      const injectedEntry = store.create(
+        makeEntry({ project: "proj-a", trigger: "past experience" })
+      );
+      expect(injectedEntry).not.toBeNull();
+
+      // Record an injection signal
+      const signalStore = new SessionSignalStore(store.getDb());
+      signalStore.addSignal("session-inject-1", "injection", {
+        injected_ids: [injectedEntry!.id],
+        injected_count: 1,
+        query_text: "test query",
+        project: "proj-a",
+      });
+
+      // Create an outcome experience in the same session
+      store.create(
+        makeEntry({ session_id: "session-inject-1", project: "proj-a", trigger: "new outcome" })
+      );
+
+      const episodes = store.getInjectionEpisodes();
+      expect(episodes).toHaveLength(1);
+      expect(episodes[0].session_id).toBe("session-inject-1");
+      expect(episodes[0].injected_experiences).toHaveLength(1);
+      expect(episodes[0].injected_experiences[0].id).toBe(injectedEntry!.id);
+      expect(episodes[0].outcome_experiences).toHaveLength(1);
+    });
+
+    it("filters by project", () => {
+      const signalStore = new SessionSignalStore(store.getDb());
+
+      signalStore.addSignal("sess-a", "injection", {
+        injected_ids: [],
+        injected_count: 0,
+        query_text: "query a",
+        project: "proj-a",
+      });
+      signalStore.addSignal("sess-b", "injection", {
+        injected_ids: [],
+        injected_count: 0,
+        query_text: "query b",
+        project: "proj-b",
+      });
+
+      const episodesA = store.getInjectionEpisodes("proj-a");
+      expect(episodesA).toHaveLength(1);
+      expect(episodesA[0].session_id).toBe("sess-a");
+    });
+
+    it("respects limit parameter", () => {
+      const signalStore = new SessionSignalStore(store.getDb());
+      for (let i = 0; i < 5; i++) {
+        signalStore.addSignal(`sess-${i}`, "injection", {
+          injected_ids: [],
+          injected_count: 0,
+          query_text: `query ${i}`,
+          project: "proj",
+        });
+      }
+
+      const episodes = store.getInjectionEpisodes(undefined, 2);
+      expect(episodes).toHaveLength(2);
     });
   });
 

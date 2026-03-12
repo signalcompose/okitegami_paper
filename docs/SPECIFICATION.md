@@ -78,6 +78,7 @@ interface ExperienceEntry {
   signal_type: SignalType;       // Level 1–4
   session_id: string;
   timestamp: string;             // ISO 8601
+  project?: string;              // Project name (derived from cwd basename)
 
   // Failure-specific fields
   interrupt_context?: {
@@ -126,6 +127,7 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 3. Query experience DB: top-K (K=5) entries by cosine similarity
 4. Format injection text (compact format, see Section 3.3 of paper)
 5. Return injection as hook output (system prompt addition)
+6. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
 
 **Injection format**:
 ```
@@ -241,12 +243,14 @@ CREATE TABLE experiences (
   session_id TEXT NOT NULL,
   timestamp TEXT NOT NULL,
   interrupt_context TEXT,        -- JSON, nullable
-  embedding BLOB                 -- vector embedding of retrieval_keys
+  embedding BLOB,                -- vector embedding of retrieval_keys
+  project TEXT                   -- Project name (cwd basename), nullable for backward compat
 );
 
 CREATE INDEX idx_experiences_type ON experiences(type);
 CREATE INDEX idx_experiences_signal_strength ON experiences(signal_strength);
 CREATE INDEX idx_experiences_timestamp ON experiences(timestamp);
+CREATE INDEX idx_experiences_project ON experiences(project);
 ```
 
 ### 4.2 Storage Location
@@ -358,4 +362,42 @@ The following are discussed in the paper but NOT implemented in this phase:
 
 ---
 
-*Last updated: 2026-03-08*
+---
+
+## 8. Reporting and Analysis
+
+### 8.1 `acm_report` MCP Tool
+
+**Purpose**: Provide cross-project analysis and injection→outcome episode tracing for case study evidence.
+
+**Input**: `{ project?: string, limit?: number }`
+
+**Output**:
+1. **Cross-project summary**: Per-project entry counts (success/failure), average signal strength, date range
+2. **Injection episodes**: Per-session records linking what was injected → what happened → what was generated
+
+**Injection Episode Structure**:
+```typescript
+interface InjectionEpisode {
+  session_id: string;
+  project: string;
+  timestamp: string;
+  injected_experiences: ExperienceEntry[];  // What was injected at session start
+  session_signals: SessionSignalSummary;    // What happened during session
+  outcome_experiences: ExperienceEntry[];   // What was generated at session end
+}
+```
+
+### 8.2 Session Signal: `injection` Event
+
+When the SessionStart hook injects experiences, it records an `injection` event in `session_signals` with:
+- `injected_ids`: array of injected experience entry IDs
+- `injected_count`: number of injected entries
+- `query_text`: the query text used for retrieval
+- `project`: project name at time of injection (derived from cwd basename)
+
+This enables tracing the injection→outcome relationship via shared `session_id`.
+
+---
+
+*Last updated: 2026-03-12*

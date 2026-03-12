@@ -96,7 +96,7 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = bootstrapHook(JSON.stringify({ session_id: "new-session" }));
     const queryEmbedding = makeFakeEmbedding(1); // Same seed = high similarity
-    const result = retrieveAndInject(ctx!, queryEmbedding);
+    const result = retrieveAndInject(ctx!, queryEmbedding, "new-session", "test query");
     ctx!.cleanup();
 
     expect(result).toContain("[ACM Context]");
@@ -104,12 +104,65 @@ describe("session-start hook: retrieveAndInject", () => {
     expect(result).toContain("syntax error");
   });
 
+  it("records injection signal in session_signals", () => {
+    setupEnv();
+    const emb1 = makeFakeEmbedding(1);
+
+    insertExperienceWithEmbedding(
+      process.env.ACM_CONFIG_PATH!,
+      {
+        type: "success",
+        trigger: "Past task",
+        action: "Past action",
+        outcome: "Past outcome",
+        retrieval_keys: ["past"],
+        signal_strength: 0.8,
+        signal_type: "uninterrupted_completion",
+        session_id: "past-session",
+        timestamp: new Date().toISOString(),
+      },
+      emb1
+    );
+
+    const ctx = bootstrapHook(
+      JSON.stringify({ session_id: "inject-session", cwd: "/home/user/my-project" })
+    );
+    const queryEmbedding = makeFakeEmbedding(1);
+    retrieveAndInject(ctx!, queryEmbedding, "inject-session", "query text");
+
+    // Verify injection signal was recorded
+    const signals = ctx!.signalStore.getBySession("inject-session");
+    const injectionSignals = signals.filter((s) => s.event_type === "injection");
+    expect(injectionSignals).toHaveLength(1);
+    expect(injectionSignals[0].data).toMatchObject({
+      injected_count: 1,
+      query_text: "query text",
+      project: "my-project",
+    });
+    expect((injectionSignals[0].data as Record<string, unknown>).injected_ids).toHaveLength(1);
+
+    ctx!.cleanup();
+  });
+
+  it("does not record injection signal when no results", () => {
+    setupEnv();
+
+    const ctx = bootstrapHook(JSON.stringify({ session_id: "empty-inject" }));
+    const queryEmbedding = makeFakeEmbedding(42);
+    retrieveAndInject(ctx!, queryEmbedding, "empty-inject", "query text");
+
+    const signals = ctx!.signalStore.getBySession("empty-inject");
+    expect(signals.filter((s) => s.event_type === "injection")).toHaveLength(0);
+
+    ctx!.cleanup();
+  });
+
   it("returns empty string when DB is empty", () => {
     setupEnv();
 
     const ctx = bootstrapHook(JSON.stringify({ session_id: "empty-session" }));
     const queryEmbedding = makeFakeEmbedding(42);
-    const result = retrieveAndInject(ctx!, queryEmbedding);
+    const result = retrieveAndInject(ctx!, queryEmbedding, "empty-session", "query");
     ctx!.cleanup();
 
     expect(result).toBe("");
@@ -146,7 +199,7 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = bootstrapHook(JSON.stringify({ session_id: "topk-session" }));
     const queryEmbedding = makeFakeEmbedding(3); // Most similar to entry 3
-    const result = retrieveAndInject(ctx!, queryEmbedding);
+    const result = retrieveAndInject(ctx!, queryEmbedding, "topk-session", "query");
     ctx!.cleanup();
 
     // Should have at most 3 entries (top_k=3)
@@ -194,7 +247,7 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = bootstrapHook(JSON.stringify({ session_id: "order-session" }));
     const queryEmbedding = makeFakeEmbedding(10); // Similar to first entry
-    const result = retrieveAndInject(ctx!, queryEmbedding);
+    const result = retrieveAndInject(ctx!, queryEmbedding, "order-session", "query");
     ctx!.cleanup();
 
     // FAILURE (high score) should appear before SUCCESS (low score)

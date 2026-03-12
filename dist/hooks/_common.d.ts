@@ -16,6 +16,7 @@ export interface HookContext {
     signalStore: SessionSignalStore;
     experienceStore: ExperienceStore;
     collector: SignalCollector;
+    projectName: string;
     cleanup: () => void;
 }
 export declare function bootstrapHook(stdin: string): HookContext | null;
