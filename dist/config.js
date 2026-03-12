@@ -54,7 +54,7 @@ export function loadConfig(pathOrOptions) {
             throw new Error(`Unknown config keys: ${unknownKeys.join(", ")}. Valid keys: ${[...KNOWN_CONFIG_KEYS].join(", ")}`);
         }
     }
-    const dbPath = opts.dbPathOverride ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
+    const dbPath = (opts.dbPathOverride || undefined) ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
     const config = {
         ...DEFAULT_CONFIG,
         ...overrides,

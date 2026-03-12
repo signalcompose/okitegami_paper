@@ -93,4 +93,43 @@ describe("loadConfig", () => {
 
     expect(() => loadConfig(configPath)).toThrow("capture_turns must be >= 1");
   });
+
+  describe("LoadConfigOptions", () => {
+    it("accepts LoadConfigOptions with path", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm.json");
+      writeFileSync(configPath, JSON.stringify({ mode: "failure_only" }));
+
+      const config = loadConfig({ path: configPath });
+      expect(config.mode).toBe("failure_only");
+    });
+
+    it("dbPathOverride takes precedence over config file db_path", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm.json");
+      const overridePath = join(testDir, "override.db");
+      writeFileSync(configPath, JSON.stringify({ db_path: "/from/config.db" }));
+
+      const config = loadConfig({ path: configPath, dbPathOverride: overridePath });
+      expect(config.db_path).toBe(overridePath);
+    });
+
+    it("dbPathOverride expands tilde", () => {
+      const config = loadConfig({ dbPathOverride: "~/custom-acm.db" });
+      expect(config.db_path).not.toContain("~");
+      expect(config.db_path).toContain("custom-acm.db");
+    });
+
+    it("empty string dbPathOverride falls back to default", () => {
+      const config = loadConfig({ dbPathOverride: "" });
+      expect(config.db_path).toContain("experiences.db");
+    });
+
+    it("dbPathOverride without config file path", () => {
+      const overridePath = join(testDir, "standalone.db");
+      const config = loadConfig({ dbPathOverride: overridePath });
+      expect(config.db_path).toBe(overridePath);
+      expect(config.mode).toBe(DEFAULT_CONFIG.mode);
+    });
+  });
 });

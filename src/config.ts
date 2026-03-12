@@ -75,7 +75,7 @@ export function loadConfig(pathOrOptions?: string | LoadConfigOptions): AcmConfi
     }
   }
 
-  const dbPath = opts.dbPathOverride ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
+  const dbPath = (opts.dbPathOverride || undefined) ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
 
   const config: AcmConfig = {
     ...DEFAULT_CONFIG,
