@@ -11,7 +11,7 @@ const KNOWN_CONFIG_KEYS = new Set<string>([
   "db_path",
 ]);
 
-function expandTilde(filePath: string): string {
+export function expandTilde(filePath: string): string {
   if (filePath === "~") {
     return homedir();
   }
@@ -38,16 +38,23 @@ function validate(config: AcmConfig): void {
   }
 }
 
-export function loadConfig(path?: string): AcmConfig {
+export interface LoadConfigOptions {
+  path?: string;
+  dbPathOverride?: string;
+}
+
+export function loadConfig(pathOrOptions?: string | LoadConfigOptions): AcmConfig {
+  const opts: LoadConfigOptions =
+    typeof pathOrOptions === "string" ? { path: pathOrOptions } : (pathOrOptions ?? {});
   let overrides: Partial<AcmConfig> = {};
 
-  if (path) {
+  if (opts.path) {
     let raw: string;
     try {
-      raw = readFileSync(path, "utf-8");
+      raw = readFileSync(opts.path, "utf-8");
     } catch (err) {
       throw new Error(
-        `Cannot read config file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+        `Cannot read config file "${opts.path}": ${err instanceof Error ? err.message : String(err)}`,
         { cause: err }
       );
     }
@@ -55,7 +62,7 @@ export function loadConfig(path?: string): AcmConfig {
       overrides = JSON.parse(raw) as Partial<AcmConfig>;
     } catch (err) {
       throw new Error(
-        `Invalid JSON in config file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+        `Invalid JSON in config file "${opts.path}": ${err instanceof Error ? err.message : String(err)}`,
         { cause: err }
       );
     }
@@ -68,10 +75,12 @@ export function loadConfig(path?: string): AcmConfig {
     }
   }
 
+  const dbPath = (opts.dbPathOverride || undefined) ?? overrides.db_path ?? DEFAULT_CONFIG.db_path;
+
   const config: AcmConfig = {
     ...DEFAULT_CONFIG,
     ...overrides,
-    db_path: expandTilde(overrides.db_path ?? DEFAULT_CONFIG.db_path),
+    db_path: expandTilde(dbPath),
   };
 
   validate(config);

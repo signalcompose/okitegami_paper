@@ -1,0 +1,1 @@
+{"version":3,"file":"patterns.d.ts","sourceRoot":"","sources":["../../src/signals/patterns.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,MAAM,WAAW,eAAe;IAC9B,OAAO,EAAE,MAAM,CAAC;IAChB,QAAQ,EAAE,IAAI,GAAG,IAAI,CAAC;CACvB;AAgCD,wBAAgB,2BAA2B,CAAC,IAAI,EAAE,MAAM,GAAG,eAAe,GAAG,IAAI,CAOhF"}

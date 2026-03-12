@@ -48,6 +48,10 @@ export class ExperienceStore {
     );
   }
 
+  getDb(): Database.Database {
+    return this.db;
+  }
+
   create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null {
     return this.insertEntry(data, null);
   }
