@@ -23,6 +23,11 @@
 - 論文に記載されていない機能を追加しないこと
 - 実験条件の再現に必要な設定はすべて設定ファイルで制御できること
 
+**プラグイン構造**:
+- `.claude-plugin/plugin.json` — MCP サーバー定義
+- `hooks/hooks.json` — Claude Code hook イベントマッピング（6 hooks）
+- インストール時、hook は自動的に登録され、`ACM_CONFIG_PATH` 未設定でも `DEFAULT_CONFIG`（`mode: "full"`, `db_path: "~/.acm/experiences.db"`）で動作する
+
 ### 1.1 Functional Overview
 
 ACM (Associative Context Memory) is an MCP server that integrates with Claude Code via the hooks API. It performs three functions:
@@ -114,6 +119,8 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 ## 3. Hook Implementations
 
 *Reference: Paper Section 3.1*
+
+**Common bootstrap** (`bootstrapHook()`): All hooks share a common entry point. If `ACM_CONFIG_PATH` is set, the config file is loaded; otherwise, `DEFAULT_CONFIG` is used (`mode: "full"`, `db_path: "~/.acm/experiences.db"`). If `mode === "disabled"`, the hook exits silently.
 
 ### 3.1 SessionStart Hook
 
