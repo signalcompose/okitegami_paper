@@ -27,8 +27,7 @@ export interface HookContext {
 
 export function bootstrapHook(stdin: string): HookContext | null {
   // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
-  const configPath = process.env.ACM_CONFIG_PATH || undefined;
-  const config = configPath ? loadConfig(configPath) : loadConfig();
+  const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
   if (config.mode === "disabled") {
     return null;
   }

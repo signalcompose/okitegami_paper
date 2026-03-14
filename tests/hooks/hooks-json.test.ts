@@ -3,7 +3,7 @@
  * Verifies that hooks.json is valid and all hook scripts exist in dist/hooks/
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -28,22 +28,20 @@ interface HooksConfig {
 describe("hooks/hooks.json", () => {
   let config: HooksConfig;
 
-  it("is valid JSON", () => {
+  beforeAll(() => {
     const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
     config = JSON.parse(raw) as HooksConfig;
+  });
+
+  it("is valid JSON", () => {
     expect(config).toBeDefined();
   });
 
   it("has a description field", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
     expect(config.description).toBeTruthy();
   });
 
   it("maps all 6 hook scripts", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     // Collect all script names from commands
     const scriptNames = new Set<string>();
     for (const matchers of Object.values(config.hooks)) {
@@ -70,9 +68,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("maps to correct Claude Code hook events", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     const events = Object.keys(config.hooks);
     expect(events).toContain("SessionStart");
     expect(events).toContain("Stop");
@@ -82,9 +77,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("has corresponding source files for each hook script", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     const srcDir = join(__dirname, "../../src/hooks");
     for (const matchers of Object.values(config.hooks)) {
       for (const matcher of matchers) {
@@ -100,9 +92,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("has appropriate timeouts", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     for (const [event, matchers] of Object.entries(config.hooks)) {
       for (const matcher of matchers) {
         for (const hook of matcher.hooks) {
@@ -118,9 +107,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("has correct PostToolUse matcher for common tools", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     const matcher = config.hooks.PostToolUse[0].matcher;
     expect(matcher).toContain("Bash");
     expect(matcher).toContain("Edit");
@@ -129,9 +115,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("all hook entries use command type", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     for (const matchers of Object.values(config.hooks)) {
       for (const matcher of matchers) {
         for (const hook of matcher.hooks) {
@@ -142,9 +125,6 @@ describe("hooks/hooks.json", () => {
   });
 
   it("Stop event has both stop.js and session-end.js in order", () => {
-    const raw = readFileSync(HOOKS_JSON_PATH, "utf-8");
-    config = JSON.parse(raw) as HooksConfig;
-
     const stopMatchers = config.hooks.Stop;
     expect(stopMatchers).toHaveLength(2);
 

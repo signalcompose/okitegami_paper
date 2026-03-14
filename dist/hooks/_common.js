@@ -14,8 +14,7 @@ import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 export function bootstrapHook(stdin) {
     // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
-    const configPath = process.env.ACM_CONFIG_PATH || undefined;
-    const config = configPath ? loadConfig(configPath) : loadConfig();
+    const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
     if (config.mode === "disabled") {
         return null;
     }
