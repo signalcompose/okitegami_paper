@@ -1,6 +1,6 @@
 /**
  * Tests for hooks/hooks.json — hook event mapping validation
- * Verifies that hooks.json is valid and all hook scripts exist in dist/hooks/
+ * Verifies that hooks.json is valid, maps all expected hook events, and has corresponding source files in src/hooks/
  */
 
 import { describe, it, expect, beforeAll } from "vitest";

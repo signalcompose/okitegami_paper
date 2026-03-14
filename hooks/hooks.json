@@ -1,5 +1,5 @@
 {
-  "description": "ACM signal collection and experience generation hooks",
+  "description": "ACM hooks for experience retrieval/injection, signal collection, and experience generation",
   "hooks": {
     "SessionStart": [{
       "matcher": "",
