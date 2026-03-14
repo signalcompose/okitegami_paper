@@ -34,16 +34,23 @@ describe("bootstrapHook", () => {
     }
   });
 
-  it("returns null when ACM_CONFIG_PATH is not set", () => {
+  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is not set", () => {
     delete process.env.ACM_CONFIG_PATH;
     const result = bootstrapHook('{"session_id":"s1"}');
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.config.mode).toBe("full");
+    expect(result!.config.top_k).toBe(5);
+    expect(result!.config.capture_turns).toBe(5);
+    expect(result!.config.promotion_threshold).toBe(0.3);
+    result!.cleanup();
   });
 
-  it("returns null when ACM_CONFIG_PATH is empty string", () => {
+  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is empty string", () => {
     process.env.ACM_CONFIG_PATH = "";
     const result = bootstrapHook('{"session_id":"s1"}');
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.config.mode).toBe("full");
+    result!.cleanup();
   });
 
   it("returns null when mode is disabled", () => {

@@ -13,13 +13,8 @@ import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 export function bootstrapHook(stdin) {
-    // Check ACM_CONFIG_PATH
-    const configPath = process.env.ACM_CONFIG_PATH;
-    if (!configPath) {
-        return null;
-    }
-    // Load config
-    const config = loadConfig(configPath);
+    // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
+    const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
     if (config.mode === "disabled") {
         return null;
     }
