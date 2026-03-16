@@ -66,20 +66,22 @@ function wrapDatabase(db: SqlJsDatabase, dbPath: string): AdaptedDatabase {
       db.run(sql);
     },
     close(): void {
-      if (dbPath !== ":memory:") {
-        try {
-          const data = db.export();
-          writeFileSync(dbPath, data);
-        } catch (writeErr) {
-          console.error(
-            `[ACM] Failed to persist DB to "${dbPath}". Session data may be lost. ` +
-              `Error: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
-          );
-          db.close();
-          throw writeErr;
+      try {
+        if (dbPath !== ":memory:") {
+          try {
+            const data = db.export();
+            writeFileSync(dbPath, data);
+          } catch (writeErr) {
+            console.error(
+              `[ACM] Failed to persist DB to "${dbPath}". Session data may be lost. ` +
+                `Error: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
+            );
+            throw writeErr;
+          }
         }
+      } finally {
+        db.close();
       }
-      db.close();
     },
   };
 }

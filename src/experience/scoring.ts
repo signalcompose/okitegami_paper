@@ -42,7 +42,7 @@ export function computeFailureStrength(summary: SessionSummary): number | null {
  * Compute success signal strength.
  * Returns null if session doesn't qualify as success.
  *
- * Typically called when computeFailureStrength() returned null.
+ * Must only be called when computeFailureStrength() returned null.
  * Guards independently against interrupted + 0 corrective (ambiguous).
  */
 export function computeSuccessStrength(
