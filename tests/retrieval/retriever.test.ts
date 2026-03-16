@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Retriever } from "../../src/retrieval/retriever.js";
 import { ExperienceStore } from "../../src/store/experience-store.js";
-import { makeEntry, makeConfig } from "./helpers.js";
+import { makeEntry, makeStore } from "./helpers.js";
 
 describe("Retriever", () => {
   let store: ExperienceStore;
   let retriever: Retriever;
 
-  beforeEach(() => {
-    store = new ExperienceStore(makeConfig());
+  beforeEach(async () => {
+    store = await makeStore();
     retriever = new Retriever(store);
   });
 
@@ -59,8 +59,8 @@ describe("Retriever", () => {
     expect(results).toHaveLength(0);
   });
 
-  it("returns empty array in disabled mode", () => {
-    const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
+  it("returns empty array in disabled mode", async () => {
+    const disabledStore = await makeStore({ mode: "disabled" });
     const disabledRetriever = new Retriever(disabledStore);
 
     disabledStore.createWithEmbedding(makeEntry(), new Float32Array([1, 0, 0]));
@@ -70,8 +70,8 @@ describe("Retriever", () => {
     disabledStore.close();
   });
 
-  it("filters success_only mode", () => {
-    const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
+  it("filters success_only mode", async () => {
+    const successStore = await makeStore({ mode: "success_only" });
     const successRetriever = new Retriever(successStore);
     const emb = new Float32Array([1, 0, 0]);
 
@@ -92,8 +92,8 @@ describe("Retriever", () => {
     successStore.close();
   });
 
-  it("filters failure_only mode", () => {
-    const failStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
+  it("filters failure_only mode", async () => {
+    const failStore = await makeStore({ mode: "failure_only" });
     const failRetriever = new Retriever(failStore);
     const emb = new Float32Array([1, 0, 0]);
 

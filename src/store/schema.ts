@@ -1,6 +1,4 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { openDatabase, type AdaptedDatabase } from "./sqlite-adapter.js";
 import { EVENT_TYPES } from "../signals/types.js";
 
 const EVENT_TYPES_SQL = EVENT_TYPES.map((t) => `'${t}'`).join(",");
@@ -44,7 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_session_signals_session_event
   ON session_signals(session_id, event_type);
 `;
 
-function migrateDatabase(db: Database.Database): void {
+function migrateDatabase(db: AdaptedDatabase): void {
   // Additive migration: add project column if missing (backward compat with pre-report DBs)
   const columns = db.prepare("PRAGMA table_info(experiences)").all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map((c) => c.name));
@@ -56,13 +54,8 @@ function migrateDatabase(db: Database.Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_project ON experiences(project)");
 }
 
-export function initializeDatabase(dbPath: string): Database.Database {
-  if (dbPath !== ":memory:") {
-    mkdirSync(dirname(dbPath), { recursive: true });
-  }
-  const db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
+export async function initializeDatabase(dbPath: string): Promise<AdaptedDatabase> {
+  const db = await openDatabase(dbPath);
   db.exec(SCHEMA_SQL);
   migrateDatabase(db);
   return db;

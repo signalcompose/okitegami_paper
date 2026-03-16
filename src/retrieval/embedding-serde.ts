@@ -8,7 +8,10 @@ export function serializeEmbedding(embedding: Float32Array): Buffer {
   );
 }
 
-export function deserializeEmbedding(blob: Buffer, expectedDim?: number): Float32Array {
+export function deserializeEmbedding(
+  blob: Buffer | Uint8Array,
+  expectedDim?: number
+): Float32Array {
   if (blob.byteLength % 4 !== 0) {
     throw new Error(
       `Embedding BLOB has invalid byte length ${blob.byteLength} (not a multiple of 4)`

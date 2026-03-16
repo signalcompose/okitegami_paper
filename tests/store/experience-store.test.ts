@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
-import { makeEntry, makeConfig } from "../retrieval/helpers.js";
+import { makeEntry, makeStore } from "../retrieval/helpers.js";
 import type { ExperienceEntry } from "../../src/store/types.js";
 
 describe("ExperienceStore", () => {
   let store: ExperienceStore;
 
-  beforeEach(() => {
-    store = new ExperienceStore(makeConfig());
+  beforeEach(async () => {
+    store = await makeStore();
   });
 
   afterEach(() => {
@@ -127,8 +127,8 @@ describe("ExperienceStore", () => {
   });
 
   describe("mode filtering", () => {
-    it("filters to success entries only in success_only mode", () => {
-      const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
+    it("filters to success entries only in success_only mode", async () => {
+      const successStore = await makeStore({ mode: "success_only" });
       successStore.create(makeEntry({ type: "success" }));
       successStore.create(
         makeEntry({
@@ -144,8 +144,8 @@ describe("ExperienceStore", () => {
       successStore.close();
     });
 
-    it("filters to failure entries only in failure_only mode", () => {
-      const failureStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
+    it("filters to failure entries only in failure_only mode", async () => {
+      const failureStore = await makeStore({ mode: "failure_only" });
       failureStore.create(makeEntry({ type: "success" }));
       failureStore.create(
         makeEntry({
@@ -175,8 +175,8 @@ describe("ExperienceStore", () => {
       expect(entries).toHaveLength(2);
     });
 
-    it("returns empty in disabled mode", () => {
-      const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
+    it("returns empty in disabled mode", async () => {
+      const disabledStore = await makeStore({ mode: "disabled" });
       disabledStore.create(makeEntry({ type: "success" }));
 
       const entries = disabledStore.listByMode();
@@ -312,8 +312,8 @@ describe("ExperienceStore", () => {
   });
 
   describe("promotion threshold", () => {
-    it("does not persist entries below promotion_threshold", () => {
-      const strictStore = new ExperienceStore(makeConfig({ promotion_threshold: 0.5 }));
+    it("does not persist entries below promotion_threshold", async () => {
+      const strictStore = await makeStore({ promotion_threshold: 0.5 });
 
       const entry = strictStore.create(makeEntry({ signal_strength: 0.3 }));
 
@@ -322,8 +322,8 @@ describe("ExperienceStore", () => {
       strictStore.close();
     });
 
-    it("persists entries at or above promotion_threshold", () => {
-      const strictStore = new ExperienceStore(makeConfig({ promotion_threshold: 0.5 }));
+    it("persists entries at or above promotion_threshold", async () => {
+      const strictStore = await makeStore({ promotion_threshold: 0.5 });
 
       const entry = strictStore.create(makeEntry({ signal_strength: 0.5 }));
 

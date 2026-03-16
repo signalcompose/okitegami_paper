@@ -134,7 +134,7 @@ export class ExperimentRunner {
 
       // 4. Retrieve past experiences for ACM conditions
       const taskDescription = this.readTaskDescription(spec.task);
-      const injectionText = this.experienceManager.retrieveInjection(
+      const injectionText = await this.experienceManager.retrieveInjection(
         dbPath,
         taskDescription,
         spec.condition
@@ -186,7 +186,7 @@ export class ExperimentRunner {
             vitestOutput,
           });
           if (experience) {
-            const stored = this.experienceManager.storeExperience(dbPath, experience);
+            const stored = await this.experienceManager.storeExperience(dbPath, experience);
             if (stored) {
               console.log(
                 `  [ACM] Stored ${experience.type} experience (strength: ${experience.signal_strength.toFixed(2)})`

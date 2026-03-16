@@ -5,8 +5,8 @@
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 
-export function handlePostToolUseFailure(stdin: string): void {
-  const ctx = bootstrapHook(stdin);
+export async function handlePostToolUseFailure(stdin: string): Promise<void> {
+  const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
   try {

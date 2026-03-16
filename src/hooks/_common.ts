@@ -14,6 +14,7 @@ import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 import type { AcmConfig } from "../store/types.js";
+import type { AdaptedDatabase } from "../store/sqlite-adapter.js";
 
 export interface HookContext {
   input: Record<string, unknown>;
@@ -25,7 +26,7 @@ export interface HookContext {
   cleanup: () => void;
 }
 
-export function bootstrapHook(stdin: string): HookContext | null {
+export async function bootstrapHook(stdin: string): Promise<HookContext | null> {
   // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
   const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
   if (config.mode === "disabled") {
@@ -43,11 +44,11 @@ export function bootstrapHook(stdin: string): HookContext | null {
     );
   }
 
-  // Initialize DB and stores
-  const db = initializeDatabase(config.db_path);
+  // Initialize DB and stores (async for sql.js WASM)
+  const db: AdaptedDatabase = await initializeDatabase(config.db_path);
   try {
     const signalStore = new SessionSignalStore(db);
-    const experienceStore = new ExperienceStore(config);
+    const experienceStore = new ExperienceStore(db, config);
     const collector = new SignalCollector(signalStore, {
       capture_turns: config.capture_turns,
     });
@@ -62,7 +63,6 @@ export function bootstrapHook(stdin: string): HookContext | null {
       collector,
       projectName,
       cleanup: () => {
-        experienceStore.close();
         db.close();
       },
     };

@@ -4,15 +4,15 @@ import { initializeDatabase } from "../../src/store/schema.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 
 describe("Signal MCP Tools", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let server: McpServer;
   let client: Client;
 
   beforeEach(async () => {
-    db = initializeDatabase(":memory:");
+    db = await initializeDatabase(":memory:");
     server = createAcmServer({ db });
     client = new Client({ name: "test-client", version: "1.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

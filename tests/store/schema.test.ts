@@ -1,12 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { initializeDatabase } from "../../src/store/schema.js";
+import { openDatabase } from "../../src/store/sqlite-adapter.js";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { unlinkSync } from "node:fs";
-import type Database from "better-sqlite3";
 
 describe("initializeDatabase", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   const cleanupPaths: string[] = [];
 
   afterEach(() => {
@@ -17,22 +18,12 @@ describe("initializeDatabase", () => {
       } catch {
         /* ignore */
       }
-      try {
-        unlinkSync(p + "-wal");
-      } catch {
-        /* ignore */
-      }
-      try {
-        unlinkSync(p + "-shm");
-      } catch {
-        /* ignore */
-      }
     }
     cleanupPaths.length = 0;
   });
 
-  it("creates experiences table with correct columns including project", () => {
-    db = initializeDatabase(":memory:");
+  it("creates experiences table with correct columns including project", async () => {
+    db = await initializeDatabase(":memory:");
 
     const tableInfo = db.prepare("PRAGMA table_info(experiences)").all() as Array<{
       name: string;
@@ -56,8 +47,8 @@ describe("initializeDatabase", () => {
     expect(columnNames).toContain("project");
   });
 
-  it("creates expected indexes including project", () => {
-    db = initializeDatabase(":memory:");
+  it("creates expected indexes including project", async () => {
+    db = await initializeDatabase(":memory:");
 
     const indexes = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'experiences'")
@@ -74,9 +65,8 @@ describe("initializeDatabase", () => {
     const dbPath = join(tmpdir(), `acm-migration-test-${Date.now()}.db`);
     cleanupPaths.push(dbPath);
 
-    // Create a DB with the old schema (no project column)
-    const BetterSqlite3 = (await import("better-sqlite3")).default;
-    const oldDb = new BetterSqlite3(dbPath);
+    // Create a DB with the old schema (no project column) using openDatabase
+    const oldDb = await openDatabase(dbPath);
     oldDb.exec(`
       CREATE TABLE experiences (
         id TEXT PRIMARY KEY,
@@ -120,7 +110,7 @@ describe("initializeDatabase", () => {
     oldDb.close();
 
     // Re-open with initializeDatabase which should run migration
-    db = initializeDatabase(dbPath);
+    db = await initializeDatabase(dbPath);
 
     // Verify project column now exists
     const tableInfo = db.prepare("PRAGMA table_info(experiences)").all() as Array<{ name: string }>;
@@ -133,15 +123,15 @@ describe("initializeDatabase", () => {
     expect(row.project).toBeNull();
   });
 
-  it("is idempotent — calling twice on same DB does not throw", () => {
+  it("is idempotent — calling twice on same DB does not throw", async () => {
     const dbPath = join(tmpdir(), `acm-idempotent-test-${Date.now()}.db`);
     cleanupPaths.push(dbPath);
 
-    db = initializeDatabase(dbPath);
+    db = await initializeDatabase(dbPath);
     db.close();
 
     // Second call on same file should not throw
-    db = initializeDatabase(dbPath);
+    db = await initializeDatabase(dbPath);
 
     const tableInfo = db.prepare("PRAGMA table_info(experiences)").all() as Array<{ name: string }>;
     expect(tableInfo.map((c) => c.name)).toContain("id");
