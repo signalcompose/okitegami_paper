@@ -50,12 +50,12 @@ function makeFakeEmbedding(seed: number): Float32Array {
   return arr;
 }
 
-function insertExperienceWithEmbedding(
+async function insertExperienceWithEmbedding(
   dbPath: string,
   entry: Omit<ExperienceEntry, "id">,
   embedding: Float32Array
-): void {
-  const ctx = bootstrapHook(JSON.stringify({ session_id: "setup" }));
+): Promise<void> {
+  const ctx = await bootstrapHook(JSON.stringify({ session_id: "setup" }));
   if (!ctx) throw new Error("Failed to bootstrap for test setup");
   ctx.experienceStore.createWithEmbedding(entry, embedding);
   ctx.cleanup();
@@ -73,11 +73,11 @@ describe("session-start hook: retrieveAndInject", () => {
     }
   });
 
-  it("returns injection text when experiences exist", () => {
+  it("returns injection text when experiences exist", async () => {
     setupEnv();
     const emb1 = makeFakeEmbedding(1);
 
-    insertExperienceWithEmbedding(
+    await insertExperienceWithEmbedding(
       process.env.ACM_CONFIG_PATH!,
       {
         type: "failure",
@@ -94,7 +94,7 @@ describe("session-start hook: retrieveAndInject", () => {
       emb1
     );
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "new-session" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "new-session" }));
     const queryEmbedding = makeFakeEmbedding(1); // Same seed = high similarity
     const result = retrieveAndInject(ctx!, queryEmbedding, "new-session", "test query");
     ctx!.cleanup();
@@ -104,11 +104,11 @@ describe("session-start hook: retrieveAndInject", () => {
     expect(result).toContain("syntax error");
   });
 
-  it("records injection signal in session_signals", () => {
+  it("records injection signal in session_signals", async () => {
     setupEnv();
     const emb1 = makeFakeEmbedding(1);
 
-    insertExperienceWithEmbedding(
+    await insertExperienceWithEmbedding(
       process.env.ACM_CONFIG_PATH!,
       {
         type: "success",
@@ -124,7 +124,7 @@ describe("session-start hook: retrieveAndInject", () => {
       emb1
     );
 
-    const ctx = bootstrapHook(
+    const ctx = await bootstrapHook(
       JSON.stringify({ session_id: "inject-session", cwd: "/home/user/my-project" })
     );
     const queryEmbedding = makeFakeEmbedding(1);
@@ -144,10 +144,10 @@ describe("session-start hook: retrieveAndInject", () => {
     ctx!.cleanup();
   });
 
-  it("does not record injection signal when no results", () => {
+  it("does not record injection signal when no results", async () => {
     setupEnv();
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "empty-inject" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "empty-inject" }));
     const queryEmbedding = makeFakeEmbedding(42);
     retrieveAndInject(ctx!, queryEmbedding, "empty-inject", "query text");
 
@@ -157,10 +157,10 @@ describe("session-start hook: retrieveAndInject", () => {
     ctx!.cleanup();
   });
 
-  it("returns empty string when DB is empty", () => {
+  it("returns empty string when DB is empty", async () => {
     setupEnv();
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "empty-session" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "empty-session" }));
     const queryEmbedding = makeFakeEmbedding(42);
     const result = retrieveAndInject(ctx!, queryEmbedding, "empty-session", "query");
     ctx!.cleanup();
@@ -168,19 +168,19 @@ describe("session-start hook: retrieveAndInject", () => {
     expect(result).toBe("");
   });
 
-  it("returns empty string when mode is disabled", () => {
+  it("returns empty string when mode is disabled", async () => {
     setupEnv("disabled");
     // bootstrapHook returns null for disabled mode, so retrieveAndInject won't be called
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "disabled-session" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "disabled-session" }));
     expect(ctx).toBeNull();
   });
 
-  it("respects top-K limit", () => {
+  it("respects top-K limit", async () => {
     setupEnv(); // top_k: 3
 
     // Insert 5 experiences
     for (let i = 1; i <= 5; i++) {
-      insertExperienceWithEmbedding(
+      await insertExperienceWithEmbedding(
         process.env.ACM_CONFIG_PATH!,
         {
           type: "success",
@@ -197,7 +197,7 @@ describe("session-start hook: retrieveAndInject", () => {
       );
     }
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "topk-session" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "topk-session" }));
     const queryEmbedding = makeFakeEmbedding(3); // Most similar to entry 3
     const result = retrieveAndInject(ctx!, queryEmbedding, "topk-session", "query");
     ctx!.cleanup();
@@ -207,11 +207,11 @@ describe("session-start hook: retrieveAndInject", () => {
     expect(successCount).toBeLessThanOrEqual(3);
   });
 
-  it("returns results ordered by score (similarity × strength)", () => {
+  it("returns results ordered by score (similarity × strength)", async () => {
     setupEnv();
 
     // High similarity + high strength should rank first
-    insertExperienceWithEmbedding(
+    await insertExperienceWithEmbedding(
       process.env.ACM_CONFIG_PATH!,
       {
         type: "failure",
@@ -229,7 +229,7 @@ describe("session-start hook: retrieveAndInject", () => {
     );
 
     // Low similarity should rank lower
-    insertExperienceWithEmbedding(
+    await insertExperienceWithEmbedding(
       process.env.ACM_CONFIG_PATH!,
       {
         type: "success",
@@ -245,7 +245,7 @@ describe("session-start hook: retrieveAndInject", () => {
       makeFakeEmbedding(99)
     );
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "order-session" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "order-session" }));
     const queryEmbedding = makeFakeEmbedding(10); // Similar to first entry
     const result = retrieveAndInject(ctx!, queryEmbedding, "order-session", "query");
     ctx!.cleanup();

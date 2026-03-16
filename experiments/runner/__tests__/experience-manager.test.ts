@@ -113,7 +113,7 @@ describe("ExperienceManager", () => {
   });
 
   describe("storeExperience / retrieveInjection", () => {
-    it("stores and retrieves experiences from a shared DB", () => {
+    it("stores and retrieves experiences from a shared DB", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_test", "acm-sf", "task-a", "full");
 
@@ -126,14 +126,14 @@ describe("ExperienceManager", () => {
       });
       expect(entry).not.toBeNull();
 
-      const stored = mgr.storeExperience(dbPath, entry!);
+      const stored = await mgr.storeExperience(dbPath, entry!);
       expect(stored).not.toBeNull();
       expect(stored!.id).toBeTruthy();
 
       mgr.closeAll();
     });
 
-    it("accumulates experiences across multiple sessions", () => {
+    it("accumulates experiences across multiple sessions", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_acc", "acm-sf", "task-a", "full");
 
@@ -144,7 +144,7 @@ describe("ExperienceManager", () => {
         taskDescription: "Fix JWT authentication bugs",
         claudeOutput: "Partially fixed",
       });
-      mgr.storeExperience(dbPath, e1!);
+      await mgr.storeExperience(dbPath, e1!);
 
       // Session 2
       const e2 = mgr.generateExperience({
@@ -153,17 +153,17 @@ describe("ExperienceManager", () => {
         taskDescription: "Fix JWT authentication bugs",
         claudeOutput: "Fixed all bugs",
       });
-      mgr.storeExperience(dbPath, e2!);
+      await mgr.storeExperience(dbPath, e2!);
 
       // Verify DB has both
-      const store = mgr.getStore(dbPath);
+      const store = await mgr.getStore(dbPath);
       const all = store.list();
       expect(all).toHaveLength(2);
 
       mgr.closeAll();
     });
 
-    it("retrieves injection text for accumulated experiences", () => {
+    it("retrieves injection text for accumulated experiences", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_inject", "acm-sf", "task-a", "full");
 
@@ -174,10 +174,10 @@ describe("ExperienceManager", () => {
         taskDescription: "Fix JWT authentication bugs",
         claudeOutput: "Fixed token validation",
       });
-      mgr.storeExperience(dbPath, e1!);
+      await mgr.storeExperience(dbPath, e1!);
 
       // Retrieve injection
-      const injection = mgr.retrieveInjection(dbPath, "Fix JWT authentication bugs");
+      const injection = await mgr.retrieveInjection(dbPath, "Fix JWT authentication bugs");
 
       // Should contain ACM Context header and experience data
       expect(injection).toContain("[ACM Context]");
@@ -186,31 +186,31 @@ describe("ExperienceManager", () => {
       mgr.closeAll();
     });
 
-    it("returns empty injection when no experiences exist", () => {
+    it("returns empty injection when no experiences exist", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_empty", "acm-sf", "task-a", "full");
 
-      const injection = mgr.retrieveInjection(dbPath, "Fix bugs");
+      const injection = await mgr.retrieveInjection(dbPath, "Fix bugs");
       expect(injection).toBe("");
 
       mgr.closeAll();
     });
 
-    it("returns empty injection for control condition (disabled mode)", () => {
+    it("returns empty injection for control condition (disabled mode)", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_ctrl", "control", "task-a", "full");
 
-      const injection = mgr.retrieveInjection(dbPath, "Fix bugs", "control");
+      const injection = await mgr.retrieveInjection(dbPath, "Fix bugs", "control");
       expect(injection).toBe("");
 
       mgr.closeAll();
     });
 
-    it("returns empty injection for baseline-compact condition", () => {
+    it("returns empty injection for baseline-compact condition", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_bc", "baseline-compact", "task-a", "full");
 
-      const injection = mgr.retrieveInjection(dbPath, "Fix bugs", "baseline-compact");
+      const injection = await mgr.retrieveInjection(dbPath, "Fix bugs", "baseline-compact");
       expect(injection).toBe("");
 
       mgr.closeAll();
@@ -442,11 +442,11 @@ describe("ExperienceManager", () => {
   });
 
   describe("DB lifecycle", () => {
-    it("creates DB directory if needed", () => {
+    it("creates DB directory if needed", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_new", "acm-sf", "task-a", "full");
 
-      mgr.storeExperience(
+      await mgr.storeExperience(
         dbPath,
         mgr.generateExperience({
           sessionId: "s1",
@@ -456,16 +456,17 @@ describe("ExperienceManager", () => {
         })!
       );
 
-      expect(existsSync(dbPath)).toBe(true);
+      // sql.js writes file on close(), not on insert
       mgr.closeAll();
+      expect(existsSync(dbPath)).toBe(true);
     });
 
-    it("reuses store instance for same DB path", () => {
+    it("reuses store instance for same DB path", async () => {
       const mgr = new ExperienceManager(TEST_DIR);
       const dbPath = mgr.getDbPath("exp_reuse", "acm-sf", "task-a", "full");
 
-      const store1 = mgr.getStore(dbPath);
-      const store2 = mgr.getStore(dbPath);
+      const store1 = await mgr.getStore(dbPath);
+      const store2 = await mgr.getStore(dbPath);
       expect(store1).toBe(store2);
 
       mgr.closeAll();

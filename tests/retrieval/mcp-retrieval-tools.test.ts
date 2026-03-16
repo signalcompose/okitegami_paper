@@ -7,18 +7,19 @@ import { DEFAULT_CONFIG } from "../../src/store/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 
 describe("Retrieval MCP Tools", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let server: McpServer;
   let client: Client;
   let experienceStore: ExperienceStore;
   let embedder: Embedder;
 
   beforeAll(async () => {
-    db = initializeDatabase(":memory:");
-    experienceStore = new ExperienceStore({
+    db = await initializeDatabase(":memory:");
+    const expDb = await initializeDatabase(":memory:");
+    experienceStore = new ExperienceStore(expDb, {
       ...DEFAULT_CONFIG,
       db_path: ":memory:",
     });

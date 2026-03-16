@@ -15,6 +15,7 @@ import {
 } from "../../experiments/runner/worktree-helpers.js";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 
 const TMP_DIR = join(tmpdir(), "acm-test-worktree");
 
@@ -111,10 +112,10 @@ describe("readSessionSignals", () => {
     }
   });
 
-  it("reads signal counts from a DB file", () => {
+  it("reads signal counts from a DB file", async () => {
     mkdirSync(TMP_DIR, { recursive: true });
     const dbPath = join(TMP_DIR, "test-signals.db");
-    const db = initializeDatabase(dbPath);
+    const db: AdaptedDatabase = await initializeDatabase(dbPath);
     const store = new SessionSignalStore(db);
 
     // Add some signals
@@ -125,24 +126,24 @@ describe("readSessionSignals", () => {
     store.addSignal("s1", "stop", null);
     db.close();
 
-    const signals = readSessionSignals(dbPath, "s1");
+    const signals = await readSessionSignals(dbPath, "s1");
     expect(signals.interrupt_count).toBe(2);
     expect(signals.corrective_instruction_count).toBe(1);
   });
 
-  it("returns zeros when session has no signals", () => {
+  it("returns zeros when session has no signals", async () => {
     mkdirSync(TMP_DIR, { recursive: true });
     const dbPath = join(TMP_DIR, "empty-signals.db");
-    const db = initializeDatabase(dbPath);
+    const db: AdaptedDatabase = await initializeDatabase(dbPath);
     db.close();
 
-    const signals = readSessionSignals(dbPath, "nonexistent");
+    const signals = await readSessionSignals(dbPath, "nonexistent");
     expect(signals.interrupt_count).toBe(0);
     expect(signals.corrective_instruction_count).toBe(0);
   });
 
-  it("returns zeros when DB file does not exist", () => {
-    const signals = readSessionSignals(join(TMP_DIR, "missing.db"), "s1");
+  it("returns zeros when DB file does not exist", async () => {
+    const signals = await readSessionSignals(join(TMP_DIR, "missing.db"), "s1");
     expect(signals.interrupt_count).toBe(0);
     expect(signals.corrective_instruction_count).toBe(0);
   });

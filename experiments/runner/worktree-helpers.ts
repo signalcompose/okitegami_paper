@@ -5,10 +5,10 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SignalData } from "../harness/metric-collector.js";
+import initSqlJs from "sql.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -98,7 +98,7 @@ export function generateHooksConfig(worktreePath: string, projectRoot: string): 
  * Read signal counts from a session's DB.
  * Returns zeros if DB doesn't exist or session has no signals.
  */
-export function readSessionSignals(dbPath: string, sessionId: string): SignalData {
+export async function readSessionSignals(dbPath: string, sessionId: string): Promise<SignalData> {
   const defaultResult: SignalData = {
     interrupt_count: 0,
     corrective_instruction_count: 0,
@@ -111,29 +111,26 @@ export function readSessionSignals(dbPath: string, sessionId: string): SignalDat
     return defaultResult;
   }
 
-  // Load dependency — fail hard if missing (infrastructure misconfiguration)
-  const esmRequire = createRequire(import.meta.url);
-
-  const Database = esmRequire("better-sqlite3");
-
-  // Let DB errors propagate — measurement failures should not produce fake zero data
-  const db = new Database(dbPath, { readonly: true });
+  const SQL = await initSqlJs();
+  const data = readFileSync(dbPath);
+  const db = new SQL.Database(data);
 
   try {
-    const rows = db
-      .prepare(
-        "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN ('interrupt', 'corrective_instruction') GROUP BY event_type"
-      )
-      .all(sessionId) as Array<{ event_type: string; count: number }>;
+    const stmt = db.prepare(
+      "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN ('interrupt', 'corrective_instruction') GROUP BY event_type"
+    );
+    stmt.bind([sessionId]);
 
     const result: SignalData = { ...defaultResult };
-    for (const row of rows) {
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { event_type: string; count: number };
       if (row.event_type === "interrupt") {
         result.interrupt_count = row.count;
       } else if (row.event_type === "corrective_instruction") {
         result.corrective_instruction_count = row.count;
       }
     }
+    stmt.free();
     return result;
   } finally {
     db.close();

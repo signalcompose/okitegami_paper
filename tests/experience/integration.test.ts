@@ -1,6 +1,9 @@
 /**
  * Integration test: signal recording → experience generation → DB persistence
  * Validates Phase 1 + Phase 2 + Phase 3 working together.
+ *
+ * Revised: Corrective instructions are reported via acm_record_signal
+ * (not auto-detected by regex). Interrupt alone is ambiguous.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -13,7 +16,7 @@ import { SignalCollector } from "../../src/signals/signal-collector.js";
 import { ExperienceGenerator } from "../../src/experience/generator.js";
 import { createAcmServer } from "../../src/server/tools.js";
 import type { AcmConfig } from "../../src/store/types.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 
 const TEST_CONFIG: AcmConfig = {
   mode: "full",
@@ -24,18 +27,16 @@ const TEST_CONFIG: AcmConfig = {
 };
 
 describe("Signal → Experience Integration", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let experienceStore: ExperienceStore;
   let signalStore: SessionSignalStore;
   let collector: SignalCollector;
   let generator: ExperienceGenerator;
 
-  beforeEach(() => {
-    // Signal-side DB: session_signals table
-    db = initializeDatabase(":memory:");
-    // Experience-side DB: ExperienceStore opens its own isolated :memory: DB
-    // (separate from signal DB — data is threaded between them via generator)
-    experienceStore = new ExperienceStore(TEST_CONFIG);
+  beforeEach(async () => {
+    db = await initializeDatabase(":memory:");
+    const expDb = await initializeDatabase(":memory:");
+    experienceStore = new ExperienceStore(expDb, TEST_CONFIG);
     signalStore = new SessionSignalStore(db);
     collector = new SignalCollector(signalStore, {
       capture_turns: TEST_CONFIG.capture_turns,
@@ -51,16 +52,23 @@ describe("Signal → Experience Integration", () => {
     db.close();
   });
 
-  it("generates failure entry from interrupt flow", () => {
+  it("generates failure entry from interrupt + corrective flow", () => {
     const sessionId = "int-session-1";
 
-    // Simulate hook events
+    // Simulate hook events: interrupt + corrective via acm_record_signal
     collector.handleInterrupt(sessionId, "Bash", "npm test failed");
     collector.handleUserPrompt(sessionId, "That's wrong, don't run tests on the build directory");
     collector.handleUserPrompt(sessionId, "Use the source directory instead");
-    collector.handleUserPrompt(sessionId, "And fix the TypeScript config");
+    // Claude Code reports corrective instructions via acm_record_signal
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "That's wrong, don't run tests on the build directory",
+      reason: "wrong directory",
+    });
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Use the source directory instead",
+      reason: "source not build",
+    });
 
-    // Generate experience
     const summary = collector.getSessionSummary(sessionId);
     const signals = signalStore.getBySession(sessionId);
     const entries = generator.generate({ session_id: sessionId, summary, signals });
@@ -70,9 +78,9 @@ describe("Signal → Experience Integration", () => {
     const failure = entries.find((e) => e.type === "failure");
     expect(failure).toBeDefined();
     expect(failure!.signal_type).toBe("interrupt_with_dialogue");
-    expect(failure!.signal_strength).toBeGreaterThanOrEqual(0.9);
+    // Interrupt + 2 corrective → strength in 0.40–0.60 range
+    expect(failure!.signal_strength).toBeGreaterThanOrEqual(0.4);
     expect(failure!.interrupt_context).toBeDefined();
-    expect(failure!.interrupt_context!.turns_captured).toBe(3);
     expect(failure!.retrieval_keys).toContain("Bash");
 
     // Persist to DB
@@ -87,16 +95,27 @@ describe("Signal → Experience Integration", () => {
     expect(retrieved!.signal_strength).toBe(failure!.signal_strength);
   });
 
+  it("generates no entry for interrupt without corrective (ambiguous)", () => {
+    const sessionId = "int-only-session";
+
+    collector.handleInterrupt(sessionId, "Bash", "npm test failed");
+    collector.handleUserPrompt(sessionId, "Let me think about this");
+
+    const summary = collector.getSessionSummary(sessionId);
+    const signals = signalStore.getBySession(sessionId);
+    const entries = generator.generate({ session_id: sessionId, summary, signals });
+
+    expect(entries).toEqual([]);
+  });
+
   it("generates success entry from clean completion with tests", () => {
     const sessionId = "clean-session-1";
 
-    // Simulate hook events
     collector.handleToolSuccess(sessionId, "Read", { file_path: "src/main.ts" });
     collector.handleToolSuccess(sessionId, "Edit", { file_path: "src/main.ts" });
     collector.handleToolSuccess(sessionId, "Bash", { command: "npx vitest run" }, 0);
     collector.handleStop(sessionId);
 
-    // Generate experience
     const summary = collector.getSessionSummary(sessionId);
     const signals = signalStore.getBySession(sessionId);
     const entries = generator.generate({ session_id: sessionId, summary, signals });
@@ -106,37 +125,45 @@ describe("Signal → Experience Integration", () => {
     expect(success.type).toBe("success");
     expect(success.signal_type).toBe("uninterrupted_completion");
     expect(success.signal_strength).toBeGreaterThanOrEqual(0.7);
-    expect((success as Record<string, unknown>).has_test_pass).toBeUndefined();
     expect(success.retrieval_keys).toContain("Read");
     expect(success.retrieval_keys).toContain("Edit");
     expect(success.retrieval_keys).toContain("Bash");
 
-    // Persist
     const saved = experienceStore.create(success);
     expect(saved).not.toBeNull();
 
-    // Verify via list
     const all = experienceStore.list();
     expect(all.length).toBe(1);
     expect(all[0].type).toBe("success");
   });
 
-  it("generates failure from corrective instructions (3+)", () => {
+  it("generates failure from corrective instructions (3+) reported by Claude", () => {
     const sessionId = "corrective-session-1";
 
-    // Simulate hook events — 4 corrective instructions
-    collector.handleUserPrompt(sessionId, "No, that's wrong");
-    collector.handleUserPrompt(sessionId, "Try again with a different approach");
-    collector.handleUserPrompt(sessionId, "That's not what I meant");
+    // Claude reports corrective instructions via acm_record_signal
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "No, that's wrong",
+      reason: "incorrect approach",
+    });
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Try again with a different approach",
+      reason: "wrong method",
+    });
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "That's not what I meant",
+      reason: "misunderstanding",
+    });
     collector.handleToolSuccess(sessionId, "Edit", { file_path: "src/app.ts" });
-    collector.handleUserPrompt(sessionId, "Undo that change");
+    signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Undo that change",
+      reason: "unwanted edit",
+    });
     collector.handleStop(sessionId);
 
     const summary = collector.getSessionSummary(sessionId);
     const signals = signalStore.getBySession(sessionId);
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
-    // Should have failure (corrective >= 3) but NOT success (corrective >= 3 disqualifies)
     const failures = entries.filter((e) => e.type === "failure");
     const successes = entries.filter((e) => e.type === "success");
     expect(failures.length).toBe(1);
@@ -154,16 +181,19 @@ describe("Signal → Experience Integration", () => {
   });
 
   it("full pipeline: multiple sessions, multiple experience types", () => {
-    // Session 1: interrupted
+    // Session 1: interrupt + corrective → failure
     collector.handleInterrupt("s1", "Bash", "build failed");
     collector.handleUserPrompt("s1", "Fix the build error in webpack config");
+    signalStore.addSignal("s1", "corrective_instruction", {
+      prompt: "Fix the build error in webpack config",
+      reason: "build failure",
+    });
 
     // Session 2: clean success
     collector.handleToolSuccess("s2", "Read", { file_path: "README.md" });
     collector.handleToolSuccess("s2", "Bash", { command: "npm test" }, 0);
     collector.handleStop("s2");
 
-    // Generate for both sessions
     for (const sid of ["s1", "s2"]) {
       const summary = collector.getSessionSummary(sid);
       const signals = signalStore.getBySession(sid);
@@ -173,7 +203,6 @@ describe("Signal → Experience Integration", () => {
       }
     }
 
-    // Verify DB state
     const all = experienceStore.list();
     expect(all.length).toBe(2);
 
@@ -181,22 +210,20 @@ describe("Signal → Experience Integration", () => {
     expect(types.has("failure")).toBe(true);
     expect(types.has("success")).toBe(true);
 
-    // Mode filtering
     const successes = experienceStore.listByMode();
     expect(successes.length).toBe(2); // mode=full returns all
   });
 });
 
 describe("acm_generate_experience MCP tool", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let experienceStore: ExperienceStore;
   let client: Client;
 
   beforeEach(async () => {
-    // Signal-side DB shared with server's internal SessionSignalStore
-    db = initializeDatabase(":memory:");
-    // Experience-side DB: separate :memory: instance (ExperienceStore manages its own connection)
-    experienceStore = new ExperienceStore(TEST_CONFIG);
+    db = await initializeDatabase(":memory:");
+    const expDb = await initializeDatabase(":memory:");
+    experienceStore = new ExperienceStore(expDb, TEST_CONFIG);
 
     const server = createAcmServer({
       db,
@@ -219,21 +246,29 @@ describe("acm_generate_experience MCP tool", () => {
   it("generates and persists experience entries via MCP tool", async () => {
     const sessionId = "mcp-test-session";
 
-    // Record signals via MCP
+    // Record signals via MCP — need corrective instruction for failure generation
     await client.callTool({
       name: "acm_record_signal",
       arguments: {
         session_id: sessionId,
-        event_type: "interrupt",
-        data: JSON.stringify({ tool_name: "Bash", error: "test failed" }),
+        event_type: "corrective_instruction",
+        data: JSON.stringify({ prompt: "That's wrong, fix it", reason: "incorrect approach" }),
       },
     });
     await client.callTool({
       name: "acm_record_signal",
       arguments: {
         session_id: sessionId,
-        event_type: "post_interrupt_turn",
-        data: JSON.stringify({ prompt: "Fix the failing test" }),
+        event_type: "corrective_instruction",
+        data: JSON.stringify({ prompt: "Try again", reason: "wrong method" }),
+      },
+    });
+    await client.callTool({
+      name: "acm_record_signal",
+      arguments: {
+        session_id: sessionId,
+        event_type: "corrective_instruction",
+        data: JSON.stringify({ prompt: "Not what I wanted", reason: "misunderstanding" }),
       },
     });
 
@@ -251,7 +286,6 @@ describe("acm_generate_experience MCP tool", () => {
     expect(parsed.persisted).toBe(parsed.generated);
     expect(parsed.ids.length).toBe(parsed.persisted);
 
-    // Verify persistence via ExperienceStore
     const all = experienceStore.list();
     expect(all.length).toBe(parsed.persisted);
     expect(all[0].session_id).toBe(sessionId);

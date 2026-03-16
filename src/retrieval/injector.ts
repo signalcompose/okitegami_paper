@@ -42,3 +42,17 @@ export function formatInjection(results: RetrievalResult[]): string {
 
   return lines.join("\n");
 }
+
+/**
+ * Format signal detection instruction for Claude Code.
+ * Instructs Claude to report corrective feedback via acm_record_signal.
+ */
+export function formatSignalInstruction(sessionId: string): string {
+  return `[ACM Signal Detection]
+Session: ${sessionId}
+When you recognize corrective feedback from the user (approach changes,
+undo requests, dissatisfaction, redirections), call acm_record_signal:
+  session_id: "${sessionId}"
+  event_type: "corrective_instruction"
+  data: '{"prompt":"<user message excerpt>","reason":"<brief explanation>"}'`;
+}

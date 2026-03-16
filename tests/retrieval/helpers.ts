@@ -3,6 +3,8 @@
  */
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
 import { DEFAULT_CONFIG } from "../../src/store/types.js";
+import { initializeDatabase } from "../../src/store/schema.js";
+import { ExperienceStore } from "../../src/store/experience-store.js";
 
 export function makeEntry(overrides: Partial<ExperienceEntry> = {}): Omit<ExperienceEntry, "id"> {
   return {
@@ -21,4 +23,10 @@ export function makeEntry(overrides: Partial<ExperienceEntry> = {}): Omit<Experi
 
 export function makeConfig(overrides: Partial<AcmConfig> = {}): AcmConfig {
   return { ...DEFAULT_CONFIG, db_path: ":memory:", ...overrides };
+}
+
+export async function makeStore(overrides: Partial<AcmConfig> = {}): Promise<ExperienceStore> {
+  const config = makeConfig(overrides);
+  const db = await initializeDatabase(config.db_path);
+  return new ExperienceStore(db, config);
 }

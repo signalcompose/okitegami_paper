@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
-import { initializeDatabase } from "./schema.js";
+import type { AdaptedDatabase, Statement } from "./sqlite-adapter.js";
 import { SIGNAL_TYPES } from "./types.js";
 import type {
   ExperienceEntry,
@@ -17,23 +16,23 @@ export interface EntryWithEmbedding {
 }
 
 export class ExperienceStore {
-  private db: Database.Database;
+  private db: AdaptedDatabase;
   private config: AcmConfig;
-  private stmtInsert: Database.Statement;
-  private stmtGetById: Database.Statement;
-  private stmtList: Database.Statement;
-  private stmtListByType: Database.Statement;
-  private stmtDelete: Database.Statement;
-  private stmtUpdateEmbedding: Database.Statement;
-  private stmtAllWithEmbedding: Database.Statement;
-  private stmtAllWithEmbeddingByType: Database.Statement;
-  private stmtOutcomesBySession: Database.Statement;
-  private stmtCrossProjectReport: Database.Statement;
-  private stmtSignalSummaryBySession: Database.Statement;
+  private stmtInsert: Statement;
+  private stmtGetById: Statement;
+  private stmtList: Statement;
+  private stmtListByType: Statement;
+  private stmtDelete: Statement;
+  private stmtUpdateEmbedding: Statement;
+  private stmtAllWithEmbedding: Statement;
+  private stmtAllWithEmbeddingByType: Statement;
+  private stmtOutcomesBySession: Statement;
+  private stmtCrossProjectReport: Statement;
+  private stmtSignalSummaryBySession: Statement;
 
-  constructor(config: AcmConfig) {
+  constructor(db: AdaptedDatabase, config: AcmConfig) {
     this.config = config;
-    this.db = initializeDatabase(config.db_path);
+    this.db = db;
 
     this.stmtInsert = this.db.prepare(
       `INSERT INTO experiences
@@ -75,7 +74,7 @@ export class ExperienceStore {
     );
   }
 
-  getDb(): Database.Database {
+  getDb(): AdaptedDatabase {
     return this.db;
   }
 
@@ -144,7 +143,7 @@ export class ExperienceStore {
       try {
         results.push({
           entry: this.rowToEntry(row),
-          embedding: deserializeEmbedding(row.embedding as Buffer),
+          embedding: deserializeEmbedding(row.embedding as Uint8Array),
         });
       } catch (err) {
         // Skip corrupt embedding rows rather than failing entire retrieval
@@ -214,7 +213,7 @@ export class ExperienceStore {
   }
 
   getCrossProjectReport(): ProjectReportRow[] {
-    return this.stmtCrossProjectReport.all() as ProjectReportRow[];
+    return this.stmtCrossProjectReport.all<ProjectReportRow>();
   }
 
   getInjectionEpisodes(project?: string, limit?: number): InjectionEpisode[] {

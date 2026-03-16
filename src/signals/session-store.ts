@@ -3,7 +3,7 @@
  * SPECIFICATION.md Section 3
  */
 
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase, Statement } from "../store/sqlite-adapter.js";
 import type { EventType, SessionSignal } from "./types.js";
 import { EVENT_TYPES } from "./types.js";
 
@@ -16,14 +16,14 @@ interface SignalRow {
 }
 
 export class SessionSignalStore {
-  private insertStmt: Database.Statement;
-  private getBySessionStmt: Database.Statement;
-  private countByTypeStmt: Database.Statement;
-  private clearSessionStmt: Database.Statement;
-  private countSpecificTypesStmt: Database.Statement;
-  private hasTestPassStmt: Database.Statement;
+  private insertStmt: Statement;
+  private getBySessionStmt: Statement;
+  private countByTypeStmt: Statement;
+  private clearSessionStmt: Statement;
+  private countSpecificTypesStmt: Statement;
+  private hasTestPassStmt: Statement;
 
-  constructor(private db: Database.Database) {
+  constructor(private db: AdaptedDatabase) {
     this.insertStmt = db.prepare(
       "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
     );
@@ -62,7 +62,7 @@ export class SessionSignalStore {
   }
 
   getBySession(sessionId: string): SessionSignal[] {
-    const rows = this.getBySessionStmt.all(sessionId) as SignalRow[];
+    const rows = this.getBySessionStmt.all<SignalRow>(sessionId);
     return rows.map((row) => ({
       id: row.id,
       session_id: row.session_id,

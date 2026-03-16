@@ -4,6 +4,7 @@ import { Embedder } from "../../src/retrieval/embedder.js";
 import { Retriever } from "../../src/retrieval/retriever.js";
 import { formatInjection } from "../../src/retrieval/injector.js";
 import { DEFAULT_CONFIG } from "../../src/store/types.js";
+import { initializeDatabase } from "../../src/store/schema.js";
 import { makeEntry } from "./helpers.js";
 
 describe("Phase 4 Integration: write → embed → retrieve → inject", () => {
@@ -12,7 +13,8 @@ describe("Phase 4 Integration: write → embed → retrieve → inject", () => {
   let retriever: Retriever;
 
   beforeAll(async () => {
-    store = new ExperienceStore({
+    const db = await initializeDatabase(":memory:");
+    store = new ExperienceStore(db, {
       ...DEFAULT_CONFIG,
       db_path: ":memory:",
     });
@@ -103,7 +105,8 @@ describe("Phase 4 Integration: write → embed → retrieve → inject", () => {
 
   it("mode filtering works in retrieval pipeline", async () => {
     // Create a success-only store
-    const successStore = new ExperienceStore({
+    const successDb = await initializeDatabase(":memory:");
+    const successStore = new ExperienceStore(successDb, {
       ...DEFAULT_CONFIG,
       db_path: ":memory:",
       mode: "success_only",
@@ -131,7 +134,8 @@ describe("Phase 4 Integration: write → embed → retrieve → inject", () => {
   });
 
   it("createWithEmbedding shortcut works end-to-end", async () => {
-    const inlineStore = new ExperienceStore({
+    const inlineDb = await initializeDatabase(":memory:");
+    const inlineStore = new ExperienceStore(inlineDb, {
       ...DEFAULT_CONFIG,
       db_path: ":memory:",
     });

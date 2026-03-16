@@ -5,8 +5,8 @@
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 
-export function handleStop(stdin: string): void {
-  const ctx = bootstrapHook(stdin);
+export async function handleStop(stdin: string): Promise<void> {
+  const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
   try {

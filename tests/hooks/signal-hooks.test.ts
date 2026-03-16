@@ -36,7 +36,7 @@ describe("post-tool-use-failure hook", () => {
     }
   });
 
-  it("records interrupt signal to DB", () => {
+  it("records interrupt signal to DB", async () => {
     setupEnv();
     const stdin = JSON.stringify({
       session_id: "s1",
@@ -44,10 +44,10 @@ describe("post-tool-use-failure hook", () => {
       error: "command not found",
       is_interrupt: true,
     });
-    handlePostToolUseFailure(stdin);
+    await handlePostToolUseFailure(stdin);
 
     // Verify via bootstrap
-    const ctx = bootstrapHook('{"session_id":"s1"}');
+    const ctx = await bootstrapHook('{"session_id":"s1"}');
     const signals = ctx!.signalStore.getBySession("s1");
     expect(signals).toHaveLength(1);
     expect(signals[0].event_type).toBe("interrupt");
@@ -55,7 +55,7 @@ describe("post-tool-use-failure hook", () => {
     ctx!.cleanup();
   });
 
-  it("does nothing when mode is disabled", () => {
+  it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
     const stdin = JSON.stringify({
       session_id: "s1",
@@ -64,10 +64,10 @@ describe("post-tool-use-failure hook", () => {
       is_interrupt: true,
     });
     // Should not throw
-    handlePostToolUseFailure(stdin);
+    await handlePostToolUseFailure(stdin);
   });
 
-  it("ignores non-interrupt failures", () => {
+  it("ignores non-interrupt failures", async () => {
     setupEnv();
     const stdin = JSON.stringify({
       session_id: "s1",
@@ -75,9 +75,9 @@ describe("post-tool-use-failure hook", () => {
       error: "err",
       is_interrupt: false,
     });
-    handlePostToolUseFailure(stdin);
+    await handlePostToolUseFailure(stdin);
 
-    const ctx = bootstrapHook('{"session_id":"s1"}');
+    const ctx = await bootstrapHook('{"session_id":"s1"}');
     const signals = ctx!.signalStore.getBySession("s1");
     expect(signals).toHaveLength(0);
     ctx!.cleanup();
@@ -96,10 +96,10 @@ describe("user-prompt-submit hook", () => {
     }
   });
 
-  it("records user prompt after interrupt", () => {
+  it("records user prompt after interrupt", async () => {
     setupEnv();
     // First create an interrupt
-    handlePostToolUseFailure(
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: "s2",
         tool_name: "Bash",
@@ -108,14 +108,14 @@ describe("user-prompt-submit hook", () => {
       })
     );
     // Then submit user prompt
-    handleUserPromptSubmit(
+    await handleUserPromptSubmit(
       JSON.stringify({
         session_id: "s2",
         prompt: "No, do it differently",
       })
     );
 
-    const ctx = bootstrapHook('{"session_id":"s2"}');
+    const ctx = await bootstrapHook('{"session_id":"s2"}');
     const signals = ctx!.signalStore.getBySession("s2");
     expect(signals.length).toBeGreaterThanOrEqual(2);
     const postInterrupt = signals.find((s) => s.event_type === "post_interrupt_turn");
@@ -123,25 +123,25 @@ describe("user-prompt-submit hook", () => {
     ctx!.cleanup();
   });
 
-  it("detects corrective instruction", () => {
+  it("does not auto-detect corrective instruction (delegated to Claude)", async () => {
     setupEnv();
-    handleUserPromptSubmit(
+    await handleUserPromptSubmit(
       JSON.stringify({
         session_id: "s3",
         prompt: "No, that's wrong. Use the other approach instead.",
       })
     );
 
-    const ctx = bootstrapHook('{"session_id":"s3"}');
+    const ctx = await bootstrapHook('{"session_id":"s3"}');
     const signals = ctx!.signalStore.getBySession("s3");
     const corrective = signals.find((s) => s.event_type === "corrective_instruction");
-    expect(corrective).toBeDefined();
+    expect(corrective).toBeUndefined();
     ctx!.cleanup();
   });
 
-  it("does nothing when mode is disabled", () => {
+  it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
-    handleUserPromptSubmit(JSON.stringify({ session_id: "s4", prompt: "hello" }));
+    await handleUserPromptSubmit(JSON.stringify({ session_id: "s4", prompt: "hello" }));
   });
 });
 
@@ -157,9 +157,9 @@ describe("post-tool-use hook", () => {
     }
   });
 
-  it("records tool success signal", () => {
+  it("records tool success signal", async () => {
     setupEnv();
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: "s5",
         tool_name: "Bash",
@@ -168,7 +168,7 @@ describe("post-tool-use hook", () => {
       })
     );
 
-    const ctx = bootstrapHook('{"session_id":"s5"}');
+    const ctx = await bootstrapHook('{"session_id":"s5"}');
     const signals = ctx!.signalStore.getBySession("s5");
     expect(signals).toHaveLength(1);
     expect(signals[0].event_type).toBe("tool_success");
@@ -176,9 +176,9 @@ describe("post-tool-use hook", () => {
     ctx!.cleanup();
   });
 
-  it("detects test runner success", () => {
+  it("detects test runner success", async () => {
     setupEnv();
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: "s6",
         tool_name: "Bash",
@@ -188,14 +188,14 @@ describe("post-tool-use hook", () => {
       })
     );
 
-    const ctx = bootstrapHook('{"session_id":"s6"}');
+    const ctx = await bootstrapHook('{"session_id":"s6"}');
     expect(ctx!.signalStore.hasTestPass("s6")).toBe(true);
     ctx!.cleanup();
   });
 
-  it("handles missing tool_input gracefully", () => {
+  it("handles missing tool_input gracefully", async () => {
     setupEnv();
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: "s6b",
         tool_name: "Read",
@@ -203,16 +203,16 @@ describe("post-tool-use hook", () => {
       })
     );
 
-    const ctx = bootstrapHook('{"session_id":"s6b"}');
+    const ctx = await bootstrapHook('{"session_id":"s6b"}');
     const signals = ctx!.signalStore.getBySession("s6b");
     expect(signals).toHaveLength(1);
     expect(signals[0].event_type).toBe("tool_success");
     ctx!.cleanup();
   });
 
-  it("does nothing when mode is disabled", () => {
+  it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: "s7",
         tool_name: "Bash",
@@ -235,19 +235,19 @@ describe("stop hook", () => {
     }
   });
 
-  it("records stop signal", () => {
+  it("records stop signal", async () => {
     setupEnv();
-    handleStop(JSON.stringify({ session_id: "s8" }));
+    await handleStop(JSON.stringify({ session_id: "s8" }));
 
-    const ctx = bootstrapHook('{"session_id":"s8"}');
+    const ctx = await bootstrapHook('{"session_id":"s8"}');
     const signals = ctx!.signalStore.getBySession("s8");
     expect(signals).toHaveLength(1);
     expect(signals[0].event_type).toBe("stop");
     ctx!.cleanup();
   });
 
-  it("does nothing when mode is disabled", () => {
+  it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
-    handleStop(JSON.stringify({ session_id: "s9" }));
+    await handleStop(JSON.stringify({ session_id: "s9" }));
   });
 });

@@ -2,16 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
 import { SignalCollector } from "../../src/signals/signal-collector.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 
 describe("SignalCollector", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let store: SessionSignalStore;
   let collector: SignalCollector;
   const sessionId = "test-session-1";
 
-  beforeEach(() => {
-    db = initializeDatabase(":memory:");
+  beforeEach(async () => {
+    db = await initializeDatabase(":memory:");
     store = new SessionSignalStore(db);
     collector = new SignalCollector(store, { capture_turns: 3 });
   });
@@ -50,13 +50,12 @@ describe("SignalCollector", () => {
       );
     });
 
-    it("detects corrective instruction in user prompt", () => {
+    it("does not detect corrective instruction via regex (delegated to Claude)", () => {
       collector.handleUserPrompt(sessionId, "That's wrong, try again");
 
       const signals = store.getBySession(sessionId);
       const corrective = signals.find((s) => s.event_type === "corrective_instruction");
-      expect(corrective).toBeDefined();
-      expect(corrective!.data).toEqual(expect.objectContaining({ pattern: expect.any(String) }));
+      expect(corrective).toBeUndefined();
     });
 
     it("does not record post_interrupt_turn without prior interrupt", () => {
@@ -81,13 +80,12 @@ describe("SignalCollector", () => {
       expect(postInterruptSignals).toHaveLength(3);
     });
 
-    it("detects Japanese corrective instruction", () => {
+    it("does not detect Japanese corrective instruction via regex (delegated to Claude)", () => {
       collector.handleUserPrompt(sessionId, "それは違う、こうして");
 
       const signals = store.getBySession(sessionId);
       const corrective = signals.find((s) => s.event_type === "corrective_instruction");
-      expect(corrective).toBeDefined();
-      expect(corrective!.data).toEqual(expect.objectContaining({ language: "ja" }));
+      expect(corrective).toBeUndefined();
     });
   });
 
@@ -166,15 +164,16 @@ describe("SignalCollector", () => {
       const summary = collector.getSessionSummary(sessionId);
 
       expect(summary.session_id).toBe(sessionId);
-      // interrupt + corrective_instruction + post_interrupt_turn + tool_success + stop = 5
-      expect(summary.total_signals).toBe(5);
+      // interrupt + post_interrupt_turn + tool_success + stop = 4
+      // (corrective_instruction no longer auto-detected via regex)
+      expect(summary.total_signals).toBe(4);
       expect(summary.counts.interrupt).toBe(1);
-      expect(summary.counts.corrective_instruction).toBe(1);
+      expect(summary.counts.corrective_instruction).toBe(0);
       expect(summary.counts.post_interrupt_turn).toBe(1);
       expect(summary.counts.tool_success).toBe(1);
       expect(summary.counts.stop).toBe(1);
       expect(summary.was_interrupted).toBe(true);
-      expect(summary.corrective_instruction_count).toBe(1);
+      expect(summary.corrective_instruction_count).toBe(0);
     });
 
     it("returns empty summary for unknown session", () => {

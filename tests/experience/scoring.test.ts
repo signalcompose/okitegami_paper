@@ -1,75 +1,78 @@
 /**
  * Signal strength scoring tests — SPECIFICATION.md Section 2.2
+ *
+ * Revised: Interrupt alone is ambiguous (null).
+ * Corrective instruction count is the primary failure signal.
+ * Interrupt acts as a strength modifier (+0.10).
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  computeFailureStrength,
-  computeSuccessStrength,
-  computeCorrectiveStrength,
-} from "../../src/experience/scoring.js";
+import { computeFailureStrength, computeSuccessStrength } from "../../src/experience/scoring.js";
 import { makeSummary } from "./helpers.js";
 
 describe("computeFailureStrength", () => {
-  it("returns 0.90–1.00 for interrupt + post-interrupt dialogue", () => {
+  it("returns null for interrupt + 0 corrective (ambiguous)", () => {
     const summary = makeSummary({
       was_interrupted: true,
+      corrective_instruction_count: 0,
       counts: {
         ...makeSummary().counts,
         interrupt: 1,
         post_interrupt_turn: 3,
       },
     });
-    const score = computeFailureStrength(summary, 5);
-    expect(score).toBeGreaterThanOrEqual(0.9);
-    expect(score).toBeLessThanOrEqual(1.0);
+    const score = computeFailureStrength(summary);
+    expect(score).toBeNull();
   });
 
-  it("scales with post_interrupt_turn count within 0.90–1.00", () => {
-    const low = computeFailureStrength(
-      makeSummary({
-        was_interrupted: true,
-        counts: { ...makeSummary().counts, interrupt: 1, post_interrupt_turn: 0 },
-      }),
-      5
-    );
-    const high = computeFailureStrength(
-      makeSummary({
-        was_interrupted: true,
-        counts: { ...makeSummary().counts, interrupt: 1, post_interrupt_turn: 5 },
-      }),
-      5
-    );
-    expect(low).toBe(0.9);
-    expect(high).toBe(1.0);
-    expect(high).toBeGreaterThan(low);
-  });
-
-  it("returns 0.60–0.80 for corrective instruction count >= 3", () => {
+  it("returns 0.40–0.60 for interrupt + 1-2 corrective", () => {
     const summary = makeSummary({
+      was_interrupted: true,
+      corrective_instruction_count: 2,
+      counts: { ...makeSummary().counts, interrupt: 1 },
+    });
+    const score = computeFailureStrength(summary);
+    expect(score).toBeGreaterThanOrEqual(0.4);
+    expect(score).toBeLessThanOrEqual(0.6);
+  });
+
+  it("returns 0.70–0.90 for interrupt + 3+ corrective", () => {
+    const summary = makeSummary({
+      was_interrupted: true,
+      corrective_instruction_count: 3,
+      counts: { ...makeSummary().counts, interrupt: 1 },
+    });
+    const score = computeFailureStrength(summary);
+    expect(score).toBeGreaterThanOrEqual(0.7);
+    expect(score).toBeLessThanOrEqual(0.9);
+  });
+
+  it("returns 0.60–0.80 for no interrupt + corrective count >= 3", () => {
+    const summary = makeSummary({
+      was_interrupted: false,
       corrective_instruction_count: 3,
     });
-    const score = computeFailureStrength(summary, 5);
+    const score = computeFailureStrength(summary);
     expect(score).toBeGreaterThanOrEqual(0.6);
     expect(score).toBeLessThanOrEqual(0.8);
   });
 
   it("scales corrective (3+) with count", () => {
-    const score3 = computeFailureStrength(makeSummary({ corrective_instruction_count: 3 }), 5);
-    const score7 = computeFailureStrength(makeSummary({ corrective_instruction_count: 7 }), 5);
+    const score3 = computeFailureStrength(makeSummary({ corrective_instruction_count: 3 }));
+    const score7 = computeFailureStrength(makeSummary({ corrective_instruction_count: 7 }));
     expect(score3).toBe(0.6);
-    expect(score7).toBeLessThanOrEqual(0.8);
-    expect(score7).toBeGreaterThan(score3);
+    expect(score7).toBeLessThanOrEqual(0.9);
+    expect(score7).toBeGreaterThan(score3!);
   });
 
-  it("returns 0.30–0.50 for corrective instruction count 1-2", () => {
-    const score1 = computeFailureStrength(makeSummary({ corrective_instruction_count: 1 }), 5);
-    const score2 = computeFailureStrength(makeSummary({ corrective_instruction_count: 2 }), 5);
+  it("returns 0.30–0.50 for corrective instruction count 1-2 (no interrupt)", () => {
+    const score1 = computeFailureStrength(makeSummary({ corrective_instruction_count: 1 }));
+    const score2 = computeFailureStrength(makeSummary({ corrective_instruction_count: 2 }));
     expect(score1).toBeGreaterThanOrEqual(0.3);
     expect(score1).toBeLessThanOrEqual(0.5);
     expect(score2).toBeGreaterThanOrEqual(0.3);
     expect(score2).toBeLessThanOrEqual(0.5);
-    expect(score2).toBeGreaterThan(score1);
+    expect(score2).toBeGreaterThan(score1!);
   });
 
   it("returns null when no failure signals", () => {
@@ -77,18 +80,18 @@ describe("computeFailureStrength", () => {
       was_interrupted: false,
       corrective_instruction_count: 0,
     });
-    const score = computeFailureStrength(summary, 5);
+    const score = computeFailureStrength(summary);
     expect(score).toBeNull();
   });
 
-  it("prioritizes interrupt over corrective instructions", () => {
-    const summary = makeSummary({
-      was_interrupted: true,
-      corrective_instruction_count: 5,
-      counts: { ...makeSummary().counts, interrupt: 1, post_interrupt_turn: 3 },
-    });
-    const score = computeFailureStrength(summary, 5);
-    expect(score).toBeGreaterThanOrEqual(0.9);
+  it("interrupt boosts corrective strength by 0.10", () => {
+    const withoutInterrupt = computeFailureStrength(
+      makeSummary({ corrective_instruction_count: 2, was_interrupted: false })
+    );
+    const withInterrupt = computeFailureStrength(
+      makeSummary({ corrective_instruction_count: 2, was_interrupted: true })
+    );
+    expect(withInterrupt! - withoutInterrupt!).toBeCloseTo(0.1, 2);
   });
 });
 
@@ -136,21 +139,13 @@ describe("computeSuccessStrength", () => {
       }),
       10
     );
-    expect(highRatio).toBeGreaterThan(lowRatio);
+    expect(highRatio).toBeGreaterThan(lowRatio!);
   });
 
-  it("returns null when interrupted (not a success)", () => {
+  it("returns null for interrupt + 0 corrective (ambiguous)", () => {
     const summary = makeSummary({
       was_interrupted: true,
-      has_test_pass: true,
-    });
-    const score = computeSuccessStrength(summary, 10);
-    expect(score).toBeNull();
-  });
-
-  it("returns null when corrective count >= 3 (not a clean success)", () => {
-    const summary = makeSummary({
-      corrective_instruction_count: 3,
+      corrective_instruction_count: 0,
       has_test_pass: true,
     });
     const score = computeSuccessStrength(summary, 10);
@@ -165,34 +160,5 @@ describe("computeSuccessStrength", () => {
     const score = computeSuccessStrength(summary, 0);
     expect(score).toBeGreaterThanOrEqual(0.4);
     expect(score).toBeLessThanOrEqual(0.6);
-  });
-});
-
-describe("computeCorrectiveStrength", () => {
-  it("returns null for count 0", () => {
-    expect(computeCorrectiveStrength(0)).toBeNull();
-  });
-
-  it("returns null for count 1", () => {
-    expect(computeCorrectiveStrength(1)).toBeNull();
-  });
-
-  it("returns null for count 2", () => {
-    expect(computeCorrectiveStrength(2)).toBeNull();
-  });
-
-  it("returns 0.6 for count 3 (lower bound)", () => {
-    expect(computeCorrectiveStrength(3)).toBe(0.6);
-  });
-
-  it("scales with count above 3", () => {
-    const score5 = computeCorrectiveStrength(5);
-    const score3 = computeCorrectiveStrength(3);
-    expect(score5).toBeGreaterThan(score3!);
-    expect(score5).toBeLessThanOrEqual(0.8);
-  });
-
-  it("caps at 0.8 for high counts", () => {
-    expect(computeCorrectiveStrength(100)).toBe(0.8);
   });
 });

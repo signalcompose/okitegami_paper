@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatInjection } from "../../src/retrieval/injector.js";
+import { formatInjection, formatSignalInstruction } from "../../src/retrieval/injector.js";
 import type { RetrievalResult } from "../../src/retrieval/types.js";
 import type { ExperienceEntry } from "../../src/store/types.js";
 
@@ -117,5 +117,24 @@ describe("formatInjection", () => {
     const text = formatInjection(longResults);
     // 500 tokens ≈ 2000 chars
     expect(text.length).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe("formatSignalInstruction", () => {
+  it("includes ACM Signal Detection header", () => {
+    const text = formatSignalInstruction("session-123");
+    expect(text).toContain("[ACM Signal Detection]");
+  });
+
+  it("includes session ID in instruction", () => {
+    const text = formatSignalInstruction("session-abc");
+    expect(text).toContain("Session: session-abc");
+    expect(text).toContain('"session-abc"');
+  });
+
+  it("instructs to call acm_record_signal", () => {
+    const text = formatSignalInstruction("s1");
+    expect(text).toContain("acm_record_signal");
+    expect(text).toContain("corrective_instruction");
   });
 });

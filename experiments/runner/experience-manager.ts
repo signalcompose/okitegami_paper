@@ -8,8 +8,8 @@
  * across sessions within the same experiment.
  */
 
-import { mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
+import { initializeDatabase } from "../../src/store/schema.js";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { formatInjection } from "../../src/retrieval/injector.js";
 import type { ExperienceEntry, AcmConfig } from "../../src/store/types.js";
@@ -53,14 +53,14 @@ export class ExperienceManager {
    * Get or create an ExperienceStore for a given DB path.
    * Caches store instances so the same DB is not opened multiple times.
    */
-  getStore(dbPath: string): ExperienceStore {
+  async getStore(dbPath: string): Promise<ExperienceStore> {
     const existing = this.stores.get(dbPath);
     if (existing) return existing;
 
     try {
-      mkdirSync(dirname(dbPath), { recursive: true });
       const config: AcmConfig = { ...EXPERIMENT_ACM_CONFIG, db_path: dbPath };
-      const store = new ExperienceStore(config);
+      const db = await initializeDatabase(dbPath);
+      const store = new ExperienceStore(db, config);
       this.stores.set(dbPath, store);
       return store;
     } catch (err) {
@@ -117,8 +117,11 @@ export class ExperienceManager {
   /**
    * Store an experience entry in the shared DB.
    */
-  storeExperience(dbPath: string, entry: Omit<ExperienceEntry, "id">): ExperienceEntry | null {
-    const store = this.getStore(dbPath);
+  async storeExperience(
+    dbPath: string,
+    entry: Omit<ExperienceEntry, "id">
+  ): Promise<ExperienceEntry | null> {
+    const store = await this.getStore(dbPath);
     return store.create(entry);
   }
 
@@ -126,16 +129,16 @@ export class ExperienceManager {
    * Retrieve past experiences and format as injection text for the prompt.
    * Returns empty string for control condition or when no experiences exist.
    */
-  retrieveInjection(
+  async retrieveInjection(
     dbPath: string,
     taskDescription: string,
     condition?: ConditionName | string
-  ): string {
+  ): Promise<string> {
     if (condition !== undefined && !isAcmCondition(condition)) {
       return "";
     }
 
-    const store = this.getStore(dbPath);
+    const store = await this.getStore(dbPath);
     const experiences = store.list({ limit: 50 });
 
     if (experiences.length === 0) return "";

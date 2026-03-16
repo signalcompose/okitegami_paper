@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ExperienceStore } from "../../src/store/experience-store.js";
 import { serializeEmbedding, deserializeEmbedding } from "../../src/retrieval/embedding-serde.js";
-import { makeEntry, makeConfig } from "../retrieval/helpers.js";
+import { makeEntry, makeStore } from "../retrieval/helpers.js";
 
 describe("ExperienceStore embedding support", () => {
   let store: ExperienceStore;
 
-  beforeEach(() => {
-    store = new ExperienceStore(makeConfig());
+  beforeEach(async () => {
+    store = await makeStore();
   });
 
   afterEach(() => {
@@ -105,8 +105,8 @@ describe("ExperienceStore embedding support", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("filters by mode: success_only", () => {
-      const successStore = new ExperienceStore(makeConfig({ mode: "success_only" }));
+    it("filters by mode: success_only", async () => {
+      const successStore = await makeStore({ mode: "success_only" });
       const emb = new Float32Array([0.1]);
 
       successStore.createWithEmbedding(makeEntry({ type: "success" }), emb);
@@ -125,8 +125,8 @@ describe("ExperienceStore embedding support", () => {
       successStore.close();
     });
 
-    it("filters by mode: failure_only", () => {
-      const failStore = new ExperienceStore(makeConfig({ mode: "failure_only" }));
+    it("filters by mode: failure_only", async () => {
+      const failStore = await makeStore({ mode: "failure_only" });
       const emb = new Float32Array([0.1]);
 
       failStore.createWithEmbedding(makeEntry({ type: "success" }), emb);
@@ -185,8 +185,8 @@ describe("ExperienceStore embedding support", () => {
       warnSpy.mockRestore();
     });
 
-    it("returns empty for disabled mode", () => {
-      const disabledStore = new ExperienceStore(makeConfig({ mode: "disabled" }));
+    it("returns empty for disabled mode", async () => {
+      const disabledStore = await makeStore({ mode: "disabled" });
       const emb = new Float32Array([0.1]);
       disabledStore.createWithEmbedding(makeEntry(), emb);
 

@@ -34,9 +34,9 @@ describe("bootstrapHook", () => {
     }
   });
 
-  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is not set", () => {
+  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is not set", async () => {
     delete process.env.ACM_CONFIG_PATH;
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(result!.config.mode).toBe("full");
     expect(result!.config.top_k).toBe(5);
@@ -45,29 +45,29 @@ describe("bootstrapHook", () => {
     result!.cleanup();
   });
 
-  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is empty string", () => {
+  it("returns context with DEFAULT_CONFIG when ACM_CONFIG_PATH is empty string", async () => {
     process.env.ACM_CONFIG_PATH = "";
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(result!.config.mode).toBe("full");
     result!.cleanup();
   });
 
-  it("returns null when mode is disabled", () => {
+  it("returns null when mode is disabled", async () => {
     const dbPath = join(TMP_DIR, "disabled.db");
     const configPath = createTempConfig({ mode: "disabled", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).toBeNull();
   });
 
-  it("returns context when mode is full", () => {
+  it("returns context when mode is full", async () => {
     const dbPath = join(TMP_DIR, "full.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(result!.input).toEqual({ session_id: "s1" });
     expect(result!.config.mode).toBe("full");
@@ -76,43 +76,43 @@ describe("bootstrapHook", () => {
     expect(result!.collector).toBeDefined();
   });
 
-  it("returns context when mode is success_only", () => {
+  it("returns context when mode is success_only", async () => {
     const dbPath = join(TMP_DIR, "success.db");
     const configPath = createTempConfig({ mode: "success_only", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(result!.config.mode).toBe("success_only");
   });
 
-  it("returns context when mode is failure_only", () => {
+  it("returns context when mode is failure_only", async () => {
     const dbPath = join(TMP_DIR, "failure.db");
     const configPath = createTempConfig({ mode: "failure_only", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(result!.config.mode).toBe("failure_only");
   });
 
-  it("throws on invalid JSON stdin", () => {
+  it("throws on invalid JSON stdin", async () => {
     const dbPath = join(TMP_DIR, "parse.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    expect(() => bootstrapHook("not json")).toThrow("Invalid JSON");
+    await expect(bootstrapHook("not json")).rejects.toThrow("Invalid JSON");
   });
 
-  it("throws on empty stdin", () => {
+  it("throws on empty stdin", async () => {
     const dbPath = join(TMP_DIR, "empty.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    expect(() => bootstrapHook("")).toThrow("Invalid JSON");
+    await expect(bootstrapHook("")).rejects.toThrow("Invalid JSON");
   });
 
-  it("parses complex input correctly", () => {
+  it("parses complex input correctly", async () => {
     const dbPath = join(TMP_DIR, "complex.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
@@ -123,13 +123,13 @@ describe("bootstrapHook", () => {
       error: "command failed",
       is_interrupt: true,
     });
-    const result = bootstrapHook(input);
+    const result = await bootstrapHook(input);
     expect(result).not.toBeNull();
     expect(result!.input.session_id).toBe("sess-123");
     expect(result!.input.tool_name).toBe("Bash");
   });
 
-  it("provides a properly initialized SignalCollector", () => {
+  it("provides a properly initialized SignalCollector", async () => {
     const dbPath = join(TMP_DIR, "collector.db");
     const configPath = createTempConfig({
       mode: "full",
@@ -138,7 +138,7 @@ describe("bootstrapHook", () => {
     });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
 
     // Verify collector works by recording a signal
@@ -148,34 +148,34 @@ describe("bootstrapHook", () => {
     expect(signals[0].event_type).toBe("interrupt");
   });
 
-  it("derives projectName from cwd in input", () => {
+  it("derives projectName from cwd in input", async () => {
     const dbPath = join(TMP_DIR, "project.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook(
+    const result = await bootstrapHook(
       JSON.stringify({ session_id: "s1", cwd: "/home/user/my-project" })
     );
     expect(result).not.toBeNull();
     expect(result!.projectName).toBe("my-project");
   });
 
-  it("defaults projectName to 'unknown' when cwd is missing", () => {
+  it("defaults projectName to 'unknown' when cwd is missing", async () => {
     const dbPath = join(TMP_DIR, "no-cwd.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook(JSON.stringify({ session_id: "s1" }));
+    const result = await bootstrapHook(JSON.stringify({ session_id: "s1" }));
     expect(result).not.toBeNull();
     expect(result!.projectName).toBe("unknown");
   });
 
-  it("closes DB via cleanup function", () => {
+  it("closes DB via cleanup function", async () => {
     const dbPath = join(TMP_DIR, "cleanup.db");
     const configPath = createTempConfig({ mode: "full", db_path: dbPath });
     process.env.ACM_CONFIG_PATH = configPath;
 
-    const result = bootstrapHook('{"session_id":"s1"}');
+    const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(() => result!.cleanup()).not.toThrow();
   });

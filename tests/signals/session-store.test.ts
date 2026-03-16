@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../../src/store/sqlite-adapter.js";
 import type { EventType } from "../../src/signals/types.js";
 
 describe("session_signals schema", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
 
-  beforeEach(() => {
-    db = initializeDatabase(":memory:");
+  beforeEach(async () => {
+    db = await initializeDatabase(":memory:");
   });
 
   afterEach(() => {
@@ -57,11 +57,11 @@ describe("session_signals schema", () => {
 });
 
 describe("SessionSignalStore", () => {
-  let db: Database.Database;
+  let db: AdaptedDatabase;
   let store: SessionSignalStore;
 
-  beforeEach(() => {
-    db = initializeDatabase(":memory:");
+  beforeEach(async () => {
+    db = await initializeDatabase(":memory:");
     store = new SessionSignalStore(db);
   });
 
