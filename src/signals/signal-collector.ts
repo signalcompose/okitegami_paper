@@ -55,7 +55,7 @@ export class SignalCollector {
     }
 
     // Corrective instruction detection is handled by Claude Code
-    // via acm_record_signal MCP tool (see injection in session-start.ts)
+    // via acm_record_signal MCP tool (see formatSignalInstruction in src/retrieval/injector.ts)
   }
 
   handleToolSuccess(

@@ -3,6 +3,8 @@
  *
  * Provides synchronous-looking Statement interface over sql.js's lower-level API.
  * Persistence: file DBs are written on close() via db.export() + writeFileSync().
+ * Tradeoff: all writes are held in WASM memory and flushed only on close().
+ * A SIGKILL before close() loses in-session data (accepted for short-lived hooks).
  */
 
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
@@ -32,7 +34,10 @@ let sqlPromise: Promise<SqlJsStatic> | null = null;
 
 function getSql(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
-    sqlPromise = initSqlJs();
+    sqlPromise = initSqlJs().catch((err) => {
+      sqlPromise = null; // Allow retry on next call
+      throw err;
+    });
   }
   return sqlPromise!;
 }
@@ -62,11 +67,17 @@ function wrapDatabase(db: SqlJsDatabase, dbPath: string): AdaptedDatabase {
     },
     close(): void {
       if (dbPath !== ":memory:") {
-        // NOTE: sql.js holds the DB in WASM memory. If the process is killed
-        // (e.g. hook timeout SIGKILL) before close(), in-session writes are lost.
-        // This is a known tradeoff vs better-sqlite3's native file I/O.
-        const data = db.export();
-        writeFileSync(dbPath, data);
+        try {
+          const data = db.export();
+          writeFileSync(dbPath, data);
+        } catch (writeErr) {
+          console.error(
+            `[ACM] Failed to persist DB to "${dbPath}". Session data may be lost. ` +
+              `Error: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
+          );
+          db.close();
+          throw writeErr;
+        }
       }
       db.close();
     },
@@ -75,10 +86,16 @@ function wrapDatabase(db: SqlJsDatabase, dbPath: string): AdaptedDatabase {
 
 function getLastInsertRowid(db: SqlJsDatabase): number {
   const stmt = db.prepare("SELECT last_insert_rowid() as rid");
-  stmt.step();
-  const row = stmt.getAsObject();
-  stmt.free();
-  return row.rid as number;
+  try {
+    stmt.step();
+    const row = stmt.getAsObject();
+    if (row.rid == null) {
+      throw new Error("[ACM] sqlite-adapter: last_insert_rowid() returned no value");
+    }
+    return row.rid as number;
+  } finally {
+    stmt.free();
+  }
 }
 
 function wrapStatement(db: SqlJsDatabase, sql: string): Statement {
@@ -90,40 +107,50 @@ function wrapStatement(db: SqlJsDatabase, sql: string): Statement {
   // NOTE: sql.js statements are single-use (step→free cycle). Unlike better-sqlite3
   // which reuses compiled statements, we re-prepare per call. This is acceptable
   // for hook processes that run briefly and exit.
+  // Note: getRowsModified() is called immediately after step(); any intermediate
+  // statement execution would invalidate the count.
   return {
     run(...params: unknown[]): RunResult {
       const stmt = db.prepare(sql);
-      if (params.length > 0) {
-        stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+      try {
+        if (params.length > 0) {
+          stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+        }
+        stmt.step();
+        return {
+          changes: db.getRowsModified(),
+          lastInsertRowid: getLastInsertRowid(db),
+        };
+      } finally {
+        stmt.free();
       }
-      stmt.step();
-      stmt.free();
-      return {
-        changes: db.getRowsModified(),
-        lastInsertRowid: getLastInsertRowid(db),
-      };
     },
     get<T = Record<string, unknown>>(...params: unknown[]): T | undefined {
       const stmt = db.prepare(sql);
-      if (params.length > 0) {
-        stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+      try {
+        if (params.length > 0) {
+          stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+        }
+        const hasRow = stmt.step();
+        return hasRow ? (stmt.getAsObject() as T) : undefined;
+      } finally {
+        stmt.free();
       }
-      const hasRow = stmt.step();
-      const row = hasRow ? (stmt.getAsObject() as T) : undefined;
-      stmt.free();
-      return row;
     },
     all<T = Record<string, unknown>>(...params: unknown[]): T[] {
       const stmt = db.prepare(sql);
-      if (params.length > 0) {
-        stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+      try {
+        if (params.length > 0) {
+          stmt.bind(params as Parameters<typeof stmt.bind>[0]);
+        }
+        const rows: T[] = [];
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject() as T);
+        }
+        return rows;
+      } finally {
+        stmt.free();
       }
-      const rows: T[] = [];
-      while (stmt.step()) {
-        rows.push(stmt.getAsObject() as T);
-      }
-      stmt.free();
-      return rows;
     },
   };
 }

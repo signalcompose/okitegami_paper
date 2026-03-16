@@ -20,8 +20,10 @@ function round(value: number): number {
  * Returns null if no corrective instructions detected.
  *
  * Interrupt alone → null (ambiguous, no experience generated).
- * Corrective 1-2 → 0.30–0.60, with +0.10 if interrupted.
- * Corrective 3+  → 0.60–0.90, with +0.10 if interrupted.
+ * Corrective 1-2, no interrupt → 0.30–0.50.
+ * Corrective 1-2, interrupted  → 0.40–0.60.
+ * Corrective 3+,  no interrupt → 0.60–0.80.
+ * Corrective 3+,  interrupted  → 0.70–0.90.
  */
 export function computeFailureStrength(summary: SessionSummary): number | null {
   const count = summary.corrective_instruction_count;
@@ -40,9 +42,8 @@ export function computeFailureStrength(summary: SessionSummary): number | null {
  * Compute success signal strength.
  * Returns null if session doesn't qualify as success.
  *
- * Precondition: only called when computeFailureStrength() returned null,
- * which implies corrective_instruction_count === 0.
- * Interrupt + 0 corrective → null (ambiguous).
+ * Typically called when computeFailureStrength() returned null.
+ * Guards independently against interrupted + 0 corrective (ambiguous).
  */
 export function computeSuccessStrength(
   summary: SessionSummary,

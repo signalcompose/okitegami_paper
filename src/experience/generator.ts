@@ -78,7 +78,7 @@ export class ExperienceGenerator {
       });
     }
 
-    // Success entry: not interrupted-only (ambiguous) and corrective < 3
+    // Success entry: only when corrective_instruction_count == 0 (failure strength was null)
     if (failureStrength === null) {
       // TODO: Phase 2 only records tool_success events (no tool_failure type).
       // totalToolCalls == tool_success, so toolSuccessRatio is always 1.0.
