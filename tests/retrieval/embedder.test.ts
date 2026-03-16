@@ -40,6 +40,20 @@ describe("Embedder", () => {
     expect(sim).toBeLessThan(0.5);
   });
 
+  it("returns high similarity for Japanese semantically similar texts", async () => {
+    const a = await embedder.embed("認証のバグを修正する");
+    const b = await embedder.embed("ログイン機能のエラーを直す");
+    const sim = cosineSimilarity(a, b);
+    expect(sim).toBeGreaterThan(0.5);
+  });
+
+  it("returns high cross-lingual similarity for same concept", async () => {
+    const ja = await embedder.embed("認証のバグを修正する");
+    const en = await embedder.embed("fix the authentication bug");
+    const sim = cosineSimilarity(ja, en);
+    expect(sim).toBeGreaterThan(0.5);
+  });
+
   it("throws for empty string", async () => {
     await expect(embedder.embed("")).rejects.toThrow("empty");
   });
