@@ -9,8 +9,8 @@
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { ExperienceGenerator } from "../experience/generator.js";
 
-export function handleSessionEnd(stdin: string): void {
-  const ctx = bootstrapHook(stdin);
+export async function handleSessionEnd(stdin: string): Promise<void> {
+  const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
   try {

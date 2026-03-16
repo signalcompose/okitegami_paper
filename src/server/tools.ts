@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../store/sqlite-adapter.js";
 import { SessionSignalStore } from "../signals/session-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 import { EVENT_TYPES } from "../signals/types.js";
@@ -34,7 +34,7 @@ function toolError(message: string) {
 }
 
 export interface AcmServerOptions {
-  db?: Database.Database;
+  db?: AdaptedDatabase;
   capture_turns?: number;
   promotion_threshold?: number;
   experienceStore?: ExperienceStore;
@@ -63,7 +63,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
 
     server.tool(
       "acm_record_signal",
-      "Record a raw session signal directly to DB (debug/test only — hooks use SignalCollector)",
+      'Record a session signal. Use to report corrective feedback: event_type=\'corrective_instruction\', data=\'{"prompt":"...","reason":"..."}\'.',
       {
         session_id: z.string().describe("Session identifier"),
         event_type: z.string().describe(`Signal event type: ${EVENT_TYPES.join(", ")}`),

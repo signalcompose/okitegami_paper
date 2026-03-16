@@ -8,7 +8,7 @@
 
 import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
-import { formatInjection } from "../retrieval/injector.js";
+import { formatInjection, formatSignalInstruction } from "../retrieval/injector.js";
 
 /**
  * Core logic: retrieve experiences, format injection text, and log injection event.
@@ -49,7 +49,7 @@ export function retrieveAndInject(
  * retrieves experiences, and writes injection text to stdout.
  */
 export async function handleSessionStart(stdin: string): Promise<void> {
-  const ctx = bootstrapHook(stdin);
+  const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
   try {
@@ -64,10 +64,12 @@ export async function handleSessionStart(stdin: string): Promise<void> {
       const queryText = `session ${sessionId} working in ${cwd}`;
 
       const queryEmbedding = await embedder.embed(queryText);
-      const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+      const experienceText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+      const instructionText = formatSignalInstruction(sessionId);
+      const fullInjection = [experienceText, instructionText].filter(Boolean).join("\n\n");
 
-      if (injectionText) {
-        process.stdout.write(injectionText);
+      if (fullInjection) {
+        process.stdout.write(fullInjection);
       }
     } finally {
       embedder.dispose();
