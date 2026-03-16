@@ -59,7 +59,8 @@ Claude Code
 
 - **Language**: TypeScript (Node.js) — MCP SDK compatibility
 - **Storage**: SQLite (structured data) + vector embeddings (retrieval)
-- **Embedding**: Local embedding model (e.g., `all-MiniLM-L6-v2` via `@xenova/transformers`)
+- **Storage backend**: `sql.js` (WASM-based SQLite, Node version independent)
+- **Embedding**: Local multilingual embedding model (`paraphrase-multilingual-MiniLM-L12-v2` via `@xenova/transformers`, 384 dim, 50+ languages)
 - **MCP SDK**: `@modelcontextprotocol/sdk`
 - **Test framework**: Vitest
 
@@ -105,14 +106,17 @@ type SignalType =
 
 These are initial working values; will be calibrated by experimental data (RQ3).
 
-| Signal | Strength Range | Direction |
-|--------|---------------|-----------|
-| Interrupt + post-interrupt dialogue | 0.90–1.00 | Negative |
-| Rewind (detected indirectly) | 0.75–0.90 | Negative |
-| Corrective instruction (3+) | 0.60–0.80 | Negative |
-| Corrective instruction (1) | 0.30–0.50 | Negative |
-| Test pass + uninterrupted | 0.70–0.85 | Positive |
-| Uninterrupted (no tests) | 0.40–0.60 | Positive |
+| Signal | Strength Range | Direction | Notes |
+|--------|---------------|-----------|-------|
+| Interrupt + 0 corrective | null | Ambiguous | No experience generated |
+| Interrupt + corrective (1-2) | 0.40–0.60 | Negative | Corrective base + interrupt boost (+0.10) |
+| Interrupt + corrective (3+) | 0.70–0.90 | Negative | Corrective base + interrupt boost (+0.10) |
+| Corrective instruction (3+, no interrupt) | 0.60–0.80 | Negative | Primary failure signal |
+| Corrective instruction (1-2, no interrupt) | 0.30–0.50 | Negative | |
+| Test pass + uninterrupted | 0.70–0.85 | Positive | |
+| Uninterrupted (no tests) | 0.40–0.60 | Positive | |
+
+**Design rationale**: Interrupt alone is ambiguous (may be benign). Corrective instruction count (reported by Claude Code via `acm_record_signal`) is the primary failure signal. Interrupt acts as a +0.10 strength modifier when corrective instructions are present.
 
 ---
 
@@ -133,8 +137,9 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 2. Generate embedding from task context
 3. Query experience DB: top-K (K=5) entries by cosine similarity
 4. Format injection text (compact format, see Section 3.3 of paper)
-5. Return injection as hook output (system prompt addition)
-6. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
+5. Append Signal Detection instruction (instructs Claude to report corrective feedback via `acm_record_signal`)
+6. Return injection as hook output (system prompt addition)
+7. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
 
 **Injection format**:
 ```
@@ -158,7 +163,7 @@ Details: ~/.acm/experiences/{id}.json
 
 ### 3.3 UserPromptSubmit Hook
 
-**Purpose**: Capture post-interrupt dialogue (Level 1) and detect corrective instructions (Level 3).
+**Purpose**: Capture post-interrupt dialogue (Level 1).
 
 **Input**: `{ user_message, session_id, ... }`
 
@@ -166,12 +171,8 @@ Details: ~/.acm/experiences/{id}.json
 1. If session state is `interrupted` and `turns_since_interrupt < 5`:
    - Capture user message as post-interrupt dialogue
    - Increment `turns_since_interrupt`
-2. Run corrective instruction detection on user message:
-   - Pattern matching for: "that's wrong", "try again", "not what I meant", "undo", "revert", etc.
-   - Increment corrective instruction counter if detected
-3. Rewind detection (indirect, per Paper Section 6.4):
-   - Monitor message count in transcript; decrease indicates rewind
-   - If rewind detected, treat as Level 2 signal
+
+**Note**: Corrective instruction detection is no longer performed by regex pattern matching. Instead, Claude Code itself recognizes corrective feedback and reports it via the `acm_record_signal` MCP tool (see Signal Detection instruction in Section 3.1).
 
 ### 3.4 PostToolUse Hook
 
@@ -200,10 +201,11 @@ Details: ~/.acm/experiences/{id}.json
 **Behavior**:
 1. Aggregate all signals collected during session
 2. Determine session outcome:
-   - If `interrupted`: generate failure entry from interrupt context
-   - If `corrective_instructions >= 3`: generate failure entry
-   - If `tests_passed && !interrupted && corrective_instructions < 3`: generate success entry
-   - Mixed signals: generate both entries for different sub-tasks
+   - If `corrective_instructions > 0`: generate failure entry (corrective-driven)
+     - If also interrupted: use `interrupt_with_dialogue` signal type, add interrupt_context
+     - If not interrupted: use `corrective_instruction` signal type
+   - If `interrupted && corrective_instructions == 0`: ambiguous — no entry generated
+   - If `!interrupted && corrective_instructions == 0`: generate success entry
 3. Generate retrieval keys from session content (keyword extraction)
 4. Compute signal strength score per scoring table
 5. Persist entries to experience DB

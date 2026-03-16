@@ -66,14 +66,14 @@ describe("ACM hooks full lifecycle", () => {
     }
   });
 
-  it("completes full cycle: signals → experience → retrieval → injection", () => {
+  it("completes full cycle: signals → experience → retrieval → injection", async () => {
     setupEnv();
     const session1 = "lifecycle-s1";
 
     // === Session 1: Failure scenario ===
 
     // Step 1: Tool fails with interrupt
-    handlePostToolUseFailure(
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: session1,
         tool_name: "Bash",
@@ -83,15 +83,25 @@ describe("ACM hooks full lifecycle", () => {
     );
 
     // Step 2: User provides corrective feedback
-    handleUserPromptSubmit(
+    await handleUserPromptSubmit(
       JSON.stringify({
         session_id: session1,
         prompt: "No, you need to use sudo for global installs",
       })
     );
 
+    // Step 2b: Claude reports corrective instructions via acm_record_signal
+    {
+      const ctx0 = await bootstrapHook(JSON.stringify({ session_id: session1 }));
+      ctx0!.signalStore.addSignal(session1, "corrective_instruction", {
+        prompt: "No, you need to use sudo for global installs",
+        reason: "permission issue",
+      });
+      ctx0!.cleanup();
+    }
+
     // Step 3: Another user prompt (within capture window)
-    handleUserPromptSubmit(
+    await handleUserPromptSubmit(
       JSON.stringify({
         session_id: session1,
         prompt: "Try sudo npm install -g instead",
@@ -99,7 +109,7 @@ describe("ACM hooks full lifecycle", () => {
     );
 
     // Step 4: Tool succeeds after correction
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: session1,
         tool_name: "Bash",
@@ -109,10 +119,10 @@ describe("ACM hooks full lifecycle", () => {
     );
 
     // Step 5: Session stops
-    handleStop(JSON.stringify({ session_id: session1 }));
+    await handleStop(JSON.stringify({ session_id: session1 }));
 
     // Verify signals were recorded
-    let ctx = bootstrapHook(JSON.stringify({ session_id: session1 }));
+    let ctx = await bootstrapHook(JSON.stringify({ session_id: session1 }));
     expect(ctx).not.toBeNull();
     const signals = ctx!.signalStore.getBySession(session1);
     expect(signals.length).toBeGreaterThanOrEqual(4);
@@ -131,17 +141,18 @@ describe("ACM hooks full lifecycle", () => {
     ctx!.cleanup();
 
     // Step 6: Session ends — generate experience
-    handleSessionEnd(JSON.stringify({ session_id: session1 }));
+    await handleSessionEnd(JSON.stringify({ session_id: session1 }));
 
     // Verify experience was created
-    ctx = bootstrapHook(JSON.stringify({ session_id: session1 }));
+    ctx = await bootstrapHook(JSON.stringify({ session_id: session1 }));
     const entries = ctx!.experienceStore.list();
     expect(entries.length).toBeGreaterThanOrEqual(1);
 
     const failureEntry = entries.find((e) => e.type === "failure");
     expect(failureEntry).toBeDefined();
     expect(failureEntry!.signal_type).toBe("interrupt_with_dialogue");
-    expect(failureEntry!.signal_strength).toBeGreaterThanOrEqual(0.9);
+    // Interrupt + 1 corrective: 0.30 + 0.10 (interrupt boost) = 0.40
+    expect(failureEntry!.signal_strength).toBeGreaterThanOrEqual(0.3);
     expect(failureEntry!.trigger).toContain("npm install failed");
 
     // Manually add embedding (in real flow, session-end would do this async)
@@ -158,12 +169,12 @@ describe("ACM hooks full lifecycle", () => {
     expect(injection).toContain("npm install failed");
   });
 
-  it("handles success-only session lifecycle", () => {
+  it("handles success-only session lifecycle", async () => {
     setupEnv();
     const session2 = "lifecycle-s2";
 
     // Clean session: only tool successes
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: session2,
         tool_name: "Bash",
@@ -172,7 +183,7 @@ describe("ACM hooks full lifecycle", () => {
         exit_code: 0,
       })
     );
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: session2,
         tool_name: "Read",
@@ -180,13 +191,13 @@ describe("ACM hooks full lifecycle", () => {
         result: "file contents",
       })
     );
-    handleStop(JSON.stringify({ session_id: session2 }));
+    await handleStop(JSON.stringify({ session_id: session2 }));
 
     // Generate experience
-    handleSessionEnd(JSON.stringify({ session_id: session2 }));
+    await handleSessionEnd(JSON.stringify({ session_id: session2 }));
 
     // Verify success entry
-    const ctx = bootstrapHook(JSON.stringify({ session_id: session2 }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: session2 }));
     const entries = ctx!.experienceStore.list();
     const successEntry = entries.find((e) => e.type === "success" && e.session_id === session2);
     expect(successEntry).toBeDefined();
@@ -194,12 +205,12 @@ describe("ACM hooks full lifecycle", () => {
     ctx!.cleanup();
   });
 
-  it("handles multiple sessions accumulating experiences", () => {
+  it("handles multiple sessions accumulating experiences", async () => {
     setupEnv();
 
-    // Session A: failure
+    // Session A: failure (interrupt + corrective)
     const sA = "multi-sA";
-    handlePostToolUseFailure(
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: sA,
         tool_name: "Bash",
@@ -207,12 +218,21 @@ describe("ACM hooks full lifecycle", () => {
         is_interrupt: true,
       })
     );
-    handleStop(JSON.stringify({ session_id: sA }));
-    handleSessionEnd(JSON.stringify({ session_id: sA }));
+    // Claude reports corrective instruction
+    {
+      const ctxA = await bootstrapHook(JSON.stringify({ session_id: sA }));
+      ctxA!.signalStore.addSignal(sA, "corrective_instruction", {
+        prompt: "Wrong approach",
+        reason: "error A",
+      });
+      ctxA!.cleanup();
+    }
+    await handleStop(JSON.stringify({ session_id: sA }));
+    await handleSessionEnd(JSON.stringify({ session_id: sA }));
 
     // Session B: success
     const sB = "multi-sB";
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: sB,
         tool_name: "Bash",
@@ -221,11 +241,11 @@ describe("ACM hooks full lifecycle", () => {
         exit_code: 0,
       })
     );
-    handleStop(JSON.stringify({ session_id: sB }));
-    handleSessionEnd(JSON.stringify({ session_id: sB }));
+    await handleStop(JSON.stringify({ session_id: sB }));
+    await handleSessionEnd(JSON.stringify({ session_id: sB }));
 
     // Verify both experiences exist
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "verify" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "verify" }));
     const entries = ctx!.experienceStore.list();
     expect(entries.length).toBeGreaterThanOrEqual(2);
 
@@ -235,13 +255,13 @@ describe("ACM hooks full lifecycle", () => {
     ctx!.cleanup();
   });
 
-  it("isolates signals between sessions", () => {
+  it("isolates signals between sessions", async () => {
     setupEnv();
 
     const sX = "iso-sX";
     const sY = "iso-sY";
 
-    handlePostToolUseFailure(
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: sX,
         tool_name: "Bash",
@@ -250,7 +270,7 @@ describe("ACM hooks full lifecycle", () => {
       })
     );
 
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: sY,
         tool_name: "Read",
@@ -260,7 +280,7 @@ describe("ACM hooks full lifecycle", () => {
     );
 
     // Verify isolation
-    const ctx = bootstrapHook(JSON.stringify({ session_id: "check" }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: "check" }));
     const signalsX = ctx!.signalStore.getBySession(sX);
     const signalsY = ctx!.signalStore.getBySession(sY);
 

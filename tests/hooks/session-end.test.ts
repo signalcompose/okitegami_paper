@@ -47,12 +47,12 @@ describe("session-end hook", () => {
     }
   });
 
-  it("generates failure experience from interrupt signals", () => {
+  it("generates failure experience from interrupt + corrective signals", async () => {
     setupEnv();
     const sessionId = "end-s1";
 
     // Create interrupt + post-interrupt signals
-    handlePostToolUseFailure(
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: sessionId,
         tool_name: "Bash",
@@ -60,19 +60,28 @@ describe("session-end hook", () => {
         is_interrupt: true,
       })
     );
-    handleUserPromptSubmit(
+    await handleUserPromptSubmit(
       JSON.stringify({
         session_id: sessionId,
         prompt: "No, use the correct approach",
       })
     );
-    handleStop(JSON.stringify({ session_id: sessionId }));
+
+    // Corrective instruction reported by Claude via acm_record_signal
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "No, use the correct approach",
+      reason: "wrong approach",
+    });
+    ctx1!.cleanup();
+
+    await handleStop(JSON.stringify({ session_id: sessionId }));
 
     // Run session-end
-    handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
 
     // Verify experience was created
-    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
     const entries = ctx!.experienceStore.list();
     expect(entries.length).toBeGreaterThanOrEqual(1);
     const failure = entries.find((e) => e.type === "failure");
@@ -82,12 +91,12 @@ describe("session-end hook", () => {
     ctx!.cleanup();
   });
 
-  it("generates success experience from clean session", () => {
+  it("generates success experience from clean session", async () => {
     setupEnv();
     const sessionId = "end-s2";
 
     // Tool success + stop
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: sessionId,
         tool_name: "Bash",
@@ -96,11 +105,11 @@ describe("session-end hook", () => {
         exit_code: 0,
       })
     );
-    handleStop(JSON.stringify({ session_id: sessionId }));
+    await handleStop(JSON.stringify({ session_id: sessionId }));
 
-    handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
     const entries = ctx!.experienceStore.list();
     expect(entries.length).toBeGreaterThanOrEqual(1);
     const success = entries.find((e) => e.type === "success");
@@ -109,30 +118,30 @@ describe("session-end hook", () => {
     ctx!.cleanup();
   });
 
-  it("does nothing when no signals exist", () => {
+  it("does nothing when no signals exist", async () => {
     setupEnv();
     const sessionId = "end-s3";
 
-    handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
     const entries = ctx!.experienceStore.list();
     expect(entries).toHaveLength(0);
     ctx!.cleanup();
   });
 
-  it("does nothing when mode is disabled", () => {
+  it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
-    handleSessionEnd(JSON.stringify({ session_id: "end-s4" }));
+    await handleSessionEnd(JSON.stringify({ session_id: "end-s4" }));
     // Should not throw
   });
 
-  it("records project name from cwd in experience entries", () => {
+  it("records project name from cwd in experience entries", async () => {
     setupEnv();
     const sessionId = "end-proj";
 
     // Tool success + stop with cwd
-    handlePostToolUse(
+    await handlePostToolUse(
       JSON.stringify({
         session_id: sessionId,
         tool_name: "Bash",
@@ -141,12 +150,12 @@ describe("session-end hook", () => {
         cwd: "/home/user/my-project",
       })
     );
-    handleStop(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
+    await handleStop(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
 
     // Session-end with cwd
-    handleSessionEnd(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId, cwd: "/home/user/my-project" }));
 
-    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
     const entries = ctx!.experienceStore.list();
     expect(entries.length).toBeGreaterThanOrEqual(1);
     const entry = entries[0];
@@ -154,12 +163,12 @@ describe("session-end hook", () => {
     ctx!.cleanup();
   });
 
-  it("respects success_only mode filtering", () => {
+  it("respects success_only mode filtering", async () => {
     setupEnv("success_only");
     const sessionId = "end-s5";
 
-    // Create interrupt signals → would generate failure entry
-    handlePostToolUseFailure(
+    // Create interrupt + corrective signals → generates failure entry
+    await handlePostToolUseFailure(
       JSON.stringify({
         session_id: sessionId,
         tool_name: "Bash",
@@ -167,12 +176,20 @@ describe("session-end hook", () => {
         is_interrupt: true,
       })
     );
-    handleStop(JSON.stringify({ session_id: sessionId }));
+    // Add corrective signal directly (simulating Claude's acm_record_signal)
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Wrong approach",
+      reason: "incorrect",
+    });
+    ctx1!.cleanup();
 
-    handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+    await handleStop(JSON.stringify({ session_id: sessionId }));
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
 
     // In success_only mode, failure entries should be filtered out by listByMode
-    const ctx = bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
     const entries = ctx!.experienceStore.listByMode();
     const failures = entries.filter((e) => e.type === "failure");
     expect(failures).toHaveLength(0);
