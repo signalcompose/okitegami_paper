@@ -62,7 +62,7 @@ export class SessionSignalStore {
   }
 
   getBySession(sessionId: string): SessionSignal[] {
-    const rows = this.getBySessionStmt.all(sessionId) as unknown as SignalRow[];
+    const rows = this.getBySessionStmt.all<SignalRow>(sessionId);
     return rows.map((row) => ({
       id: row.id,
       session_id: row.session_id,

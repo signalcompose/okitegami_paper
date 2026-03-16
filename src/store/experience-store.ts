@@ -213,7 +213,7 @@ export class ExperienceStore {
   }
 
   getCrossProjectReport(): ProjectReportRow[] {
-    return this.stmtCrossProjectReport.all() as unknown as ProjectReportRow[];
+    return this.stmtCrossProjectReport.all<ProjectReportRow>();
   }
 
   getInjectionEpisodes(project?: string, limit?: number): InjectionEpisode[] {

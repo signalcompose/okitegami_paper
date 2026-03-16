@@ -16,8 +16,8 @@ export interface RunResult {
 
 export interface Statement {
   run(...params: unknown[]): RunResult;
-  get(...params: unknown[]): Record<string, unknown> | undefined;
-  all(...params: unknown[]): Record<string, unknown>[];
+  get<T = Record<string, unknown>>(...params: unknown[]): T | undefined;
+  all<T = Record<string, unknown>>(...params: unknown[]): T[];
 }
 
 export interface AdaptedDatabase {
@@ -66,7 +66,7 @@ function wrapDatabase(db: SqlJsDatabase, dbPath: string): AdaptedDatabase {
         // (e.g. hook timeout SIGKILL) before close(), in-session writes are lost.
         // This is a known tradeoff vs better-sqlite3's native file I/O.
         const data = db.export();
-        writeFileSync(dbPath, Buffer.from(data));
+        writeFileSync(dbPath, data);
       }
       db.close();
     },
@@ -103,24 +103,24 @@ function wrapStatement(db: SqlJsDatabase, sql: string): Statement {
         lastInsertRowid: getLastInsertRowid(db),
       };
     },
-    get(...params: unknown[]): Record<string, unknown> | undefined {
+    get<T = Record<string, unknown>>(...params: unknown[]): T | undefined {
       const stmt = db.prepare(sql);
       if (params.length > 0) {
         stmt.bind(params as Parameters<typeof stmt.bind>[0]);
       }
       const hasRow = stmt.step();
-      const row = hasRow ? (stmt.getAsObject() as Record<string, unknown>) : undefined;
+      const row = hasRow ? (stmt.getAsObject() as T) : undefined;
       stmt.free();
       return row;
     },
-    all(...params: unknown[]): Record<string, unknown>[] {
+    all<T = Record<string, unknown>>(...params: unknown[]): T[] {
       const stmt = db.prepare(sql);
       if (params.length > 0) {
         stmt.bind(params as Parameters<typeof stmt.bind>[0]);
       }
-      const rows: Record<string, unknown>[] = [];
+      const rows: T[] = [];
       while (stmt.step()) {
-        rows.push(stmt.getAsObject() as Record<string, unknown>);
+        rows.push(stmt.getAsObject() as T);
       }
       stmt.free();
       return rows;

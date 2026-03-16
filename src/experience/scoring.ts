@@ -11,7 +11,7 @@
 
 import type { SessionSummary } from "../signals/signal-collector.js";
 
-export function round(value: number): number {
+function round(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
