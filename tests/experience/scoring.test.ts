@@ -152,15 +152,6 @@ describe("computeSuccessStrength", () => {
     expect(score).toBeNull();
   });
 
-  it("returns null when corrective count >= 3 (not a clean success)", () => {
-    const summary = makeSummary({
-      corrective_instruction_count: 3,
-      has_test_pass: true,
-    });
-    const score = computeSuccessStrength(summary, 10);
-    expect(score).toBeNull();
-  });
-
   it("handles zero total signals gracefully", () => {
     const summary = makeSummary({
       has_test_pass: false,

@@ -82,6 +82,14 @@ function getLastInsertRowid(db: SqlJsDatabase): number {
 }
 
 function wrapStatement(db: SqlJsDatabase, sql: string): Statement {
+  // Eagerly compile SQL to match better-sqlite3's early-error-detection behavior.
+  // sql.js prepare() validates syntax immediately.
+  const compiled = db.prepare(sql);
+  compiled.free(); // Free the validation statement; re-prepare per call below.
+
+  // NOTE: sql.js statements are single-use (step→free cycle). Unlike better-sqlite3
+  // which reuses compiled statements, we re-prepare per call. This is acceptable
+  // for hook processes that run briefly and exit.
   return {
     run(...params: unknown[]): RunResult {
       const stmt = db.prepare(sql);

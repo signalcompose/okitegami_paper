@@ -40,8 +40,9 @@ export function computeFailureStrength(summary: SessionSummary): number | null {
  * Compute success signal strength.
  * Returns null if session doesn't qualify as success.
  *
+ * Precondition: only called when computeFailureStrength() returned null,
+ * which implies corrective_instruction_count === 0.
  * Interrupt + 0 corrective → null (ambiguous).
- * corrective_instruction_count >= 3 → null (failure, not success).
  */
 export function computeSuccessStrength(
   summary: SessionSummary,
@@ -49,10 +50,6 @@ export function computeSuccessStrength(
 ): number | null {
   // Ambiguous: interrupted but no corrective feedback
   if (summary.was_interrupted && summary.corrective_instruction_count === 0) {
-    return null;
-  }
-  // Too many corrections → not a success
-  if (summary.corrective_instruction_count >= 3) {
     return null;
   }
 
