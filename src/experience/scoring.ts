@@ -3,61 +3,55 @@
  *
  * Pure functions: SessionSummary → number | null
  * Returns null when the summary doesn't qualify for the given direction.
+ *
+ * Revised: Interrupt alone is ambiguous (not auto-failure).
+ * Corrective instruction count is the primary failure signal.
+ * Interrupt acts as a strength modifier (+0.10) when corrective instructions exist.
  */
 
 import type { SessionSummary } from "../signals/signal-collector.js";
 
-function round(value: number): number {
+export function round(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
 /**
  * Compute failure signal strength.
- * Returns null if no failure signal detected.
+ * Returns null if no corrective instructions detected.
  *
- * @param summary  Session summary from SignalCollector
- * @param captureTurns  Max post-interrupt turns (config.capture_turns)
+ * Interrupt alone → null (ambiguous, no experience generated).
+ * Corrective 1-2 → 0.30–0.60, with +0.10 if interrupted.
+ * Corrective 3+  → 0.60–0.90, with +0.10 if interrupted.
  */
-export function computeFailureStrength(
-  summary: SessionSummary,
-  captureTurns: number
-): number | null {
-  // Priority 1: Interrupt + post-interrupt dialogue → 0.90–1.00
-  if (summary.was_interrupted) {
-    const postTurns = summary.counts.post_interrupt_turn;
-    const ratio = captureTurns > 0 ? postTurns / captureTurns : 0;
-    return round(0.9 + Math.min(1, ratio) * 0.1);
-  }
-
+export function computeFailureStrength(summary: SessionSummary): number | null {
   const count = summary.corrective_instruction_count;
+  if (count === 0) return null;
 
-  // Priority 2: Corrective instruction (3+) → 0.60–0.80
+  const interruptBoost = summary.was_interrupted ? 0.1 : 0;
+
   if (count >= 3) {
-    return round(Math.min(0.8, 0.6 + (count - 3) * 0.05));
+    return round(Math.min(0.9, 0.6 + interruptBoost + (count - 3) * 0.05));
   }
-
-  // Priority 3: Corrective instruction (1-2) → 0.30–0.50
-  if (count >= 1) {
-    return round(0.3 + (count - 1) * 0.1);
-  }
-
-  return null;
+  return round(Math.min(0.6, 0.3 + interruptBoost + (count - 1) * 0.1));
 }
 
 /**
  * Compute success signal strength.
- * Returns null if session doesn't qualify as success
- * (interrupted or corrective_instruction_count >= 3).
+ * Returns null if session doesn't qualify as success.
  *
- * @param summary  Session summary from SignalCollector
- * @param totalToolCalls  Total tool call count for ratio calculation
+ * Interrupt + 0 corrective → null (ambiguous).
+ * corrective_instruction_count >= 3 → null (failure, not success).
  */
 export function computeSuccessStrength(
   summary: SessionSummary,
   totalToolCalls: number
 ): number | null {
-  // Not a success if interrupted or too many corrective instructions
-  if (summary.was_interrupted || summary.corrective_instruction_count >= 3) {
+  // Ambiguous: interrupted but no corrective feedback
+  if (summary.was_interrupted && summary.corrective_instruction_count === 0) {
+    return null;
+  }
+  // Too many corrections → not a success
+  if (summary.corrective_instruction_count >= 3) {
     return null;
   }
 
@@ -70,15 +64,4 @@ export function computeSuccessStrength(
 
   // Uninterrupted (no tests) → 0.40–0.60
   return round(0.4 + toolSuccessRatio * 0.2);
-}
-
-/**
- * Compute corrective instruction (3+) strength independently.
- * Unlike computeFailureStrength which prioritizes interrupt,
- * this always evaluates corrective count regardless of interrupt state.
- * Used when both interrupt and corrective failures should be generated.
- */
-export function computeCorrectiveStrength(correctiveCount: number): number | null {
-  if (correctiveCount < 3) return null;
-  return round(Math.min(0.8, 0.6 + (correctiveCount - 3) * 0.05));
 }
