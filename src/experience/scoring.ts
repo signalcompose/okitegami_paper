@@ -30,7 +30,8 @@ export function computeFailureStrength(summary: SessionSummary): number | null {
   const interruptBoost = summary.was_interrupted ? 0.1 : 0;
 
   if (count >= 3) {
-    return round(Math.min(0.9, 0.6 + interruptBoost + (count - 3) * 0.05));
+    const cap = summary.was_interrupted ? 0.9 : 0.8;
+    return round(Math.min(cap, 0.6 + interruptBoost + (count - 3) * 0.05));
   }
   return round(Math.min(0.6, 0.3 + interruptBoost + (count - 1) * 0.1));
 }

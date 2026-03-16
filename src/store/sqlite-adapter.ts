@@ -62,6 +62,9 @@ function wrapDatabase(db: SqlJsDatabase, dbPath: string): AdaptedDatabase {
     },
     close(): void {
       if (dbPath !== ":memory:") {
+        // NOTE: sql.js holds the DB in WASM memory. If the process is killed
+        // (e.g. hook timeout SIGKILL) before close(), in-session writes are lost.
+        // This is a known tradeoff vs better-sqlite3's native file I/O.
         const data = db.export();
         writeFileSync(dbPath, Buffer.from(data));
       }
