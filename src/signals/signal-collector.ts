@@ -8,7 +8,6 @@
 
 import type { SessionSignalStore } from "./session-store.js";
 import type { EventType } from "./types.js";
-import { detectCorrectiveInstruction } from "./patterns.js";
 
 const TEST_RUNNER_PATTERNS = [
   /\bvitest\b/,
@@ -55,15 +54,8 @@ export class SignalCollector {
       this.store.addSignal(sessionId, "post_interrupt_turn", { prompt });
     }
 
-    // Check for corrective instruction
-    const match = detectCorrectiveInstruction(prompt);
-    if (match) {
-      this.store.addSignal(sessionId, "corrective_instruction", {
-        prompt,
-        pattern: match.pattern,
-        language: match.language,
-      });
-    }
+    // Corrective instruction detection is handled by Claude Code
+    // via acm_record_signal MCP tool (see injection in session-start.ts)
   }
 
   handleToolSuccess(
