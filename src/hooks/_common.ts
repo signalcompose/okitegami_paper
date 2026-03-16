@@ -63,12 +63,26 @@ export async function bootstrapHook(stdin: string): Promise<HookContext | null> 
       collector,
       projectName,
       cleanup: () => {
-        db.close();
+        try {
+          db.close();
+        } catch (err) {
+          // db.close() already logged the write error; re-throw with hook context
+          throw new Error(`[ACM] Failed to close/persist DB. Session data may be lost.`, {
+            cause: err,
+          });
+        }
       },
     };
-  } catch (err) {
-    db.close();
-    throw err;
+  } catch (constructErr) {
+    try {
+      db.close();
+    } catch (closeErr) {
+      console.error(
+        `[ACM] bootstrapHook: db.close() also failed during error cleanup: ` +
+          `${closeErr instanceof Error ? closeErr.message : String(closeErr)}`
+      );
+    }
+    throw constructErr;
   }
 }
 
