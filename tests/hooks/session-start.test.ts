@@ -10,7 +10,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { retrieveAndInject } from "../../src/hooks/session-start.js";
+import { retrieveAndInject, buildQueryText } from "../../src/hooks/session-start.js";
 import { bootstrapHook } from "../../src/hooks/_common.js";
 import type { ExperienceEntry } from "../../src/store/types.js";
 
@@ -60,6 +60,103 @@ async function insertExperienceWithEmbedding(
   ctx.experienceStore.createWithEmbedding(entry, embedding);
   ctx.cleanup();
 }
+
+describe("session-start hook: buildQueryText", () => {
+  const originalEnv = process.env.ACM_CONFIG_PATH;
+
+  afterEach(() => {
+    process.env.ACM_CONFIG_PATH = originalEnv;
+    try {
+      rmSync(TMP_DIR, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it("extracts first user message from transcript JSONL", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const transcriptPath = join(TMP_DIR, "transcript.jsonl");
+    const lines = [
+      JSON.stringify({ type: "queue-operation", sessionId: "s1" }),
+      JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Fix the login bug in auth.ts" }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "I'll look into that." }] },
+      }),
+    ];
+    writeFileSync(transcriptPath, lines.join("\n") + "\n");
+
+    const result = buildQueryText("my-project", transcriptPath);
+    expect(result).toContain("my-project");
+    expect(result).toContain("Fix the login bug in auth.ts");
+  });
+
+  it("truncates long user messages to 200 chars", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const transcriptPath = join(TMP_DIR, "transcript-long.jsonl");
+    const longMessage = "A".repeat(300);
+    const lines = [
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: [{ type: "text", text: longMessage }] },
+      }),
+    ];
+    writeFileSync(transcriptPath, lines.join("\n") + "\n");
+
+    const result = buildQueryText("proj", transcriptPath);
+    expect(result.length).toBeLessThanOrEqual(210); // proj + space + 200 chars + some margin
+  });
+
+  it("falls back to project name when transcript is empty", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const transcriptPath = join(TMP_DIR, "empty.jsonl");
+    writeFileSync(transcriptPath, "");
+
+    const result = buildQueryText("my-project", transcriptPath);
+    expect(result).toBe("my-project");
+  });
+
+  it("falls back to project name when transcript file does not exist", () => {
+    const result = buildQueryText("my-project", "/nonexistent/path.jsonl");
+    expect(result).toBe("my-project");
+  });
+
+  it("falls back to project name when no user message in transcript", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const transcriptPath = join(TMP_DIR, "no-user.jsonl");
+    const lines = [
+      JSON.stringify({ type: "queue-operation", sessionId: "s1" }),
+      JSON.stringify({ type: "progress", data: { type: "hook_progress" } }),
+    ];
+    writeFileSync(transcriptPath, lines.join("\n") + "\n");
+
+    const result = buildQueryText("my-project", transcriptPath);
+    expect(result).toBe("my-project");
+  });
+
+  it("falls back to project name when transcript_path is undefined", () => {
+    const result = buildQueryText("my-project", undefined);
+    expect(result).toBe("my-project");
+  });
+
+  it("handles string content in user message (not array)", () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    const transcriptPath = join(TMP_DIR, "string-content.jsonl");
+    const lines = [
+      JSON.stringify({ type: "user", message: { role: "user", content: "Simple text prompt" } }),
+    ];
+    writeFileSync(transcriptPath, lines.join("\n") + "\n");
+
+    const result = buildQueryText("proj", transcriptPath);
+    expect(result).toContain("Simple text prompt");
+  });
+});
 
 describe("session-start hook: retrieveAndInject", () => {
   const originalEnv = process.env.ACM_CONFIG_PATH;

@@ -31,13 +31,11 @@ describe("formatInjection", () => {
     expect(formatInjection([])).toBe("");
   });
 
-  it("formats success entry correctly", () => {
+  it("formats success entry with outcome", () => {
     const result = formatInjection([makeResult()]);
     expect(result).toContain("[ACM Context]");
     expect(result).toContain("Past relevant experience:");
-    expect(result).toContain(
-      "SUCCESS: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.72)"
-    );
+    expect(result).toContain("SUCCESS: Fix authentication bug → Tests pass (strength: 0.72)");
   });
 
   it("formats failure entry with dialogue summary", () => {
@@ -54,7 +52,7 @@ describe("formatInjection", () => {
       }),
     ]);
     expect(result).toContain(
-      'FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens, user feedback: "Wrong file was edited" (strength: 0.85)'
+      'FAILURE: Fix authentication bug → Tests pass, user feedback: "Wrong file was edited" (strength: 0.85)'
     );
   });
 
@@ -67,9 +65,7 @@ describe("formatInjection", () => {
         score: 0.63,
       }),
     ]);
-    expect(result).toContain(
-      "FAILURE: Fix authentication bug → Modified auth.ts to handle null tokens (strength: 0.63)"
-    );
+    expect(result).toContain("FAILURE: Fix authentication bug → Tests pass (strength: 0.63)");
   });
 
   it("includes [ACM Context] header", () => {
@@ -77,9 +73,10 @@ describe("formatInjection", () => {
     expect(result.startsWith("[ACM Context]")).toBe(true);
   });
 
-  it("includes Details line per entry", () => {
+  it("does not include dead file path references", () => {
     const result = formatInjection([makeResult({ id: "abc-123" })]);
-    expect(result).toContain("Details: ~/.acm/experiences/abc-123.json");
+    expect(result).not.toContain("Details:");
+    expect(result).not.toContain("~/.acm/experiences/");
   });
 
   it("formats multiple entries", () => {

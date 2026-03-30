@@ -1,18 +1,21 @@
 /**
- * SessionEnd hook — experience generation
+ * SessionEnd hook — experience generation with embedding
  * Issue #39: feat(hooks): session-end hook
+ * Issue #76: fix: generate embedding at session-end
  *
- * Aggregates signals → generates experience entries → stores.
- * Embedding is deferred (requires async Embedder, handled separately).
+ * Aggregates signals → generates experience entries → embeds → stores.
  */
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { ExperienceGenerator } from "../experience/generator.js";
+import { buildEmbeddingText } from "../retrieval/embedding-text.js";
+import type { Embedder as EmbedderType } from "../retrieval/embedder.js";
 
 export async function handleSessionEnd(stdin: string): Promise<void> {
   const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
+  let embedder: EmbedderType | null = null;
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "SessionEnd");
@@ -30,11 +33,21 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     });
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
-    // Persist each entry with project name (without embedding — embedding requires async Embedder)
+    if (entries.length === 0) return;
+
+    // Dynamic import to avoid loading @xenova/transformers WASM at module level
+    const { Embedder } = await import("../retrieval/embedder.js");
+    embedder = new Embedder();
+    await embedder.initialize();
+
+    // Persist each entry with embedding and project name
     for (const entryData of entries) {
-      experienceStore.create({ ...entryData, project: ctx.projectName });
+      const text = buildEmbeddingText(entryData);
+      const embedding = await embedder.embed(text);
+      experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
     }
   } finally {
+    if (embedder) embedder.dispose();
     ctx.cleanup();
   }
 }

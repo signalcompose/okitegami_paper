@@ -19,21 +19,19 @@ export function formatInjection(results: RetrievalResult[]): string {
     let line: string;
 
     if (entry.type === "success") {
-      line = `- SUCCESS: ${entry.trigger} → ${entry.action} (strength: ${scoreStr})`;
+      line = `- SUCCESS: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
     } else {
       const feedback = entry.interrupt_context?.dialogue_summary;
       if (feedback) {
-        line = `- FAILURE: ${entry.trigger} → ${entry.action}, user feedback: "${feedback}" (strength: ${scoreStr})`;
+        line = `- FAILURE: ${entry.trigger} → ${entry.outcome}, user feedback: "${feedback}" (strength: ${scoreStr})`;
       } else {
-        line = `- FAILURE: ${entry.trigger} → ${entry.action} (strength: ${scoreStr})`;
+        line = `- FAILURE: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
       }
     }
 
-    const detailLine = `  Details: ~/.acm/experiences/${entry.id}.json`;
-    const blockLen = line.length + 1 + detailLine.length + 1;
+    const blockLen = line.length + 1;
     if (totalChars + blockLen > TOKEN_BUDGET_CHARS) break;
     lines.push(line);
-    lines.push(detailLine);
     totalChars += blockLen;
   }
 
