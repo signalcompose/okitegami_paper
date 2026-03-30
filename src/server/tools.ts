@@ -10,7 +10,7 @@ import { ExperienceGenerator } from "../experience/generator.js";
 import { Embedder } from "../retrieval/embedder.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
-import type { ExperienceEntry } from "../store/types.js";
+import { buildEmbeddingText } from "../retrieval/embedding-text.js";
 
 const VERSION = "0.1.0";
 
@@ -20,10 +20,6 @@ function errorMessage(err: unknown): string {
 
 function toolResult(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data) }] };
-}
-
-function buildEmbeddingText(entry: ExperienceEntry): string {
-  return [entry.trigger, ...entry.retrieval_keys].join(" ");
 }
 
 function toolError(message: string) {
@@ -241,7 +237,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
 
       server.tool(
         "acm_store_embedding",
-        "Generate and store embedding for an experience entry",
+        "Generate and store embedding for an experience entry (backfill/repair — session-end hook generates embeddings automatically)",
         {
           experience_id: z.string().uuid().describe("Experience entry ID"),
         },

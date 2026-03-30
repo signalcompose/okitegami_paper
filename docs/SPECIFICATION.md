@@ -133,21 +133,25 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 **Input**: `{ session_id, cwd, transcript_path }`
 
 **Behavior**:
-1. Extract task context from initial user message (via transcript_path)
-2. Generate embedding from task context
+1. Extract task context for retrieval query:
+   a. Read `transcript_path` (JSONL) and extract the first user message content
+   b. Build query text as `{project_name} {first_user_message}` (truncated to 200 chars)
+   c. Fallback: if transcript is empty or unreadable, use `{project_name}` only
+2. Generate embedding from query text
 3. Query experience DB: top-K (K=5) entries by cosine similarity
 4. Format injection text (compact format, see Section 3.3 of paper)
 5. Append Signal Detection instruction (instructs Claude to report corrective feedback via `acm_record_signal`)
 6. Return injection as hook output (system prompt addition)
 7. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
 
+**Query construction rationale**: The query must occupy the same semantic space as stored experience embeddings (which use `trigger + retrieval_keys`). Using the user's task description aligns naturally with `trigger` text, which is derived from corrective prompts or tool contexts.
+
 **Injection format**:
 ```
 [ACM Context]
 Past relevant experience:
-- SUCCESS: {trigger} → {action} (strength: {score})
-- FAILURE: {trigger} → {action}, user feedback: "{dialogue_summary}" (strength: {score})
-Details: ~/.acm/experiences/{id}.json
+- SUCCESS: {trigger} → {outcome} (strength: {score})
+- FAILURE: {trigger} → {outcome}, user feedback: "{dialogue_summary}" (strength: {score})
 ```
 
 ### 3.2 PostToolUseFailure Hook
@@ -196,7 +200,7 @@ Details: ~/.acm/experiences/{id}.json
 
 ### 3.6 SessionEnd Hook
 
-**Purpose**: Finalize experience entries and persist to DB.
+**Purpose**: Finalize experience entries and persist to DB with embeddings.
 
 **Behavior**:
 1. Aggregate all signals collected during session
@@ -208,8 +212,11 @@ Details: ~/.acm/experiences/{id}.json
    - If `!interrupted && corrective_instructions == 0`: generate success entry
 3. Generate retrieval keys from session content (keyword extraction)
 4. Compute signal strength score per scoring table
-5. Persist entries to experience DB
-6. Log to session log
+5. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
+6. Persist entries with embedding to experience DB via `createWithEmbedding()`
+7. Log to session log
+
+**Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 
 ### 3.7 Hook-Free Experience Generation (Experiment Runner)
 
@@ -265,7 +272,6 @@ CREATE INDEX idx_experiences_project ON experiences(project);
 ### 4.2 Storage Location
 
 `~/.acm/experiences.db` (SQLite database)
-`~/.acm/experiences/` (detailed JSON files per entry, referenced from injection)
 
 ### 4.3 Retrieval
 
@@ -409,4 +415,4 @@ This enables tracing the injection→outcome relationship via shared `session_id
 
 ---
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-03-30*

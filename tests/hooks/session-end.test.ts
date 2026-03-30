@@ -163,6 +163,33 @@ describe("session-end hook", () => {
     ctx!.cleanup();
   });
 
+  it("generates experience entries with embeddings", async () => {
+    setupEnv();
+    const sessionId = "end-embed";
+
+    // Tool success + stop
+    await handlePostToolUse(
+      JSON.stringify({
+        session_id: sessionId,
+        tool_name: "Bash",
+        tool_input: { command: "npx vitest run" },
+        result: "Tests passed",
+        exit_code: 0,
+      })
+    );
+    await handleStop(JSON.stringify({ session_id: sessionId }));
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    // Verify experience has embedding
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entriesWithEmbedding = ctx!.experienceStore.getAllWithEmbedding();
+    expect(entriesWithEmbedding.length).toBeGreaterThanOrEqual(1);
+    expect(entriesWithEmbedding[0].embedding).toBeInstanceOf(Float32Array);
+    expect(entriesWithEmbedding[0].embedding.length).toBe(384);
+    ctx!.cleanup();
+  });
+
   it("respects success_only mode filtering", async () => {
     setupEnv("success_only");
     const sessionId = "end-s5";
