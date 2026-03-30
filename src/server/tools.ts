@@ -237,7 +237,7 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
 
       server.tool(
         "acm_store_embedding",
-        "Generate and store embedding for an experience entry",
+        "Generate and store embedding for an experience entry (backfill/repair — session-end hook generates embeddings automatically)",
         {
           experience_id: z.string().uuid().describe("Experience entry ID"),
         },

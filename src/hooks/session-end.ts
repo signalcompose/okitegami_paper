@@ -36,15 +36,31 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     if (entries.length === 0) return;
 
     // Dynamic import to avoid loading @xenova/transformers WASM at module level
-    const { Embedder } = await import("../retrieval/embedder.js");
-    embedder = new Embedder();
-    await embedder.initialize();
+    // Fallback: if Embedder fails, store entries without embedding so they can be
+    // backfilled later via acm_store_embedding. This preserves experience data
+    // even when the ML model is unavailable (e.g. first-run model download timeout).
+    let embedderReady = false;
+    try {
+      const { Embedder } = await import("../retrieval/embedder.js");
+      embedder = new Embedder();
+      await embedder.initialize();
+      embedderReady = true;
+    } catch (err) {
+      console.error(
+        `[ACM] session-end: Embedder initialization failed, storing entries without embedding: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+    }
 
-    // Persist each entry with embedding and project name
+    // Persist each entry with project name (and embedding if available)
     for (const entryData of entries) {
-      const text = buildEmbeddingText(entryData);
-      const embedding = await embedder.embed(text);
-      experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+      if (embedderReady && embedder) {
+        const text = buildEmbeddingText(entryData);
+        const embedding = await embedder.embed(text);
+        experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+      } else {
+        experienceStore.create({ ...entryData, project: ctx.projectName });
+      }
     }
   } finally {
     if (embedder) embedder.dispose();
