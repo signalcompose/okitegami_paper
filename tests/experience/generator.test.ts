@@ -219,8 +219,7 @@ describe("ExperienceGenerator", () => {
       expect(success).toBeDefined();
       // With tool_failure counted: ratio = 3/5 = 0.6
       // test pass: 0.7 + 0.6 * 0.15 = 0.79
-      // If tool_failure were NOT counted: ratio = 3/3 = 1.0, score = 0.85
-      expect(success!.signal_strength).toBeLessThan(0.85);
+      expect(success!.signal_strength).toBeCloseTo(0.79, 2);
     });
 
     it("populates trigger, action, outcome text fields", () => {
