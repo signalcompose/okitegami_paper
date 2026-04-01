@@ -172,6 +172,27 @@ describe("SignalCollector", () => {
       const signals = store.getBySession(sessionId);
       expect(signals).toHaveLength(1);
       expect(signals[0].event_type).toBe("stop");
+      expect(signals[0].data).toBeNull();
+    });
+
+    it("stores last_assistant_message when provided", () => {
+      collector.handleStop(sessionId, "I've completed the refactoring.");
+
+      const signals = store.getBySession(sessionId);
+      expect(signals).toHaveLength(1);
+      expect(signals[0].event_type).toBe("stop");
+      expect(signals[0].data).toEqual({
+        last_assistant_message: "I've completed the refactoring.",
+      });
+    });
+
+    it("truncates last_assistant_message to 500 chars", () => {
+      const longMessage = "A".repeat(600);
+      collector.handleStop(sessionId, longMessage);
+
+      const signals = store.getBySession(sessionId);
+      const msg = signals[0].data?.last_assistant_message as string;
+      expect(msg.length).toBe(500);
     });
   });
 

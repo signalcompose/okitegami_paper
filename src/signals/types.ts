@@ -47,6 +47,8 @@ export interface PostToolUseInput extends HookInputBase {
 
 export interface StopInput extends HookInputBase {
   hook_event_name: "Stop";
+  last_assistant_message?: string;
+  stop_hook_active?: boolean;
 }
 
 export type HookInput =

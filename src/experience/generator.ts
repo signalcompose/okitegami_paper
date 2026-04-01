@@ -32,6 +32,7 @@ interface SignalIndex {
   toolNames: string[];
   postInterruptPrompts: string[];
   hasTestPass: boolean;
+  lastAssistantMessage: string | null;
 }
 
 export class ExperienceGenerator {
@@ -105,6 +106,7 @@ export class ExperienceGenerator {
     const toolNames = new Set<string>();
     const postInterruptPrompts: string[] = [];
     let hasTestPass = false;
+    let lastAssistantMessage: string | null = null;
 
     for (const signal of signals) {
       const existing = byType.get(signal.event_type);
@@ -126,9 +128,21 @@ export class ExperienceGenerator {
       if (signal.event_type === "tool_success" && signal.data?.test_passed === true) {
         hasTestPass = true;
       }
+      if (signal.event_type === "stop") {
+        const msg = signal.data?.last_assistant_message;
+        if (typeof msg === "string" && msg) {
+          lastAssistantMessage = msg;
+        }
+      }
     }
 
-    return { byType, toolNames: [...toolNames], postInterruptPrompts, hasTestPass };
+    return {
+      byType,
+      toolNames: [...toolNames],
+      postInterruptPrompts,
+      hasTestPass,
+      lastAssistantMessage,
+    };
   }
 
   private buildTrigger(idx: SignalIndex, context: EntryContext): string {
@@ -161,6 +175,9 @@ export class ExperienceGenerator {
     if (context === "corrective") {
       return `Agent used ${toolStr}, received corrective feedback`;
     }
+    if (idx.lastAssistantMessage) {
+      return `Agent used ${toolStr}: ${idx.lastAssistantMessage}`.slice(0, 500);
+    }
     return `Agent completed task using ${toolStr}`;
   }
 
@@ -174,6 +191,10 @@ export class ExperienceGenerator {
       const corrections = idx.byType.get("corrective_instruction") ?? [];
       const count = corrections.length;
       return `Received ${count} corrective instruction${count > 1 ? "s" : ""}`;
+    }
+    if (idx.lastAssistantMessage) {
+      const prefix = idx.hasTestPass ? "Tests passed. " : "";
+      return `${prefix}${idx.lastAssistantMessage}`.slice(0, 500);
     }
     return idx.hasTestPass
       ? "Task completed with passing tests"

@@ -193,13 +193,15 @@ Past relevant experience:
 
 ### 3.5 Stop Hook
 
-**Purpose**: Record normal turn completion.
+**Purpose**: Record normal turn completion and capture Claude's final response summary.
 
-**Input**: `{ session_id, transcript_path, ... }`
+**Input**: `{ session_id, transcript_path, last_assistant_message, stop_hook_active, ... }`
 
 **Behavior**:
-1. Record turn completion in session state
-2. Note: Stop hook does NOT fire on user interrupt — this non-firing is a complementary interrupt signal
+1. If `stop_hook_active === true`: exit immediately (prevent infinite loop)
+2. Record turn completion in session state, storing `last_assistant_message` (truncated to 500 chars) in signal data
+3. Note: Stop hook does NOT fire on user interrupt — this non-firing is a complementary interrupt signal
+4. `last_assistant_message` is used by ExperienceGenerator to improve `action`/`outcome` text quality
 
 ### 3.6 SessionEnd Hook
 
