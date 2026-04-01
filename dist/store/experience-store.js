@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { initializeDatabase } from "./schema.js";
 import { SIGNAL_TYPES } from "./types.js";
 import { serializeEmbedding, deserializeEmbedding } from "../retrieval/embedding-serde.js";
 export class ExperienceStore {
@@ -16,9 +15,9 @@ export class ExperienceStore {
     stmtOutcomesBySession;
     stmtCrossProjectReport;
     stmtSignalSummaryBySession;
-    constructor(config) {
+    constructor(db, config) {
         this.config = config;
-        this.db = initializeDatabase(config.db_path);
+        this.db = db;
         this.stmtInsert = this.db.prepare(`INSERT INTO experiences
        (id, type, trigger_text, action_text, outcome_text,
         retrieval_keys, signal_strength, signal_type,

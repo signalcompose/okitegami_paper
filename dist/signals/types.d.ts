@@ -5,7 +5,7 @@
  * Distinct from ExperienceEntry types (store/types.ts) which are generated
  * from aggregated signals at session end (Phase 3).
  */
-export declare const EVENT_TYPES: readonly ["interrupt", "post_interrupt_turn", "corrective_instruction", "tool_success", "stop", "rewind", "injection"];
+export declare const EVENT_TYPES: readonly ["interrupt", "post_interrupt_turn", "corrective_instruction", "tool_success", "tool_failure", "stop", "rewind", "injection"];
 export type EventType = (typeof EVENT_TYPES)[number];
 export interface HookInputBase {
     session_id: string;

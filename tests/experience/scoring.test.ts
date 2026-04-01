@@ -128,7 +128,7 @@ describe("computeSuccessStrength", () => {
     const lowRatio = computeSuccessStrength(
       makeSummary({
         has_test_pass: true,
-        counts: { ...makeSummary().counts, tool_success: 0 },
+        counts: { ...makeSummary().counts, tool_success: 2 },
       }),
       10
     );
@@ -140,6 +140,15 @@ describe("computeSuccessStrength", () => {
       10
     );
     expect(highRatio).toBeGreaterThan(lowRatio!);
+  });
+
+  it("returns null when all tool calls failed (tool_success=0, totalToolCalls>0)", () => {
+    const summary = makeSummary({
+      has_test_pass: false,
+      counts: { ...makeSummary().counts, tool_success: 0, tool_failure: 5 },
+    });
+    const score = computeSuccessStrength(summary, 5);
+    expect(score).toBeNull();
   });
 
   it("returns null for interrupt + 0 corrective (ambiguous)", () => {

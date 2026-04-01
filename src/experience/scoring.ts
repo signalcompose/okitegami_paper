@@ -54,6 +54,11 @@ export function computeSuccessStrength(
     return null;
   }
 
+  // All tool calls failed but no corrective instruction — ambiguous, not a success
+  if (totalToolCalls > 0 && summary.counts.tool_success === 0) {
+    return null;
+  }
+
   const toolSuccessRatio = totalToolCalls > 0 ? summary.counts.tool_success / totalToolCalls : 0;
 
   // Test pass + uninterrupted → 0.70–0.85

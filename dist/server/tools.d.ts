@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type Database from "better-sqlite3";
+import type { AdaptedDatabase } from "../store/sqlite-adapter.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { Embedder } from "../retrieval/embedder.js";
 export interface AcmServerOptions {
-    db?: Database.Database;
+    db?: AdaptedDatabase;
     capture_turns?: number;
     promotion_threshold?: number;
     experienceStore?: ExperienceStore;

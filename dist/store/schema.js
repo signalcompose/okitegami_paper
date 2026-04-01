@@ -1,6 +1,4 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { openDatabase } from "./sqlite-adapter.js";
 import { EVENT_TYPES } from "../signals/types.js";
 const EVENT_TYPES_SQL = EVENT_TYPES.map((t) => `'${t}'`).join(",");
 const SCHEMA_SQL = `
@@ -50,14 +48,51 @@ function migrateDatabase(db) {
     }
     // Always ensure project index exists (handles both fresh and migrated DBs)
     db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_project ON experiences(project)");
-}
-export function initializeDatabase(dbPath) {
-    if (dbPath !== ":memory:") {
-        mkdirSync(dirname(dbPath), { recursive: true });
+    // Migration: rebuild session_signals CHECK constraint to include all current EVENT_TYPES.
+    // SQLite does not support ALTER CONSTRAINT, so we recreate the table if the constraint is stale.
+    // Guard: compare stored CHECK constraint against current EVENT_TYPES_SQL to detect staleness.
+    // NOTE: When adding new event types to EVENT_TYPES, this migration runs automatically.
+    const createSql = db
+        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='session_signals'")
+        .get();
+    if (createSql && !createSql.sql.includes(EVENT_TYPES_SQL)) {
+        db.exec("BEGIN");
+        try {
+            const rebuildSql = [
+                "ALTER TABLE session_signals RENAME TO session_signals_old",
+                `CREATE TABLE session_signals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          event_type TEXT NOT NULL CHECK(event_type IN (${EVENT_TYPES_SQL})),
+          data TEXT,
+          timestamp TEXT NOT NULL
+        )`,
+                `INSERT INTO session_signals (id, session_id, event_type, data, timestamp)
+          SELECT id, session_id, event_type, data, timestamp FROM session_signals_old`,
+                "DROP TABLE session_signals_old",
+                "CREATE INDEX IF NOT EXISTS idx_session_signals_session_id ON session_signals(session_id)",
+                "CREATE INDEX IF NOT EXISTS idx_session_signals_session_event ON session_signals(session_id, event_type)",
+            ];
+            for (const sql of rebuildSql) {
+                db.exec(sql);
+            }
+            db.exec("COMMIT");
+        }
+        catch (err) {
+            try {
+                db.exec("ROLLBACK");
+            }
+            catch (rollbackErr) {
+                console.error(`[ACM] migrateDatabase: ROLLBACK failed after migration error. ` +
+                    `DB state may be inconsistent. Original: ${err instanceof Error ? err.message : String(err)}. ` +
+                    `ROLLBACK: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+            }
+            throw err;
+        }
     }
-    const db = new Database(dbPath);
-    db.pragma("journal_mode = WAL");
-    db.pragma("busy_timeout = 5000");
+}
+export async function initializeDatabase(dbPath) {
+    const db = await openDatabase(dbPath);
     db.exec(SCHEMA_SQL);
     migrateDatabase(db);
     return db;

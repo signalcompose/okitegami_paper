@@ -197,6 +197,31 @@ describe("ExperienceGenerator", () => {
       expect(result[0].timestamp).toBeDefined();
     });
 
+    it("uses tool_success + tool_failure for totalToolCalls in scoring", () => {
+      const summary = makeSummary({
+        has_test_pass: true,
+        counts: {
+          ...makeSummary().counts,
+          tool_success: 3,
+          tool_failure: 2,
+          stop: 1,
+        },
+        total_signals: 6,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("tool_success", { tool_name: "Edit", is_test_runner: false }),
+        makeSignal("tool_success", { tool_name: "Bash", is_test_runner: true, test_passed: true }),
+        makeSignal("tool_failure", { tool_name: "Bash", error: "command not found" }),
+      ];
+
+      const result = generator.generate({ session_id: "test-session", summary, signals });
+      const success = result.find((e) => e.type === "success");
+      expect(success).toBeDefined();
+      // With tool_failure counted: ratio = 3/5 = 0.6
+      // test pass: 0.7 + 0.6 * 0.15 = 0.79
+      expect(success!.signal_strength).toBeCloseTo(0.79, 2);
+    });
+
     it("populates trigger, action, outcome text fields", () => {
       const summary = makeSummary({
         has_test_pass: true,

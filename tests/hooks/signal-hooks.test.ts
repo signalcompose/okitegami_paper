@@ -67,19 +67,35 @@ describe("post-tool-use-failure hook", () => {
     await handlePostToolUseFailure(stdin);
   });
 
-  it("ignores non-interrupt failures", async () => {
+  it("throws when is_interrupt is not a boolean", async () => {
     setupEnv();
     const stdin = JSON.stringify({
       session_id: "s1",
       tool_name: "Bash",
       error: "err",
+      // is_interrupt missing
+    });
+    await expect(handlePostToolUseFailure(stdin)).rejects.toThrow(
+      '"is_interrupt" must be a boolean'
+    );
+  });
+
+  it("records tool_failure for non-interrupt failures", async () => {
+    setupEnv();
+    const stdin = JSON.stringify({
+      session_id: "s1",
+      tool_name: "Bash",
+      error: "command not found",
       is_interrupt: false,
     });
     await handlePostToolUseFailure(stdin);
 
     const ctx = await bootstrapHook('{"session_id":"s1"}');
     const signals = ctx!.signalStore.getBySession("s1");
-    expect(signals).toHaveLength(0);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].event_type).toBe("tool_failure");
+    expect(signals[0].data?.tool_name).toBe("Bash");
+    expect(signals[0].data?.error).toBe("command not found");
     ctx!.cleanup();
   });
 });
