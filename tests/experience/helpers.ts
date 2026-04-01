@@ -11,8 +11,10 @@ export function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSum
     post_interrupt_turn: 0,
     corrective_instruction: 0,
     tool_success: 0,
+    tool_failure: 0,
     stop: 0,
     rewind: 0,
+    injection: 0,
   };
   return {
     session_id: "test-session",

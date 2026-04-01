@@ -144,6 +144,27 @@ describe("SignalCollector", () => {
     });
   });
 
+  describe("handleToolFailure", () => {
+    it("records a tool_failure signal", () => {
+      collector.handleToolFailure(sessionId, "Bash", "command not found");
+
+      const signals = store.getBySession(sessionId);
+      expect(signals).toHaveLength(1);
+      expect(signals[0].event_type).toBe("tool_failure");
+      expect(signals[0].data).toEqual({
+        tool_name: "Bash",
+        error: "command not found",
+      });
+    });
+
+    it("does not mark session as interrupted", () => {
+      collector.handleToolFailure(sessionId, "Bash", "error");
+
+      const summary = collector.getSessionSummary(sessionId);
+      expect(summary.was_interrupted).toBe(false);
+    });
+  });
+
   describe("handleStop", () => {
     it("records a stop signal", () => {
       collector.handleStop(sessionId);
@@ -159,18 +180,19 @@ describe("SignalCollector", () => {
       collector.handleInterrupt(sessionId, "Bash", "interrupted");
       collector.handleUserPrompt(sessionId, "That's wrong");
       collector.handleToolSuccess(sessionId, "Read", { file: "x.ts" });
+      collector.handleToolFailure(sessionId, "Bash", "command failed");
       collector.handleStop(sessionId);
 
       const summary = collector.getSessionSummary(sessionId);
 
       expect(summary.session_id).toBe(sessionId);
-      // interrupt + post_interrupt_turn + tool_success + stop = 4
-      // (corrective_instruction no longer auto-detected via regex)
-      expect(summary.total_signals).toBe(4);
+      // interrupt + post_interrupt_turn + tool_success + tool_failure + stop = 5
+      expect(summary.total_signals).toBe(5);
       expect(summary.counts.interrupt).toBe(1);
       expect(summary.counts.corrective_instruction).toBe(0);
       expect(summary.counts.post_interrupt_turn).toBe(1);
       expect(summary.counts.tool_success).toBe(1);
+      expect(summary.counts.tool_failure).toBe(1);
       expect(summary.counts.stop).toBe(1);
       expect(summary.was_interrupted).toBe(true);
       expect(summary.corrective_instruction_count).toBe(0);
