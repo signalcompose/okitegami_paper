@@ -80,7 +80,7 @@ export class ExperienceGenerator {
 
     // Success entry: only when corrective_instruction_count == 0 (failure strength was null)
     if (failureStrength === null) {
-      const totalToolCalls = summary.counts.tool_success + (summary.counts.tool_failure ?? 0);
+      const totalToolCalls = summary.counts.tool_success + summary.counts.tool_failure;
       const strength = computeSuccessStrength(summary, totalToolCalls);
       if (strength !== null && strength >= this.options.promotion_threshold) {
         results.push({
