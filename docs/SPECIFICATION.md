@@ -43,7 +43,7 @@ Claude Code
   ├── SessionStart hook    → ACM: retrieve & inject relevant experiences
   ├── UserPromptSubmit hook → ACM: capture post-interrupt dialogue, detect corrective instructions
   ├── PostToolUse hook      → ACM: record successful tool completions
-  ├── PostToolUseFailure hook → ACM: detect interrupts (is_interrupt=true)
+  ├── PostToolUseFailure hook → ACM: detect interrupts (is_interrupt=true), record tool failures
   ├── Stop hook             → ACM: mark normal completion (non-firing = interrupt confirmation)
   └── SessionEnd hook       → ACM: finalize entries, persist to DB
          │
@@ -113,8 +113,8 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 | Interrupt + corrective (3+) | 0.70–0.90 | Negative | Corrective base + interrupt boost (+0.10) |
 | Corrective instruction (3+, no interrupt) | 0.60–0.80 | Negative | Primary failure signal |
 | Corrective instruction (1-2, no interrupt) | 0.30–0.50 | Negative | |
-| Test pass + uninterrupted | 0.70–0.85 | Positive | |
-| Uninterrupted (no tests) | 0.40–0.60 | Positive | |
+| Test pass + uninterrupted | 0.70–0.85 | Positive | toolSuccessRatio = tool_success/(tool_success+tool_failure) |
+| Uninterrupted (no tests) | 0.40–0.60 | Positive | toolSuccessRatio = tool_success/(tool_success+tool_failure) |
 
 **Design rationale**: Interrupt alone is ambiguous (may be benign). Corrective instruction count (reported by Claude Code via `acm_record_signal`) is the primary failure signal. Interrupt acts as a +0.10 strength modifier when corrective instructions are present.
 
@@ -156,14 +156,17 @@ Past relevant experience:
 
 ### 3.2 PostToolUseFailure Hook
 
-**Purpose**: Detect user interrupts (Level 1 signal).
+**Purpose**: Detect user interrupts (Level 1 signal) and record non-interrupt tool failures.
 
 **Input**: `{ tool_name, error, is_interrupt, session_id, ... }`
 
 **Behavior**:
 1. If `is_interrupt === true`: set session state to `interrupted`
-2. Begin capturing subsequent N=3–5 turns (via UserPromptSubmit hook)
-3. Store interrupt context for experience entry generation
+   - Begin capturing subsequent N=3–5 turns (via UserPromptSubmit hook)
+   - Store interrupt context for experience entry generation
+2. If `is_interrupt === false`: record `tool_failure` signal with tool name and error
+   - Used for `toolSuccessRatio` calculation: `tool_success / (tool_success + tool_failure)`
+   - Non-interrupt failures include: Bash command errors, file not found, permission denied, etc.
 
 ### 3.3 UserPromptSubmit Hook
 
