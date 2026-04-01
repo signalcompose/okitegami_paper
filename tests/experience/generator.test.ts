@@ -273,6 +273,7 @@ describe("ExperienceGenerator", () => {
       const result = generator.generate({ session_id: "test-session", summary, signals });
 
       expect(result[0].action).toContain("auth middleware");
+      expect(result[0].action).toContain("Edit");
     });
 
     it("populates interrupt_context for interrupt + corrective failure", () => {

@@ -251,19 +251,34 @@ describe("stop hook", () => {
     }
   });
 
-  it("records stop signal with last_assistant_message", async () => {
+  it("records stop signal without last_assistant_message", async () => {
     setupEnv();
-    await handleStop(
-      JSON.stringify({
-        session_id: "s8",
-        last_assistant_message: "Task completed. All tests passing.",
-      })
-    );
+    await handleStop(JSON.stringify({ session_id: "s8" }));
 
     const ctx = await bootstrapHook('{"session_id":"s8"}');
     const signals = ctx!.signalStore.getBySession("s8");
     expect(signals).toHaveLength(1);
     expect(signals[0].event_type).toBe("stop");
+    expect(signals[0].data).toBeNull();
+    ctx!.cleanup();
+  });
+
+  it("records stop signal with last_assistant_message", async () => {
+    setupEnv();
+    await handleStop(
+      JSON.stringify({
+        session_id: "s8b",
+        last_assistant_message: "Task completed. All tests passing.",
+      })
+    );
+
+    const ctx = await bootstrapHook('{"session_id":"s8b"}');
+    const signals = ctx!.signalStore.getBySession("s8b");
+    expect(signals).toHaveLength(1);
+    expect(signals[0].event_type).toBe("stop");
+    expect(signals[0].data).toEqual({
+      last_assistant_message: "Task completed. All tests passing.",
+    });
     ctx!.cleanup();
   });
 
