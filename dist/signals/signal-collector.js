@@ -5,7 +5,6 @@
  * Each method opens/queries SQLite via SessionSignalStore,
  * writes signals, and returns. No in-memory session state.
  */
-import { detectCorrectiveInstruction } from "./patterns.js";
 const TEST_RUNNER_PATTERNS = [
     /\bvitest\b/,
     /\bjest\b/,
@@ -36,15 +35,8 @@ export class SignalCollector {
         if (counts.interrupt > 0 && counts.post_interrupt_turn < this.options.capture_turns) {
             this.store.addSignal(sessionId, "post_interrupt_turn", { prompt });
         }
-        // Check for corrective instruction
-        const match = detectCorrectiveInstruction(prompt);
-        if (match) {
-            this.store.addSignal(sessionId, "corrective_instruction", {
-                prompt,
-                pattern: match.pattern,
-                language: match.language,
-            });
-        }
+        // Corrective instruction detection is handled by Claude Code
+        // via acm_record_signal MCP tool (see formatSignalInstruction in src/retrieval/injector.ts)
     }
     handleToolSuccess(sessionId, toolName, toolInput, exitCode) {
         const isTestRunner = this.isTestRunnerCommand(toolName, toolInput);
@@ -53,6 +45,12 @@ export class SignalCollector {
             tool_name: toolName,
             is_test_runner: isTestRunner,
             test_passed: testPassed,
+        });
+    }
+    handleToolFailure(sessionId, toolName, error) {
+        this.store.addSignal(sessionId, "tool_failure", {
+            tool_name: toolName,
+            error,
         });
     }
     handleStop(sessionId) {

@@ -7,15 +7,13 @@ import { DEFAULT_CONFIG } from "../store/types.js";
 import { ExperienceGenerator } from "../experience/generator.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
+import { buildEmbeddingText } from "../retrieval/embedding-text.js";
 const VERSION = "0.1.0";
 function errorMessage(err) {
     return err instanceof Error ? err.message : String(err);
 }
 function toolResult(data) {
     return { content: [{ type: "text", text: JSON.stringify(data) }] };
-}
-function buildEmbeddingText(entry) {
-    return [entry.trigger, ...entry.retrieval_keys].join(" ");
 }
 function toolError(message) {
     return {
@@ -40,7 +38,7 @@ export function createAcmServer(options) {
         const collector = new SignalCollector(store, {
             capture_turns: options.capture_turns ?? DEFAULT_CONFIG.capture_turns,
         });
-        server.tool("acm_record_signal", "Record a raw session signal directly to DB (debug/test only — hooks use SignalCollector)", {
+        server.tool("acm_record_signal", 'Record a session signal. Use to report corrective feedback: event_type=\'corrective_instruction\', data=\'{"prompt":"...","reason":"..."}\'.', {
             session_id: z.string().describe("Session identifier"),
             event_type: z.string().describe(`Signal event type: ${EVENT_TYPES.join(", ")}`),
             data: z.string().optional().describe("Event-specific data as JSON string"),
@@ -174,7 +172,7 @@ export function createAcmServer(options) {
                     return toolError(`Retrieval error: ${errorMessage(err)}`);
                 }
             });
-            server.tool("acm_store_embedding", "Generate and store embedding for an experience entry", {
+            server.tool("acm_store_embedding", "Generate and store embedding for an experience entry (backfill/repair — session-end hook generates embeddings automatically)", {
                 experience_id: z.string().uuid().describe("Experience entry ID"),
             }, async (params) => {
                 try {

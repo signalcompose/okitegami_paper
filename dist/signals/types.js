@@ -10,6 +10,7 @@ export const EVENT_TYPES = [
     "post_interrupt_turn",
     "corrective_instruction",
     "tool_success",
+    "tool_failure",
     "stop",
     "rewind",
     "injection",

@@ -12,7 +12,13 @@ export async function handlePostToolUseFailure(stdin: string): Promise<void> {
   try {
     const { input, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "PostToolUseFailure");
-    const isInterrupt = input.is_interrupt as boolean;
+    const rawInterrupt = input.is_interrupt;
+    if (typeof rawInterrupt !== "boolean") {
+      throw new Error(
+        `PostToolUseFailure: "is_interrupt" must be a boolean, got ${JSON.stringify(rawInterrupt)}`
+      );
+    }
+    const isInterrupt = rawInterrupt;
     const toolName = requireInputString(input, "tool_name", "PostToolUseFailure");
     const error = (input.error as string) ?? "";
 

@@ -19,7 +19,7 @@ export interface HookContext {
     projectName: string;
     cleanup: () => void;
 }
-export declare function bootstrapHook(stdin: string): HookContext | null;
+export declare function bootstrapHook(stdin: string): Promise<HookContext | null>;
 /**
  * Validate that a required string field exists in hook input.
  * Throws a descriptive error if the field is missing or not a string.

@@ -67,6 +67,19 @@ describe("post-tool-use-failure hook", () => {
     await handlePostToolUseFailure(stdin);
   });
 
+  it("throws when is_interrupt is not a boolean", async () => {
+    setupEnv();
+    const stdin = JSON.stringify({
+      session_id: "s1",
+      tool_name: "Bash",
+      error: "err",
+      // is_interrupt missing
+    });
+    await expect(handlePostToolUseFailure(stdin)).rejects.toThrow(
+      '"is_interrupt" must be a boolean'
+    );
+  });
+
   it("records tool_failure for non-interrupt failures", async () => {
     setupEnv();
     const stdin = JSON.stringify({

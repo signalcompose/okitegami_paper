@@ -3,8 +3,8 @@
  * Issue #38: feat(hooks): signal recording hooks
  */
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
-export function handlePostToolUse(stdin) {
-    const ctx = bootstrapHook(stdin);
+export async function handlePostToolUse(stdin) {
+    const ctx = await bootstrapHook(stdin);
     if (!ctx)
         return;
     try {

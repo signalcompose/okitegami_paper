@@ -1,13 +1,68 @@
 /**
  * SessionStart hook — retrieval and context injection
  * Issue #40: feat(hooks): session-start hook
+ * Issue #77: fix: use transcript-based query for semantic retrieval
  *
  * Retrieves relevant past experiences and outputs injection text to stdout.
  * The injection text is appended to the session context by Claude Code.
  */
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
-import { formatInjection } from "../retrieval/injector.js";
+import { formatInjection, formatSignalInstruction } from "../retrieval/injector.js";
+const QUERY_MAX_LENGTH = 200;
+/**
+ * Extract the first user message text from a Claude Code transcript JSONL file.
+ * Returns undefined if file is unreadable or contains no user message.
+ */
+function extractFirstUserMessage(transcriptPath) {
+    try {
+        const content = readFileSync(transcriptPath, "utf-8");
+        for (const line of content.split("\n")) {
+            if (!line.trim())
+                continue;
+            try {
+                const entry = JSON.parse(line);
+                if (entry.type !== "user")
+                    continue;
+                const message = entry.message;
+                if (!message)
+                    continue;
+                const msgContent = message.content;
+                if (typeof msgContent === "string")
+                    return msgContent;
+                if (Array.isArray(msgContent)) {
+                    for (const item of msgContent) {
+                        if (item?.type === "text" && typeof item.text === "string") {
+                            return item.text;
+                        }
+                    }
+                }
+            }
+            catch {
+                // Skip malformed JSON lines
+            }
+        }
+    }
+    catch {
+        // File unreadable — fall through
+    }
+    return undefined;
+}
+/**
+ * Build query text for semantic retrieval from project name and transcript.
+ * Falls back to project name only if transcript is unavailable or empty.
+ */
+export function buildQueryText(projectName, transcriptPath) {
+    if (!transcriptPath)
+        return projectName;
+    const userMessage = extractFirstUserMessage(transcriptPath);
+    if (!userMessage)
+        return projectName;
+    const truncated = userMessage.slice(0, QUERY_MAX_LENGTH);
+    return `${projectName} ${truncated}`.trim();
+}
 /**
  * Core logic: retrieve experiences, format injection text, and log injection event.
  * Separated from async Embedder initialization for testability.
@@ -38,7 +93,7 @@ export function retrieveAndInject(ctx, queryEmbedding, sessionId, queryText) {
  * retrieves experiences, and writes injection text to stdout.
  */
 export async function handleSessionStart(stdin) {
-    const ctx = bootstrapHook(stdin);
+    const ctx = await bootstrapHook(stdin);
     if (!ctx)
         return;
     try {
@@ -46,14 +101,17 @@ export async function handleSessionStart(stdin) {
         const embedder = new Embedder();
         try {
             await embedder.initialize();
-            // Build query from session context
             const sessionId = requireInputString(ctx.input, "session_id", "SessionStart");
             const cwd = ctx.input.cwd ?? "";
-            const queryText = `session ${sessionId} working in ${cwd}`;
+            const projectName = basename(cwd) || "unknown";
+            const transcriptPath = ctx.input.transcript_path;
+            const queryText = buildQueryText(projectName, transcriptPath);
             const queryEmbedding = await embedder.embed(queryText);
-            const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
-            if (injectionText) {
-                process.stdout.write(injectionText);
+            const experienceText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+            const instructionText = formatSignalInstruction(sessionId);
+            const fullInjection = [experienceText, instructionText].filter(Boolean).join("\n\n");
+            if (fullInjection) {
+                process.stdout.write(fullInjection);
             }
         }
         finally {

@@ -12,7 +12,7 @@ import { initializeDatabase } from "../store/schema.js";
 import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
-export function bootstrapHook(stdin) {
+export async function bootstrapHook(stdin) {
     // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
     const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
     if (config.mode === "disabled") {
@@ -26,11 +26,11 @@ export function bootstrapHook(stdin) {
     catch (err) {
         throw new Error(`Invalid JSON in hook stdin: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     }
-    // Initialize DB and stores
-    const db = initializeDatabase(config.db_path);
+    // Initialize DB and stores (async for sql.js WASM)
+    const db = await initializeDatabase(config.db_path);
     try {
         const signalStore = new SessionSignalStore(db);
-        const experienceStore = new ExperienceStore(config);
+        const experienceStore = new ExperienceStore(db, config);
         const collector = new SignalCollector(signalStore, {
             capture_turns: config.capture_turns,
         });
@@ -43,14 +43,27 @@ export function bootstrapHook(stdin) {
             collector,
             projectName,
             cleanup: () => {
-                experienceStore.close();
-                db.close();
+                try {
+                    db.close();
+                }
+                catch (err) {
+                    // db.close() already logged the write error; re-throw with hook context
+                    throw new Error(`[ACM] Failed to close/persist DB. Session data may be lost.`, {
+                        cause: err,
+                    });
+                }
             },
         };
     }
-    catch (err) {
-        db.close();
-        throw err;
+    catch (constructErr) {
+        try {
+            db.close();
+        }
+        catch (closeErr) {
+            console.error(`[ACM] bootstrapHook: db.close() also failed during error cleanup: ` +
+                `${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
+        }
+        throw constructErr;
     }
 }
 /**

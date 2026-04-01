@@ -83,7 +83,15 @@ function migrateDatabase(db: AdaptedDatabase): void {
       }
       db.exec("COMMIT");
     } catch (err) {
-      db.exec("ROLLBACK");
+      try {
+        db.exec("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error(
+          `[ACM] migrateDatabase: ROLLBACK failed after migration error. ` +
+            `DB state may be inconsistent. Original: ${err instanceof Error ? err.message : String(err)}. ` +
+            `ROLLBACK: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`
+        );
+      }
       throw err;
     }
   }

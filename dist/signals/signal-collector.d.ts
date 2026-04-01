@@ -25,6 +25,7 @@ export declare class SignalCollector {
     handleInterrupt(sessionId: string, toolName: string, error: string): void;
     handleUserPrompt(sessionId: string, prompt: string): void;
     handleToolSuccess(sessionId: string, toolName: string, toolInput: Record<string, unknown>, exitCode?: number): void;
+    handleToolFailure(sessionId: string, toolName: string, error: string): void;
     handleStop(sessionId: string): void;
     getSessionSummary(sessionId: string): SessionSummary;
     private isTestRunnerCommand;

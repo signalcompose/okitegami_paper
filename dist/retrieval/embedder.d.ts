@@ -1,6 +1,7 @@
 /**
  * Embedding generation — SPECIFICATION Section 1.3, 4.3
- * Uses @xenova/transformers with all-MiniLM-L6-v2 (384 dimensions).
+ * Uses @xenova/transformers with paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions).
+ * Supports 50+ languages including Japanese.
  */
 declare const EMBEDDING_DIM = 384;
 export declare class Embedder {

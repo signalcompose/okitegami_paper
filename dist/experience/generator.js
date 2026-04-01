@@ -4,7 +4,7 @@
  * Stateless: receives SessionSummary + signals, returns ExperienceEntry candidates.
  * Caller is responsible for persistence via ExperienceStore.create().
  */
-import { computeFailureStrength, computeSuccessStrength, computeCorrectiveStrength, } from "./scoring.js";
+import { computeFailureStrength, computeSuccessStrength } from "./scoring.js";
 import { extractRetrievalKeys } from "./keywords.js";
 export class ExperienceGenerator {
     options;
@@ -27,47 +27,29 @@ export class ExperienceGenerator {
             }
             return retrievalKeys;
         };
-        // Failure entry from interrupt
-        if (summary.was_interrupted) {
-            const strength = computeFailureStrength(summary, this.options.capture_turns);
-            if (strength !== null && strength >= this.options.promotion_threshold) {
-                results.push({
-                    type: "failure",
-                    trigger: this.buildTrigger(idx, "interrupt"),
-                    action: this.buildAction(idx, "interrupt"),
-                    outcome: this.buildOutcome(idx, "interrupt"),
-                    retrieval_keys: getKeys(),
-                    signal_strength: strength,
-                    signal_type: "interrupt_with_dialogue",
-                    session_id,
-                    timestamp,
-                    interrupt_context: this.buildInterruptContext(idx),
-                });
-            }
+        // Failure entry: corrective-driven (interrupt is a modifier, not primary signal)
+        const failureStrength = computeFailureStrength(summary);
+        if (failureStrength !== null && failureStrength >= this.options.promotion_threshold) {
+            const context = summary.was_interrupted ? "interrupt" : "corrective";
+            const signalType = summary.was_interrupted
+                ? "interrupt_with_dialogue"
+                : "corrective_instruction";
+            results.push({
+                type: "failure",
+                trigger: this.buildTrigger(idx, context),
+                action: this.buildAction(idx, context),
+                outcome: this.buildOutcome(idx, context),
+                retrieval_keys: getKeys(),
+                signal_strength: failureStrength,
+                signal_type: signalType,
+                session_id,
+                timestamp,
+                ...(summary.was_interrupted ? { interrupt_context: this.buildInterruptContext(idx) } : {}),
+            });
         }
-        // Failure entry from corrective instructions (independent of interrupt — different signal types)
-        if (summary.corrective_instruction_count >= 3) {
-            const corrStrength = computeCorrectiveStrength(summary.corrective_instruction_count);
-            if (corrStrength !== null && corrStrength >= this.options.promotion_threshold) {
-                results.push({
-                    type: "failure",
-                    trigger: this.buildTrigger(idx, "corrective"),
-                    action: this.buildAction(idx, "corrective"),
-                    outcome: this.buildOutcome(idx, "corrective"),
-                    retrieval_keys: getKeys(),
-                    signal_strength: corrStrength,
-                    signal_type: "corrective_instruction",
-                    session_id,
-                    timestamp,
-                });
-            }
-        }
-        // Success entry: only if not interrupted and corrective < 3
-        if (!summary.was_interrupted && summary.corrective_instruction_count < 3) {
-            // TODO: Phase 2 only records tool_success events (no tool_failure type).
-            // totalToolCalls == tool_success, so toolSuccessRatio is always 1.0.
-            // When tool_failure events are added, pass total (success + failure) here.
-            const totalToolCalls = summary.counts.tool_success;
+        // Success entry: only when corrective_instruction_count == 0 (failure strength was null)
+        if (failureStrength === null) {
+            const totalToolCalls = summary.counts.tool_success + summary.counts.tool_failure;
             const strength = computeSuccessStrength(summary, totalToolCalls);
             if (strength !== null && strength >= this.options.promotion_threshold) {
                 results.push({
