@@ -23,7 +23,7 @@
         "hooks": [{
           "type": "command",
           "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/session-end.js",
-          "timeout": 10000
+          "timeout": 15000
         }]
       }
     ],
