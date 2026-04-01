@@ -176,7 +176,7 @@ export class ExperienceGenerator {
       return `Agent used ${toolStr}, received corrective feedback`;
     }
     if (idx.lastAssistantMessage) {
-      return `Agent used ${toolStr}: ${idx.lastAssistantMessage}`;
+      return `Agent used ${toolStr}: ${idx.lastAssistantMessage}`.slice(0, 500);
     }
     return `Agent completed task using ${toolStr}`;
   }
@@ -194,7 +194,7 @@ export class ExperienceGenerator {
     }
     if (idx.lastAssistantMessage) {
       const prefix = idx.hasTestPass ? "Tests passed. " : "";
-      return `${prefix}${idx.lastAssistantMessage}`;
+      return `${prefix}${idx.lastAssistantMessage}`.slice(0, 500);
     }
     return idx.hasTestPass
       ? "Task completed with passing tests"

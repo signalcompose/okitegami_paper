@@ -282,6 +282,22 @@ describe("stop hook", () => {
     ctx!.cleanup();
   });
 
+  it("skips recording when stop_hook_active is true", async () => {
+    setupEnv();
+    await handleStop(
+      JSON.stringify({
+        session_id: "s8c",
+        stop_hook_active: true,
+        last_assistant_message: "Should not be recorded",
+      })
+    );
+
+    const ctx = await bootstrapHook('{"session_id":"s8c"}');
+    const signals = ctx!.signalStore.getBySession("s8c");
+    expect(signals).toHaveLength(0);
+    ctx!.cleanup();
+  });
+
   it("does nothing when mode is disabled", async () => {
     setupEnv("disabled");
     await handleStop(JSON.stringify({ session_id: "s9" }));
