@@ -251,9 +251,14 @@ describe("stop hook", () => {
     }
   });
 
-  it("records stop signal", async () => {
+  it("records stop signal with last_assistant_message", async () => {
     setupEnv();
-    await handleStop(JSON.stringify({ session_id: "s8" }));
+    await handleStop(
+      JSON.stringify({
+        session_id: "s8",
+        last_assistant_message: "Task completed. All tests passing.",
+      })
+    );
 
     const ctx = await bootstrapHook('{"session_id":"s8"}');
     const signals = ctx!.signalStore.getBySession("s8");

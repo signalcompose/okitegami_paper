@@ -240,6 +240,41 @@ describe("ExperienceGenerator", () => {
       expect(result[0].outcome).toBeTruthy();
     });
 
+    it("uses last_assistant_message in success outcome when available", () => {
+      const summary = makeSummary({
+        has_test_pass: true,
+        counts: { ...makeSummary().counts, tool_success: 3, stop: 1 },
+        total_signals: 4,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("tool_success", { tool_name: "Edit", is_test_runner: false }),
+        makeSignal("tool_success", { tool_name: "Bash", is_test_runner: true, test_passed: true }),
+        makeSignal("stop", { last_assistant_message: "Refactoring complete. All 42 tests pass." }),
+      ];
+
+      const result = generator.generate({ session_id: "test-session", summary, signals });
+
+      expect(result[0].outcome).toContain("Refactoring complete");
+    });
+
+    it("uses last_assistant_message in success action when available", () => {
+      const summary = makeSummary({
+        has_test_pass: false,
+        counts: { ...makeSummary().counts, tool_success: 2, stop: 1 },
+        total_signals: 3,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("tool_success", { tool_name: "Edit", is_test_runner: false }),
+        makeSignal("stop", {
+          last_assistant_message: "I implemented the auth middleware using JWT tokens.",
+        }),
+      ];
+
+      const result = generator.generate({ session_id: "test-session", summary, signals });
+
+      expect(result[0].action).toContain("auth middleware");
+    });
+
     it("populates interrupt_context for interrupt + corrective failure", () => {
       const summary = makeSummary({
         was_interrupted: true,
