@@ -74,6 +74,13 @@ export class SignalCollector {
     });
   }
 
+  handleToolFailure(sessionId: string, toolName: string, error: string): void {
+    this.store.addSignal(sessionId, "tool_failure", {
+      tool_name: toolName,
+      error,
+    });
+  }
+
   handleStop(sessionId: string): void {
     this.store.addSignal(sessionId, "stop", null);
   }

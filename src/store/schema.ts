@@ -52,6 +52,32 @@ function migrateDatabase(db: AdaptedDatabase): void {
   }
   // Always ensure project index exists (handles both fresh and migrated DBs)
   db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_project ON experiences(project)");
+
+  // Migration: rebuild session_signals CHECK constraint to include new event types (e.g. tool_failure).
+  // SQLite does not support ALTER CONSTRAINT, so we recreate the table if the constraint is stale.
+  const createSql = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='session_signals'")
+    .get() as { sql: string } | undefined;
+  if (createSql && !createSql.sql.includes("'tool_failure'")) {
+    const rebuildSql = [
+      "ALTER TABLE session_signals RENAME TO session_signals_old",
+      `CREATE TABLE session_signals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        event_type TEXT NOT NULL CHECK(event_type IN (${EVENT_TYPES_SQL})),
+        data TEXT,
+        timestamp TEXT NOT NULL
+      )`,
+      `INSERT INTO session_signals (id, session_id, event_type, data, timestamp)
+        SELECT id, session_id, event_type, data, timestamp FROM session_signals_old`,
+      "DROP TABLE session_signals_old",
+      "CREATE INDEX IF NOT EXISTS idx_session_signals_session_id ON session_signals(session_id)",
+      "CREATE INDEX IF NOT EXISTS idx_session_signals_session_event ON session_signals(session_id, event_type)",
+    ];
+    for (const sql of rebuildSql) {
+      db.exec(sql);
+    }
+  }
 }
 
 export async function initializeDatabase(dbPath: string): Promise<AdaptedDatabase> {
