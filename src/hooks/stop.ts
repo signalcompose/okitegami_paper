@@ -12,7 +12,11 @@ export async function handleStop(stdin: string): Promise<void> {
   try {
     const { input, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "Stop");
-    collector.handleStop(sessionId);
+    const lastAssistantMessage = input.last_assistant_message;
+    collector.handleStop(
+      sessionId,
+      typeof lastAssistantMessage === "string" ? lastAssistantMessage : undefined
+    );
   } finally {
     ctx.cleanup();
   }

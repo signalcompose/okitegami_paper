@@ -81,8 +81,13 @@ export class SignalCollector {
     });
   }
 
-  handleStop(sessionId: string): void {
-    this.store.addSignal(sessionId, "stop", null);
+  handleStop(sessionId: string, lastAssistantMessage?: string): void {
+    if (lastAssistantMessage) {
+      const truncated = lastAssistantMessage.slice(0, 500);
+      this.store.addSignal(sessionId, "stop", { last_assistant_message: truncated });
+    } else {
+      this.store.addSignal(sessionId, "stop", null);
+    }
   }
 
   getSessionSummary(sessionId: string): SessionSummary {

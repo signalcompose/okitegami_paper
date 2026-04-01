@@ -72,6 +72,7 @@ export class ExperienceGenerator {
         const toolNames = new Set();
         const postInterruptPrompts = [];
         let hasTestPass = false;
+        let lastAssistantMessage = null;
         for (const signal of signals) {
             const existing = byType.get(signal.event_type);
             if (existing) {
@@ -92,8 +93,14 @@ export class ExperienceGenerator {
             if (signal.event_type === "tool_success" && signal.data?.test_passed === true) {
                 hasTestPass = true;
             }
+            if (signal.event_type === "stop") {
+                const msg = signal.data?.last_assistant_message;
+                if (typeof msg === "string" && msg) {
+                    lastAssistantMessage = msg;
+                }
+            }
         }
-        return { byType, toolNames: [...toolNames], postInterruptPrompts, hasTestPass };
+        return { byType, toolNames: [...toolNames], postInterruptPrompts, hasTestPass, lastAssistantMessage };
     }
     buildTrigger(idx, context) {
         if (context === "interrupt") {
@@ -123,6 +130,9 @@ export class ExperienceGenerator {
         if (context === "corrective") {
             return `Agent used ${toolStr}, received corrective feedback`;
         }
+        if (idx.lastAssistantMessage) {
+            return `Agent: ${idx.lastAssistantMessage.slice(0, 200)}`;
+        }
         return `Agent completed task using ${toolStr}`;
     }
     buildOutcome(idx, context) {
@@ -135,6 +145,10 @@ export class ExperienceGenerator {
             const corrections = idx.byType.get("corrective_instruction") ?? [];
             const count = corrections.length;
             return `Received ${count} corrective instruction${count > 1 ? "s" : ""}`;
+        }
+        if (idx.lastAssistantMessage) {
+            const prefix = idx.hasTestPass ? "Tests passed. " : "";
+            return `${prefix}${idx.lastAssistantMessage.slice(0, 200)}`;
         }
         return idx.hasTestPass
             ? "Task completed with passing tests"
