@@ -26,12 +26,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
     // Idempotency guard: skip if corrective signals already exist for this session
-    const existingSignals = signalStore.getBySession(sessionId);
-    const hasCorrectiveSignals = existingSignals.some(
-      (s) => s.event_type === "corrective_instruction"
-    );
-
-    if (!hasCorrectiveSignals) {
+    if (!signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
       const transcriptPath = input.transcript_path;
       if (typeof transcriptPath === "string" && transcriptPath) {
         try {

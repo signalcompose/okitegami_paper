@@ -11,6 +11,7 @@ export class SessionSignalStore {
     clearSessionStmt;
     countSpecificTypesStmt;
     hasTestPassStmt;
+    hasSignalOfTypeStmt;
     constructor(db) {
         this.db = db;
         this.insertStmt = db.prepare("INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)");
@@ -19,6 +20,7 @@ export class SessionSignalStore {
         this.clearSessionStmt = db.prepare("DELETE FROM session_signals WHERE session_id = ?");
         this.countSpecificTypesStmt = db.prepare("SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND event_type IN (?, ?) GROUP BY event_type");
         this.hasTestPassStmt = db.prepare("SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = 'tool_success' AND json_extract(data, '$.test_passed') = 1 LIMIT 1");
+        this.hasSignalOfTypeStmt = db.prepare("SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = ? LIMIT 1");
     }
     addSignal(sessionId, eventType, data) {
         const timestamp = new Date().toISOString();
@@ -61,6 +63,9 @@ export class SessionSignalStore {
     hasTestPass(sessionId) {
         const row = this.hasTestPassStmt.get(sessionId);
         return row != null;
+    }
+    hasSignalOfType(sessionId, eventType) {
+        return this.hasSignalOfTypeStmt.get(sessionId, eventType) != null;
     }
     clearSession(sessionId) {
         const result = this.clearSessionStmt.run(sessionId);

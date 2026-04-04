@@ -22,6 +22,7 @@ export class SessionSignalStore {
   private clearSessionStmt: Statement;
   private countSpecificTypesStmt: Statement;
   private hasTestPassStmt: Statement;
+  private hasSignalOfTypeStmt: Statement;
 
   constructor(private db: AdaptedDatabase) {
     this.insertStmt = db.prepare(
@@ -39,6 +40,9 @@ export class SessionSignalStore {
     );
     this.hasTestPassStmt = db.prepare(
       "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = 'tool_success' AND json_extract(data, '$.test_passed') = 1 LIMIT 1"
+    );
+    this.hasSignalOfTypeStmt = db.prepare(
+      "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = ? LIMIT 1"
     );
   }
 
@@ -106,6 +110,10 @@ export class SessionSignalStore {
   hasTestPass(sessionId: string): boolean {
     const row = this.hasTestPassStmt.get(sessionId);
     return row != null;
+  }
+
+  hasSignalOfType(sessionId: string, eventType: EventType): boolean {
+    return this.hasSignalOfTypeStmt.get(sessionId, eventType) != null;
   }
 
   clearSession(sessionId: string): number {

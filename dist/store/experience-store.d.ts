@@ -16,6 +16,7 @@ export declare class ExperienceStore {
     private stmtAllWithEmbedding;
     private stmtAllWithEmbeddingByType;
     private stmtOutcomesBySession;
+    private stmtExistsForSession;
     private stmtCrossProjectReport;
     private stmtSignalSummaryBySession;
     constructor(db: AdaptedDatabase, config: AcmConfig);

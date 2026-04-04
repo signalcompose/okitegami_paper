@@ -12,12 +12,14 @@ export declare class SessionSignalStore {
     private clearSessionStmt;
     private countSpecificTypesStmt;
     private hasTestPassStmt;
+    private hasSignalOfTypeStmt;
     constructor(db: AdaptedDatabase);
     addSignal(sessionId: string, eventType: EventType, data: Record<string, unknown> | null): SessionSignal;
     getBySession(sessionId: string): SessionSignal[];
     countByType(sessionId: string): Record<EventType, number>;
     countSpecificTypes(sessionId: string, type1: EventType, type2: EventType): Record<string, number>;
     hasTestPass(sessionId: string): boolean;
+    hasSignalOfType(sessionId: string, eventType: EventType): boolean;
     clearSession(sessionId: string): number;
     private parseData;
 }
