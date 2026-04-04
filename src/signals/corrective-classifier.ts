@@ -208,7 +208,7 @@ export async function classifyCorrections(
       message: turn.humanMessage,
       corrective: true,
       confidence: classification.confidence,
-      reason: classification.reason,
+      reason: classification.reason ?? "no reason provided",
       method: "llm",
     });
   }

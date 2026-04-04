@@ -6,7 +6,7 @@
  * and detect interrupt patterns. Uses `permissionMode` field
  * as the discriminator for real human input (vs tool results).
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 // --- Constants ---
 const INTERRUPT_PATTERNS = [
     "[Request interrupted by user]",
@@ -28,15 +28,16 @@ function isInterrupt(entry) {
     return INTERRUPT_PATTERNS.includes(text);
 }
 function isRealUserMessage(entry) {
-    return (entry.type === "user" &&
-        entry.permissionMode != null &&
-        entry.message != null);
+    return entry.type === "user" && entry.permissionMode != null && entry.message != null;
 }
 export function parseTranscript(transcriptPath) {
-    if (!existsSync(transcriptPath)) {
+    let raw;
+    try {
+        raw = readFileSync(transcriptPath, "utf-8");
+    }
+    catch {
         return { turns: [], interruptCount: 0, totalHumanMessages: 0 };
     }
-    const raw = readFileSync(transcriptPath, "utf-8");
     if (!raw.trim()) {
         return { turns: [], interruptCount: 0, totalHumanMessages: 0 };
     }

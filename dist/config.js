@@ -8,6 +8,8 @@ const KNOWN_CONFIG_KEYS = new Set([
     "capture_turns",
     "promotion_threshold",
     "db_path",
+    "ollama_url",
+    "ollama_model",
 ]);
 export function expandTilde(filePath) {
     if (filePath === "~") {

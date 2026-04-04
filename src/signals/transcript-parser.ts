@@ -7,7 +7,7 @@
  * as the discriminator for real human input (vs tool results).
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 // --- Public types ---
 
@@ -78,11 +78,12 @@ function isRealUserMessage(entry: TranscriptEntry): boolean {
 }
 
 export function parseTranscript(transcriptPath: string): ParsedTranscript {
-  if (!existsSync(transcriptPath)) {
+  let raw: string;
+  try {
+    raw = readFileSync(transcriptPath, "utf-8");
+  } catch {
     return { turns: [], interruptCount: 0, totalHumanMessages: 0 };
   }
-
-  const raw = readFileSync(transcriptPath, "utf-8");
   if (!raw.trim()) {
     return { turns: [], interruptCount: 0, totalHumanMessages: 0 };
   }
