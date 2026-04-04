@@ -264,5 +264,54 @@ describe("CorrectiveClassifier", () => {
       const results = await classifyCorrections(transcript);
       expect(results).toHaveLength(0);
     });
+
+    it("falls back when Ollama returns valid JSON but not an array", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: [] }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: JSON.stringify({ error: "something went wrong" }),
+        }),
+      });
+
+      const transcript = makeTranscript([makeTurn("Start", 0), makeTurn("Stop that", 1, true)], 1);
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(1);
+      expect(results[0].method).toBe("structural");
+    });
+
+    it("skips malformed LLM result items and keeps valid ones", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: [] }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: JSON.stringify([
+            { index: 1, corrective: true, confidence: 0.85, reason: "valid item" },
+            { index: 2, corrective: true, confidence: "high", reason: "invalid confidence type" },
+            { index: "three", corrective: true, confidence: 0.9, reason: "invalid index type" },
+          ]),
+        }),
+      });
+
+      const transcript = makeTranscript([
+        makeTurn("Initial", 0),
+        makeTurn("No, wrong", 1),
+        makeTurn("Still wrong", 2),
+        makeTurn("Try again", 3),
+      ]);
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(1);
+      expect(results[0].message.text).toBe("No, wrong");
+      expect(results[0].confidence).toBe(0.85);
+      expect(results[0].method).toBe("llm");
+    });
   });
 });

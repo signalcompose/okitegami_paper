@@ -61,6 +61,9 @@ export function loadConfig(pathOrOptions) {
         ...DEFAULT_CONFIG,
         ...overrides,
         db_path: expandTilde(dbPath),
+        // Normalize empty strings to undefined so defaults are used
+        ollama_url: overrides.ollama_url || undefined,
+        ollama_model: overrides.ollama_model || undefined,
     };
     validate(config);
     return config;
