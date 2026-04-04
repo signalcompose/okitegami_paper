@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
-import { formatInjection, formatSignalInstruction } from "../retrieval/injector.js";
+import { formatInjection } from "../retrieval/injector.js";
 const QUERY_MAX_LENGTH = 200;
 /**
  * Extract the first user message text from a Claude Code transcript JSONL file.
@@ -107,11 +107,9 @@ export async function handleSessionStart(stdin) {
             const transcriptPath = ctx.input.transcript_path;
             const queryText = buildQueryText(projectName, transcriptPath);
             const queryEmbedding = await embedder.embed(queryText);
-            const experienceText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
-            const instructionText = formatSignalInstruction(sessionId);
-            const fullInjection = [experienceText, instructionText].filter(Boolean).join("\n\n");
-            if (fullInjection) {
-                process.stdout.write(fullInjection);
+            const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+            if (injectionText) {
+                process.stdout.write(injectionText);
             }
         }
         finally {

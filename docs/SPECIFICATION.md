@@ -41,7 +41,7 @@ ACM (Associative Context Memory) is an MCP server that integrates with Claude Co
 ```
 Claude Code
   ├── SessionStart hook    → ACM: retrieve & inject relevant experiences
-  ├── UserPromptSubmit hook → ACM: capture post-interrupt dialogue, detect corrective instructions
+  ├── UserPromptSubmit hook → ACM: capture post-interrupt dialogue
   ├── PostToolUse hook      → ACM: record successful tool completions
   ├── PostToolUseFailure hook → ACM: detect interrupts (is_interrupt=true), record tool failures
   ├── Stop hook             → ACM: mark normal completion (non-firing = interrupt confirmation)
@@ -116,7 +116,7 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 | Test pass + uninterrupted | 0.70–0.85 | Positive | toolSuccessRatio = tool_success/(tool_success+tool_failure) |
 | Uninterrupted (no tests) | 0.40–0.60 | Positive | toolSuccessRatio = tool_success/(tool_success+tool_failure) |
 
-**Design rationale**: Interrupt alone is ambiguous (may be benign). Corrective instruction count (reported by Claude Code via `acm_record_signal`) is the primary failure signal. Interrupt acts as a +0.10 strength modifier when corrective instructions are present.
+**Design rationale**: Interrupt alone is ambiguous (may be benign). Corrective instruction count (detected via transcript analysis at session-end) is the primary failure signal. Interrupt acts as a +0.10 strength modifier when corrective instructions are present.
 
 ---
 
@@ -140,9 +140,8 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 2. Generate embedding from query text
 3. Query experience DB: top-K (K=5) entries by cosine similarity
 4. Format injection text (compact format, see Section 3.3 of paper)
-5. Append Signal Detection instruction (instructs Claude to report corrective feedback via `acm_record_signal`)
-6. Return injection as hook output (system prompt addition)
-7. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
+5. Return injection as hook output (system prompt addition)
+6. Record injection log as `injection` event in `session_signals` (injected entry IDs, count, query text)
 
 **Query construction rationale**: The query must occupy the same semantic space as stored experience embeddings (which use `trigger + retrieval_keys`). Using the user's task description aligns naturally with `trigger` text, which is derived from corrective prompts or tool contexts.
 
@@ -179,7 +178,7 @@ Past relevant experience:
    - Capture user message as post-interrupt dialogue
    - Increment `turns_since_interrupt`
 
-**Note**: Corrective instruction detection is no longer performed by regex pattern matching. Instead, Claude Code itself recognizes corrective feedback and reports it via the `acm_record_signal` MCP tool (see Signal Detection instruction in Section 3.1).
+**Note**: Corrective instruction detection is handled by transcript analysis at session-end (see Section 3.6 SessionEnd Hook). The UserPromptSubmit hook captures post-interrupt dialogue only.
 
 ### 3.4 PostToolUse Hook
 
@@ -205,21 +204,36 @@ Past relevant experience:
 
 ### 3.6 SessionEnd Hook
 
-**Purpose**: Finalize experience entries and persist to DB with embeddings.
+**Purpose**: Detect corrective instructions via transcript analysis, finalize experience entries, and persist to DB with embeddings.
 
 **Behavior**:
-1. Aggregate all signals collected during session
-2. Determine session outcome:
+
+**Phase 1 — Transcript-based corrective detection** (Issue #83):
+1. Read `transcript_path` from hook input
+2. Parse JSONL transcript using `TranscriptParser`:
+   - Filter real user messages via `permissionMode` field presence
+   - Detect interrupts via literal text pattern `"[Request interrupted by user]"`
+   - Construct turn sequence with interrupt markers
+3. Classify user messages using `CorrectiveClassifier`:
+   - **Primary**: Local LLM (Ollama, default model: `gemma2:2b`, `temperature: 0`)
+   - **Fallback**: If Ollama unavailable, use structural detection (interrupt-only)
+   - First message in session is excluded (cannot be corrective)
+4. Record detected corrections as `corrective_instruction` signals via `signalStore.addSignal()`
+   - Signal data includes: `prompt` (truncated), `reason`, `confidence`, `method` (llm|structural)
+
+**Phase 2 — Experience generation** (existing):
+5. Aggregate all signals collected during session (including newly added corrective signals)
+6. Determine session outcome:
    - If `corrective_instructions > 0`: generate failure entry (corrective-driven)
      - If also interrupted: use `interrupt_with_dialogue` signal type, add interrupt_context
      - If not interrupted: use `corrective_instruction` signal type
    - If `interrupted && corrective_instructions == 0`: ambiguous — no entry generated
    - If `!interrupted && corrective_instructions == 0`: generate success entry
-3. Generate retrieval keys from session content (keyword extraction)
-4. Compute signal strength score per scoring table
-5. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
-6. Persist entries with embedding to experience DB via `createWithEmbedding()`
-7. Log to session log
+7. Generate retrieval keys from session content (keyword extraction)
+8. Compute signal strength score per scoring table
+9. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
+10. Persist entries with embedding to experience DB via `createWithEmbedding()`
+11. Log to session log
 
 **Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 
@@ -361,7 +375,7 @@ ACM itself should minimize context consumption. Injection text target: <500 toke
 |--------|-------------|-----------|
 | Task completion rate | Test pass rate (automated, 0–1) | RQ1 |
 | Interrupt count | PostToolUseFailure.is_interrupt events | RQ1, RQ3 |
-| Corrective instruction count | UserPromptSubmit pattern detection | RQ1, RQ3 |
+| Corrective instruction count | Transcript analysis at session-end (CorrectiveClassifier) | RQ1, RQ3 |
 | Context efficiency | Tokens used / task complexity | RQ4 |
 | Cross-session improvement | Δ completion rate, session 1→5 | RQ1, RQ2 |
 | Signal-quality correlation | Pearson r: signal strength × downstream success | RQ3 |

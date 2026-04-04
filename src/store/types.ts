@@ -66,6 +66,8 @@ export interface AcmConfig {
   capture_turns: number; // Post-interrupt turns to capture
   promotion_threshold: number; // Minimum signal strength to persist
   db_path: string; // SQLite DB path (supports ~)
+  ollama_url?: string; // Ollama API URL (default: http://localhost:11434)
+  ollama_model?: string; // Ollama model for corrective classification (default: gemma2:2b)
 }
 
 export const DEFAULT_CONFIG: AcmConfig = {

@@ -9,6 +9,8 @@ const KNOWN_CONFIG_KEYS = new Set<string>([
   "capture_turns",
   "promotion_threshold",
   "db_path",
+  "ollama_url",
+  "ollama_model",
 ]);
 
 export function expandTilde(filePath: string): string {
@@ -81,6 +83,9 @@ export function loadConfig(pathOrOptions?: string | LoadConfigOptions): AcmConfi
     ...DEFAULT_CONFIG,
     ...overrides,
     db_path: expandTilde(dbPath),
+    // Normalize empty strings to undefined so defaults are used
+    ollama_url: overrides.ollama_url || undefined,
+    ollama_model: overrides.ollama_model || undefined,
   };
 
   validate(config);

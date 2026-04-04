@@ -5,9 +5,4 @@
  */
 import type { RetrievalResult } from "./types.js";
 export declare function formatInjection(results: RetrievalResult[]): string;
-/**
- * Format signal detection instruction for Claude Code.
- * Instructs Claude to report corrective feedback via acm_record_signal.
- */
-export declare function formatSignalInstruction(sessionId: string): string;
 //# sourceMappingURL=injector.d.ts.map

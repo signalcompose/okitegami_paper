@@ -53,6 +53,8 @@ export interface AcmConfig {
     capture_turns: number;
     promotion_threshold: number;
     db_path: string;
+    ollama_url?: string;
+    ollama_model?: string;
 }
 export declare const DEFAULT_CONFIG: AcmConfig;
 //# sourceMappingURL=types.d.ts.map

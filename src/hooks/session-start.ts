@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
-import { formatInjection, formatSignalInstruction } from "../retrieval/injector.js";
+import { formatInjection } from "../retrieval/injector.js";
 
 const QUERY_MAX_LENGTH = 200;
 
@@ -118,12 +118,10 @@ export async function handleSessionStart(stdin: string): Promise<void> {
       const queryText = buildQueryText(projectName, transcriptPath);
 
       const queryEmbedding = await embedder.embed(queryText);
-      const experienceText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
-      const instructionText = formatSignalInstruction(sessionId);
-      const fullInjection = [experienceText, instructionText].filter(Boolean).join("\n\n");
+      const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
 
-      if (fullInjection) {
-        process.stdout.write(fullInjection);
+      if (injectionText) {
+        process.stdout.write(injectionText);
       }
     } finally {
       embedder.dispose();
