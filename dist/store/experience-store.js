@@ -13,6 +13,7 @@ export class ExperienceStore {
     stmtAllWithEmbedding;
     stmtAllWithEmbeddingByType;
     stmtOutcomesBySession;
+    stmtExistsForSession;
     stmtCrossProjectReport;
     stmtSignalSummaryBySession;
     constructor(db, config) {
@@ -31,6 +32,7 @@ export class ExperienceStore {
         this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL");
         this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?");
         this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
+        this.stmtExistsForSession = this.db.prepare("SELECT 1 FROM experiences WHERE session_id = ? LIMIT 1");
         this.stmtCrossProjectReport = this.db.prepare(`
       SELECT project, COUNT(*) as total_entries,
         SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
@@ -61,6 +63,9 @@ export class ExperienceStore {
         if (!row)
             return null;
         return this.rowToEntry(row);
+    }
+    hasEntriesForSession(sessionId) {
+        return this.stmtExistsForSession.get(sessionId) !== undefined;
     }
     list(options) {
         const rows = this.stmtList.all(options?.limit ?? -1);

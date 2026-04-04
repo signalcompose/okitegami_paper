@@ -3,8 +3,23 @@
  * Issue #83: transcript-based corrective instruction detection
  *
  * Primary: Uses local Ollama LLM to classify user messages as corrective or not.
- * Fallback: When Ollama is unavailable, uses structural detection (interrupt-only).
+ * Fallback: When Ollama is unavailable, uses heuristic structural detection.
  */
+// --- Message Normalization ---
+/**
+ * Normalize message text for classification by removing Claude Code UI artifacts.
+ * Raw text is preserved in HumanMessage.text; this is applied before classification only.
+ */
+export function normalizeForClassification(text) {
+    let normalized = text;
+    // Pattern A: remove mode modifier suffixes (ultrathink/ultrathik)
+    normalized = normalized.replace(/\s+(?:ultrathink|ultrathik)\s*$/gi, "");
+    // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (running hooks…)\n\n")
+    // Anchored on "running hooks" to avoid false-positives on common words like "Thinking".
+    // \p{So} matches CLI spinner glyphs (✶, ✢, etc.) but not ASCII math operators.
+    normalized = normalized.replace(/^[\p{So}][^\n]*running\s+(?:stop\s+)?hooks[^\n]*\n{1,2}/u, "");
+    return normalized.trim();
+}
 // --- Defaults ---
 const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 const DEFAULT_MODEL = "gemma2:2b";
@@ -99,20 +114,55 @@ async function classifyWithOllama(messages, config) {
     }
 }
 // --- Structural Fallback ---
+const STRUCTURAL_CONFIDENCE = 0.4;
+const MIN_CORRECTIVE_LENGTH = 6;
+const CONTINUATION_TOKENS = new Set([
+    "続けて",
+    "continue",
+    "go on",
+    "yes",
+    "no",
+    "ok",
+    "okay",
+    "y",
+    "n",
+    "1",
+    "2",
+    "はい",
+    "いいえ",
+    "ごめん続けて",
+    "動いてる？",
+]);
+const AGREEMENT_SUFFIXES = ["ましょう", "ください", "お願いします"];
+const CONFIRMATION_PATTERNS = [
+    /認識でいいですか[？?]?$/,
+    /でいいですか[？?]?$/,
+    /^あー.{0,10}のだね[。.]?$/,
+];
 function structuralFallback(transcript) {
     const results = [];
     for (const turn of transcript.turns) {
         if (turn.index === 0)
-            continue; // First message cannot be corrective
-        if (turn.isAfterInterrupt) {
-            results.push({
-                message: turn.humanMessage,
-                corrective: true,
-                confidence: 0.9,
-                reason: "message immediately follows user interrupt",
-                method: "structural",
-            });
-        }
+            continue;
+        if (!turn.isAfterInterrupt)
+            continue;
+        const text = normalizeForClassification(turn.humanMessage.text).trim();
+        if (text.length < MIN_CORRECTIVE_LENGTH)
+            continue;
+        if (CONTINUATION_TOKENS.has(text.toLowerCase()))
+            continue;
+        // Exclude agreement/confirmation patterns
+        if (AGREEMENT_SUFFIXES.some((s) => text.endsWith(s)))
+            continue;
+        if (CONFIRMATION_PATTERNS.some((p) => p.test(text)))
+            continue;
+        results.push({
+            message: turn.humanMessage,
+            corrective: true,
+            confidence: STRUCTURAL_CONFIDENCE,
+            reason: "message immediately follows user interrupt",
+            method: "structural",
+        });
     }
     return results;
 }
@@ -134,9 +184,10 @@ export async function classifyCorrections(transcript, config) {
         return structuralFallback(transcript);
     }
     // Prepare messages for LLM (skip first message — cannot be corrective)
+    // Normalize text to remove UI artifacts before sending to LLM
     const messagesToClassify = transcript.turns
         .filter((t) => t.index > 0)
-        .map((t) => ({ index: t.index, text: t.humanMessage.text }));
+        .map((t) => ({ index: t.index, text: normalizeForClassification(t.humanMessage.text) }));
     if (messagesToClassify.length === 0)
         return [];
     // Try LLM classification
@@ -158,8 +209,10 @@ export async function classifyCorrections(transcript, config) {
         if (classification.confidence < resolvedConfig.minConfidence)
             continue;
         const turn = transcript.turns.find((t) => t.index === classification.index);
-        if (!turn)
+        if (!turn) {
+            console.error(`[ACM] classifyCorrections: LLM returned index ${classification.index} not found in transcript (${transcript.turns.length} turns), skipping`);
             continue;
+        }
         results.push({
             message: turn.humanMessage,
             corrective: true,

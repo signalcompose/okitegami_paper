@@ -25,34 +25,47 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     const sessionId = requireInputString(input, "session_id", "SessionEnd");
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
-    const transcriptPath = input.transcript_path;
-    if (typeof transcriptPath === "string" && transcriptPath) {
-      try {
-        const parsed = parseTranscript(transcriptPath);
-        if (parsed.turns.length > 1) {
-          const corrections = await classifyCorrections(parsed, {
-            ollamaUrl: config.ollama_url,
-            model: config.ollama_model,
-          });
-          for (const c of corrections) {
-            signalStore.addSignal(sessionId, "corrective_instruction", {
-              prompt: c.message.text.slice(0, 200),
-              reason: c.reason,
-              confidence: c.confidence,
-              method: c.method,
+    if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
+      console.error(
+        `[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`
+      );
+    } else {
+      const transcriptPath = input.transcript_path;
+      if (typeof transcriptPath === "string" && transcriptPath) {
+        try {
+          const parsed = parseTranscript(transcriptPath);
+          if (parsed.turns.length > 1) {
+            const corrections = await classifyCorrections(parsed, {
+              ollamaUrl: config.ollama_url,
+              model: config.ollama_model,
             });
+            for (const c of corrections) {
+              signalStore.addSignal(sessionId, "corrective_instruction", {
+                prompt: c.message.text.slice(0, 200),
+                reason: c.reason,
+                confidence: c.confidence,
+                method: c.method,
+              });
+            }
           }
+        } catch (err) {
+          console.error(
+            `[ACM] session-end: transcript analysis failed for "${transcriptPath}", ` +
+              `continuing without corrective signals: ` +
+              `${err instanceof Error ? err.message : String(err)}`
+          );
         }
-      } catch (err) {
-        console.error(
-          `[ACM] session-end: transcript analysis failed for "${transcriptPath}", ` +
-            `continuing without corrective signals: ` +
-            `${err instanceof Error ? err.message : String(err)}`
-        );
       }
     }
 
     // --- Phase 2: Experience generation (existing flow) ---
+    if (experienceStore.hasEntriesForSession(sessionId)) {
+      console.error(
+        `[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`
+      );
+      return;
+    }
+
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);
     if (summary.total_signals === 0) return;

@@ -27,6 +27,7 @@ export class ExperienceStore {
   private stmtAllWithEmbedding: Statement;
   private stmtAllWithEmbeddingByType: Statement;
   private stmtOutcomesBySession: Statement;
+  private stmtExistsForSession: Statement;
   private stmtCrossProjectReport: Statement;
   private stmtSignalSummaryBySession: Statement;
 
@@ -55,6 +56,9 @@ export class ExperienceStore {
       "SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?"
     );
     this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
+    this.stmtExistsForSession = this.db.prepare(
+      "SELECT 1 FROM experiences WHERE session_id = ? LIMIT 1"
+    );
     this.stmtCrossProjectReport = this.db.prepare(`
       SELECT project, COUNT(*) as total_entries,
         SUM(CASE WHEN type='success' THEN 1 ELSE 0 END) as success_count,
@@ -94,6 +98,10 @@ export class ExperienceStore {
 
     if (!row) return null;
     return this.rowToEntry(row);
+  }
+
+  hasEntriesForSession(sessionId: string): boolean {
+    return this.stmtExistsForSession.get(sessionId) !== undefined;
   }
 
   list(options?: { limit?: number }): ExperienceEntry[] {

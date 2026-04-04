@@ -16,6 +16,7 @@ export declare class ExperienceStore {
     private stmtAllWithEmbedding;
     private stmtAllWithEmbeddingByType;
     private stmtOutcomesBySession;
+    private stmtExistsForSession;
     private stmtCrossProjectReport;
     private stmtSignalSummaryBySession;
     constructor(db: AdaptedDatabase, config: AcmConfig);
@@ -23,6 +24,7 @@ export declare class ExperienceStore {
     create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null;
     createWithEmbedding(data: Omit<ExperienceEntry, "id">, embedding: Float32Array): ExperienceEntry | null;
     getById(id: string): ExperienceEntry | null;
+    hasEntriesForSession(sessionId: string): boolean;
     list(options?: {
         limit?: number;
     }): ExperienceEntry[];

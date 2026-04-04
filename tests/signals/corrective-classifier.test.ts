@@ -4,7 +4,11 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ParsedTranscript, TranscriptTurn } from "../../src/signals/transcript-parser.js";
-import { classifyCorrections, isOllamaAvailable } from "../../src/signals/corrective-classifier.js";
+import {
+  classifyCorrections,
+  isOllamaAvailable,
+  normalizeForClassification,
+} from "../../src/signals/corrective-classifier.js";
 
 // --- Helpers ---
 
@@ -193,7 +197,7 @@ describe("CorrectiveClassifier", () => {
       expect(results).toHaveLength(1);
       expect(results[0].corrective).toBe(true);
       expect(results[0].method).toBe("structural");
-      expect(results[0].confidence).toBe(0.9);
+      expect(results[0].confidence).toBe(0.4);
       expect(results[0].message.text).toBe("No, do it differently");
     });
 
@@ -312,6 +316,146 @@ describe("CorrectiveClassifier", () => {
       expect(results[0].message.text).toBe("No, wrong");
       expect(results[0].confidence).toBe(0.85);
       expect(results[0].method).toBe("llm");
+    });
+  });
+
+  describe("classifyCorrections — structural fallback filtering", () => {
+    it("excludes short messages from structural detection", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [
+          makeTurn("Do the task", 0),
+          makeTurn("1", 1, true),
+          makeTurn("y", 2, true),
+          makeTurn("ok", 3, true),
+        ],
+        3
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(0);
+    });
+
+    it("excludes continuation tokens from structural detection", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [
+          makeTurn("Do the task", 0),
+          makeTurn("続けて", 1, true),
+          makeTurn("continue", 2, true),
+          makeTurn("ごめん続けて", 3, true),
+        ],
+        3
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(0);
+    });
+
+    it("excludes agreement patterns from structural detection", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [
+          makeTurn("Do the task", 0),
+          makeTurn("あなたの分析の提案で進めてみましょう", 1, true),
+          makeTurn("今の方針でこのまま進めましょう", 2, true),
+        ],
+        2
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(0);
+    });
+
+    it("excludes confirmation questions from structural detection", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [
+          makeTurn("Do the task", 0),
+          makeTurn("改善プラン自体は残っていないという認識でいいですか？", 1, true),
+        ],
+        1
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(0);
+    });
+
+    it("still detects substantive corrective instructions", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [
+          makeTurn("Do the task", 0),
+          makeTurn("No, do it differently", 1, true),
+          makeTurn("報告の前にちゃんとテストして。", 2, true),
+          makeTurn("stop hookの問題は調査して。また再発してるので。", 3, true),
+        ],
+        3
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(3);
+    });
+
+    it("uses reduced confidence for structural detection", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+      const transcript = makeTranscript(
+        [makeTurn("Do the task", 0), makeTurn("No, that's wrong", 1, true)],
+        1
+      );
+
+      const results = await classifyCorrections(transcript);
+      expect(results).toHaveLength(1);
+      expect(results[0].confidence).toBe(0.4);
+    });
+  });
+
+  describe("normalizeForClassification", () => {
+    it("strips ultrathink suffix", () => {
+      expect(normalizeForClassification("テスト ultrathink")).toBe("テスト");
+    });
+
+    it("strips ultrathik suffix (typo variant)", () => {
+      expect(normalizeForClassification("テスト ultrathik")).toBe("テスト");
+    });
+
+    it("strips ultrathink case-insensitively", () => {
+      expect(normalizeForClassification("something ULTRATHINK")).toBe("something");
+    });
+
+    it("does not strip ultrathink mid-sentence", () => {
+      expect(normalizeForClassification("ultrathink is a mode")).toBe("ultrathink is a mode");
+    });
+
+    it("strips CLI status line prefix with double newline", () => {
+      const input =
+        "✶ Cerebrating… (running stop hooks… 7/8 · 3m 32s · ↓ 583 tokens)\n\nまたhookが邪魔してます。";
+      expect(normalizeForClassification(input)).toBe("またhookが邪魔してます。");
+    });
+
+    it("strips CLI status line prefix with single newline", () => {
+      const input = "✢ Churning… (running hooks… 5/8 · 1m 20s)\nContinue please";
+      expect(normalizeForClassification(input)).toBe("Continue please");
+    });
+
+    it("preserves normal messages", () => {
+      expect(normalizeForClassification("Fix the bug in auth.ts")).toBe("Fix the bug in auth.ts");
+    });
+
+    it("handles both patterns simultaneously", () => {
+      const input = "✶ Cerebrating… (running stop hooks…)\n\nまたhookが邪魔 ultrathink";
+      expect(normalizeForClassification(input)).toBe("またhookが邪魔");
+    });
+
+    it("returns empty string for status-line-only messages", () => {
+      const input = "✶ Cerebrating… (running stop hooks… 7/8 · 3m 32s)\n\n";
+      expect(normalizeForClassification(input)).toBe("");
     });
   });
 });
