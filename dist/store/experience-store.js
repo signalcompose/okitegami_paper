@@ -62,6 +62,10 @@ export class ExperienceStore {
             return null;
         return this.rowToEntry(row);
     }
+    hasEntriesForSession(sessionId) {
+        const rows = this.stmtOutcomesBySession.all(sessionId);
+        return rows.length > 0;
+    }
     list(options) {
         const rows = this.stmtList.all(options?.limit ?? -1);
         return rows.map((row) => this.rowToEntry(row));

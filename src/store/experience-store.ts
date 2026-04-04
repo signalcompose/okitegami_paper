@@ -96,6 +96,11 @@ export class ExperienceStore {
     return this.rowToEntry(row);
   }
 
+  hasEntriesForSession(sessionId: string): boolean {
+    const rows = this.stmtOutcomesBySession.all(sessionId) as unknown[];
+    return rows.length > 0;
+  }
+
   list(options?: { limit?: number }): ExperienceEntry[] {
     const rows = this.stmtList.all(options?.limit ?? -1) as Record<string, unknown>[];
 

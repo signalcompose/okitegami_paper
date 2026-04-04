@@ -6,6 +6,7 @@
  */
 
 import type { SessionSignal } from "../signals/types.js";
+import { normalizeForClassification } from "../signals/corrective-classifier.js";
 
 const STOP_WORDS = new Set([
   "the",
@@ -136,7 +137,7 @@ export function extractRetrievalKeys(
       case "corrective_instruction": {
         const prompt = signal.data.prompt;
         if (typeof prompt === "string") {
-          addWordsFromText(prompt, keys);
+          addWordsFromText(normalizeForClassification(prompt), keys);
         }
         break;
       }

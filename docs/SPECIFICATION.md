@@ -208,32 +208,40 @@ Past relevant experience:
 
 **Behavior**:
 
+**Idempotency**: `handleSessionEnd` is idempotent per session_id. Phase 1 skips if `corrective_instruction` signals already exist for the session. Phase 2 skips if experience entries already exist for the session (via `experienceStore.hasEntriesForSession()`). This is necessary because the hook is registered under the `Stop` event, which fires on every assistant response, not just at session end.
+
 **Phase 1 — Transcript-based corrective detection** (Issue #83):
 1. Read `transcript_path` from hook input
 2. Parse JSONL transcript using `TranscriptParser`:
    - Filter real user messages via `permissionMode` field presence
    - Detect interrupts via literal text pattern `"[Request interrupted by user]"`
    - Construct turn sequence with interrupt markers
-3. Classify user messages using `CorrectiveClassifier`:
+3. **Message normalization**: Before classification, `normalizeForClassification()` removes:
+   - Mode modifier suffixes (`ultrathink`/`ultrathik`) appended by Claude Code UI
+   - CLI status line prefixes (e.g., `"✶ Cerebrating… (running hooks…)\n\n"`)
+   - Raw text is preserved in `HumanMessage.text` and signal `prompt` field; normalization is applied only for classification and keyword extraction
+4. Classify user messages using `CorrectiveClassifier`:
    - **Primary**: Local LLM (Ollama, default model: `gemma2:2b`, `temperature: 0`)
    - **Fallback**: If Ollama unavailable, use structural detection (interrupt-only)
+     - Structural fallback filters: messages < 6 characters, continuation tokens (`続けて`, `continue`, `ok`, etc.), agreement patterns (`ましょう`, `ください`), and confirmation questions (`認識でいいですか？`, etc.) are excluded
+     - Structural confidence is `0.4` (low-precision heuristic)
    - First message in session is excluded (cannot be corrective)
-4. Record detected corrections as `corrective_instruction` signals via `signalStore.addSignal()`
+5. Record detected corrections as `corrective_instruction` signals via `signalStore.addSignal()`
    - Signal data includes: `prompt` (truncated), `reason`, `confidence`, `method` (llm|structural)
 
 **Phase 2 — Experience generation** (existing):
-5. Aggregate all signals collected during session (including newly added corrective signals)
-6. Determine session outcome:
+6. Aggregate all signals collected during session (including newly added corrective signals)
+7. Determine session outcome:
    - If `corrective_instructions > 0`: generate failure entry (corrective-driven)
      - If also interrupted: use `interrupt_with_dialogue` signal type, add interrupt_context
      - If not interrupted: use `corrective_instruction` signal type
    - If `interrupted && corrective_instructions == 0`: ambiguous — no entry generated
    - If `!interrupted && corrective_instructions == 0`: generate success entry
-7. Generate retrieval keys from session content (keyword extraction)
-8. Compute signal strength score per scoring table
-9. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
-10. Persist entries with embedding to experience DB via `createWithEmbedding()`
-11. Log to session log
+8. Generate retrieval keys from session content (keyword extraction)
+9. Compute signal strength score per scoring table
+10. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
+11. Persist entries with embedding to experience DB via `createWithEmbedding()`
+12. Log to session log
 
 **Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 

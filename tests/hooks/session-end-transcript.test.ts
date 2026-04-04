@@ -139,7 +139,7 @@ describe("session-end transcript-based corrective detection", () => {
     // Verify the corrective signal has structural method
     const data = correctiveSignals[0].data as Record<string, unknown>;
     expect(data.method).toBe("structural");
-    expect(data.confidence).toBe(0.9);
+    expect(data.confidence).toBe(0.4);
 
     ctx!.cleanup();
   });
@@ -324,6 +324,84 @@ describe("session-end transcript-based corrective detection", () => {
     expect(data.confidence).toBe(0.85);
     expect(data.reason).toBe("redirecting approach");
 
+    ctx!.cleanup();
+  });
+
+  it("does not duplicate corrective signals when called twice (idempotency)", async () => {
+    setupEnv();
+    const sessionId = "transcript-dedup-1";
+
+    mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+    const transcriptPath = writeTranscript([
+      userLine("Fix the bug"),
+      assistantLine("Working on it..."),
+      interruptLine(),
+      userLine("No, do it differently"),
+    ]);
+
+    await handlePostToolUseFailure(
+      JSON.stringify({
+        session_id: sessionId,
+        tool_name: "Bash",
+        error: "interrupted",
+        is_interrupt: true,
+      })
+    );
+    await handleStop(JSON.stringify({ session_id: sessionId }));
+
+    // Call session-end TWICE with the same session_id
+    await handleSessionEnd(
+      JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath })
+    );
+    await handleSessionEnd(
+      JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath })
+    );
+
+    // Verify corrective signals are NOT duplicated
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const signals = ctx!.signalStore.getBySession(sessionId);
+    const correctiveSignals = signals.filter((s) => s.event_type === "corrective_instruction");
+    expect(correctiveSignals).toHaveLength(1); // Not 2
+    ctx!.cleanup();
+  });
+
+  it("does not duplicate experience entries when called twice (idempotency)", async () => {
+    setupEnv();
+    const sessionId = "transcript-dedup-2";
+
+    mockFetch.mockRejectedValue(new Error("Connection refused"));
+
+    const transcriptPath = writeTranscript([
+      userLine("Implement the feature"),
+      assistantLine("Sure..."),
+      interruptLine(),
+      userLine("That's wrong, try again"),
+    ]);
+
+    await handlePostToolUseFailure(
+      JSON.stringify({
+        session_id: sessionId,
+        tool_name: "Bash",
+        error: "interrupted",
+        is_interrupt: true,
+      })
+    );
+    await handleStop(JSON.stringify({ session_id: sessionId }));
+
+    // Call session-end TWICE
+    await handleSessionEnd(
+      JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath })
+    );
+    await handleSessionEnd(
+      JSON.stringify({ session_id: sessionId, transcript_path: transcriptPath })
+    );
+
+    // Verify only ONE failure experience entry exists
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries = ctx!.experienceStore.list();
+    const failures = entries.filter((e) => e.type === "failure");
+    expect(failures).toHaveLength(1); // Not 2
     ctx!.cleanup();
   });
 });

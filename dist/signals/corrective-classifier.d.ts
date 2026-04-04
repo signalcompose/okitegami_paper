@@ -19,6 +19,11 @@ export interface ClassifierConfig {
     minConfidence?: number;
     timeoutMs?: number;
 }
+/**
+ * Normalize message text for classification by removing Claude Code UI artifacts.
+ * Raw text is preserved in HumanMessage.text; this is applied before classification only.
+ */
+export declare function normalizeForClassification(text: string): string;
 export declare function isOllamaAvailable(url: string): Promise<boolean>;
 export declare function classifyCorrections(transcript: ParsedTranscript, config?: ClassifierConfig): Promise<ClassifiedMessage[]>;
 //# sourceMappingURL=corrective-classifier.d.ts.map
