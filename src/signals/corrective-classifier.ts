@@ -67,7 +67,13 @@ export async function isOllamaAvailable(url: string): Promise<boolean> {
     } finally {
       clearTimeout(timeoutId);
     }
-  } catch {
+  } catch (err) {
+    if (!(err instanceof Error && err.name === "AbortError")) {
+      console.error(
+        `[ACM] isOllamaAvailable: probe to "${url}/api/tags" failed: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     return false;
   }
 }
@@ -120,8 +126,12 @@ async function classifyWithOllama(
     }
     return parsed as OllamaClassification[];
   } catch (err) {
-    if (err instanceof Error && err.name !== "AbortError") {
-      console.error(`[ACM] classifyWithOllama: unexpected error: ${err.message}`);
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error(`[ACM] classifyWithOllama: request timed out after ${config.timeoutMs}ms`);
+    } else {
+      console.error(
+        `[ACM] classifyWithOllama: unexpected error: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
     return null;
   } finally {
@@ -168,6 +178,10 @@ export async function classifyCorrections(
   // Check Ollama availability
   const ollamaUp = await isOllamaAvailable(resolvedConfig.ollamaUrl);
   if (!ollamaUp) {
+    console.error(
+      `[ACM] classifyCorrections: Ollama unavailable at "${resolvedConfig.ollamaUrl}", ` +
+        `using structural fallback`
+    );
     return structuralFallback(transcript);
   }
 

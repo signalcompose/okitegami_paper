@@ -41,7 +41,7 @@ ACM (Associative Context Memory) is an MCP server that integrates with Claude Co
 ```
 Claude Code
   ├── SessionStart hook    → ACM: retrieve & inject relevant experiences
-  ├── UserPromptSubmit hook → ACM: capture post-interrupt dialogue, detect corrective instructions
+  ├── UserPromptSubmit hook → ACM: capture post-interrupt dialogue
   ├── PostToolUse hook      → ACM: record successful tool completions
   ├── PostToolUseFailure hook → ACM: detect interrupts (is_interrupt=true), record tool failures
   ├── Stop hook             → ACM: mark normal completion (non-firing = interrupt confirmation)
@@ -375,7 +375,7 @@ ACM itself should minimize context consumption. Injection text target: <500 toke
 |--------|-------------|-----------|
 | Task completion rate | Test pass rate (automated, 0–1) | RQ1 |
 | Interrupt count | PostToolUseFailure.is_interrupt events | RQ1, RQ3 |
-| Corrective instruction count | UserPromptSubmit pattern detection | RQ1, RQ3 |
+| Corrective instruction count | Transcript analysis at session-end (CorrectiveClassifier) | RQ1, RQ3 |
 | Context efficiency | Tokens used / task complexity | RQ4 |
 | Cross-session improvement | Δ completion rate, session 1→5 | RQ1, RQ2 |
 | Signal-quality correlation | Pearson r: signal strength × downstream success | RQ3 |

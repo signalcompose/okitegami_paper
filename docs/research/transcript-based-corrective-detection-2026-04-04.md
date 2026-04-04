@@ -167,7 +167,7 @@ export interface HookInputBase {
 - LLM の confidence threshold（default: 0.5）でフィルタリング
 - セッション最初のメッセージは除外（corrective になり得ない）
 
-### 3.4 統合ポイント
+### 3.5 統合ポイント
 
 **変更前** (`session-end.ts`):
 ```
@@ -268,7 +268,7 @@ Osmosing... (running stop hooks... 7/8 · 11m 57s · ↓ 161 tokens)
 |------|-----------|
 | Transcript ファイルが大きい（MB 単位） | Streaming line-by-line 解析、必要な行のみ parse |
 | session-end の 15s timeout 超過 | Parser は I/O bound（JSONL scan）で < 1s 想定 |
-| パターンの言語カバレッジ不足 | 日英の主要パターンでカバー。extensible 設計 |
+| LLM の言語カバレッジ不足 | ローカル LLM（gemma2:2b）に分類を委任。モデル変更は ollama_model 設定で制御可能 |
 | False positive による misleading injection | High precision 方針 + configurable threshold |
 | 既存テストの regression | 変更は additive（既存フローの前に transcript 解析を追加） |
 

@@ -35,7 +35,12 @@ export function parseTranscript(transcriptPath) {
     try {
         raw = readFileSync(transcriptPath, "utf-8");
     }
-    catch {
+    catch (err) {
+        const code = err.code;
+        if (code !== "ENOENT") {
+            console.error(`[ACM] parseTranscript: failed to read "${transcriptPath}" (${code ?? "unknown"}): ` +
+                `${err instanceof Error ? err.message : String(err)}`);
+        }
         return { turns: [], interruptCount: 0, totalHumanMessages: 0 };
     }
     if (!raw.trim()) {
