@@ -3,7 +3,7 @@
  * Issue #83: transcript-based corrective instruction detection
  *
  * Primary: Uses local Ollama LLM to classify user messages as corrective or not.
- * Fallback: When Ollama is unavailable, uses structural detection (interrupt-only).
+ * Fallback: When Ollama is unavailable, uses heuristic structural detection.
  */
 import type { ParsedTranscript, HumanMessage } from "./transcript-parser.js";
 export interface ClassifiedMessage {

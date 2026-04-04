@@ -21,8 +21,10 @@ export async function handleSessionEnd(stdin) {
         const { input, config, signalStore, experienceStore, collector } = ctx;
         const sessionId = requireInputString(input, "session_id", "SessionEnd");
         // --- Phase 1: Transcript-based corrective instruction detection ---
-        // Idempotency guard: skip if corrective signals already exist for this session
-        if (!signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
+        if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
+            console.error(`[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`);
+        }
+        else {
             const transcriptPath = input.transcript_path;
             if (typeof transcriptPath === "string" && transcriptPath) {
                 try {
@@ -50,9 +52,10 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // --- Phase 2: Experience generation (existing flow) ---
-        // Idempotency guard: skip if experience entries already exist for this session
-        if (experienceStore.hasEntriesForSession(sessionId))
+        if (experienceStore.hasEntriesForSession(sessionId)) {
+            console.error(`[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`);
             return;
+        }
         // Get session summary and signals
         const summary = collector.getSessionSummary(sessionId);
         if (summary.total_signals === 0)

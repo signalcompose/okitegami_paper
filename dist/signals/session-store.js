@@ -65,7 +65,7 @@ export class SessionSignalStore {
         return row != null;
     }
     hasSignalOfType(sessionId, eventType) {
-        return this.hasSignalOfTypeStmt.get(sessionId, eventType) != null;
+        return this.hasSignalOfTypeStmt.get(sessionId, eventType) !== undefined;
     }
     clearSession(sessionId) {
         const result = this.clearSessionStmt.run(sessionId);

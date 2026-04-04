@@ -113,7 +113,7 @@ export class SessionSignalStore {
   }
 
   hasSignalOfType(sessionId: string, eventType: EventType): boolean {
-    return this.hasSignalOfTypeStmt.get(sessionId, eventType) != null;
+    return this.hasSignalOfTypeStmt.get(sessionId, eventType) !== undefined;
   }
 
   clearSession(sessionId: string): number {

@@ -3,7 +3,7 @@
  * Issue #83: transcript-based corrective instruction detection
  *
  * Primary: Uses local Ollama LLM to classify user messages as corrective or not.
- * Fallback: When Ollama is unavailable, uses structural detection (interrupt-only).
+ * Fallback: When Ollama is unavailable, uses heuristic structural detection.
  */
 
 import type { ParsedTranscript, HumanMessage } from "./transcript-parser.js";
@@ -35,13 +35,10 @@ export function normalizeForClassification(text: string): string {
   let normalized = text;
   // Pattern A: remove mode modifier suffixes (ultrathink/ultrathik)
   normalized = normalized.replace(/\s+(?:ultrathink|ultrathik)\s*$/gi, "");
-  // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (…)\n\n")
-  // Use \p{So} (Other Symbol) only — CLI spinner glyphs (✶, ✢, ⊕, etc.) are all in this
-  // category. Excludes \p{Sm} (Math Symbol) which includes ASCII +, =, <, >, ~, |.
-  normalized = normalized.replace(
-    /^[\p{So}][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u,
-    ""
-  );
+  // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (running hooks…)\n\n")
+  // Anchored on "running hooks" to avoid false-positives on common words like "Thinking".
+  // \p{So} matches CLI spinner glyphs (✶, ✢, etc.) but not ASCII math operators.
+  normalized = normalized.replace(/^[\p{So}][^\n]*running\s+(?:stop\s+)?hooks[^\n]*\n{1,2}/u, "");
   return normalized.trim();
 }
 
@@ -273,7 +270,12 @@ export async function classifyCorrections(
     if (classification.confidence < resolvedConfig.minConfidence) continue;
 
     const turn = transcript.turns.find((t) => t.index === classification.index);
-    if (!turn) continue;
+    if (!turn) {
+      console.error(
+        `[ACM] classifyCorrections: LLM returned index ${classification.index} not found in transcript (${transcript.turns.length} turns), skipping`
+      );
+      continue;
+    }
 
     results.push({
       message: turn.humanMessage,
