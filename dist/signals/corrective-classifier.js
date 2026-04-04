@@ -15,9 +15,9 @@ export function normalizeForClassification(text) {
     // Pattern A: remove mode modifier suffixes (ultrathink/ultrathik)
     normalized = normalized.replace(/\s+(?:ultrathink|ultrathik)\s*$/gi, "");
     // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (…)\n\n")
-    // Use \p{So} (Other Symbol) and \p{Sm} (Math Symbol) to match CLI spinner glyphs
-    // (✶, ✢, ⊕, etc.) without false-positives on (, [, →, -, etc.
-    normalized = normalized.replace(/^[\p{So}\p{Sm}][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u, "");
+    // Use \p{So} (Other Symbol) only — CLI spinner glyphs (✶, ✢, ⊕, etc.) are all in this
+    // category. Excludes \p{Sm} (Math Symbol) which includes ASCII +, =, <, >, ~, |.
+    normalized = normalized.replace(/^[\p{So}][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u, "");
     return normalized.trim();
 }
 // --- Defaults ---
