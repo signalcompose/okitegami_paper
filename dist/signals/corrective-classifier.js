@@ -15,7 +15,9 @@ export function normalizeForClassification(text) {
     // Pattern A: remove mode modifier suffixes (ultrathink/ultrathik)
     normalized = normalized.replace(/\s+(?:ultrathink|ultrathik)\s*$/gi, "");
     // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (…)\n\n")
-    normalized = normalized.replace(/^[^\w\s][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u, "");
+    // Use \p{So} (Other Symbol) and \p{Sm} (Math Symbol) to match CLI spinner glyphs
+    // (✶, ✢, ⊕, etc.) without false-positives on (, [, →, -, etc.
+    normalized = normalized.replace(/^[\p{So}\p{Sm}][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u, "");
     return normalized.trim();
 }
 // --- Defaults ---
@@ -115,8 +117,20 @@ async function classifyWithOllama(messages, config) {
 const STRUCTURAL_CONFIDENCE = 0.4;
 const MIN_CORRECTIVE_LENGTH = 6;
 const CONTINUATION_TOKENS = new Set([
-    "続けて", "continue", "go on", "yes", "no", "ok", "okay",
-    "y", "n", "1", "2", "はい", "いいえ", "ごめん続けて",
+    "続けて",
+    "continue",
+    "go on",
+    "yes",
+    "no",
+    "ok",
+    "okay",
+    "y",
+    "n",
+    "1",
+    "2",
+    "はい",
+    "いいえ",
+    "ごめん続けて",
     "動いてる？",
 ]);
 const AGREEMENT_SUFFIXES = ["ましょう", "ください", "お願いします"];
@@ -136,8 +150,6 @@ function structuralFallback(transcript) {
         if (text.length < MIN_CORRECTIVE_LENGTH)
             continue;
         if (CONTINUATION_TOKENS.has(text.toLowerCase()))
-            continue;
-        if (CONTINUATION_TOKENS.has(text))
             continue;
         // Exclude agreement/confirmation patterns
         if (AGREEMENT_SUFFIXES.some((s) => text.endsWith(s)))

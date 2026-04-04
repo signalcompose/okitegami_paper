@@ -36,8 +36,10 @@ export function normalizeForClassification(text: string): string {
   // Pattern A: remove mode modifier suffixes (ultrathink/ultrathik)
   normalized = normalized.replace(/\s+(?:ultrathink|ultrathik)\s*$/gi, "");
   // Pattern B: remove CLI status line prefixes (e.g., "✶ Cerebrating… (…)\n\n")
+  // Use \p{So} (Other Symbol) and \p{Sm} (Math Symbol) to match CLI spinner glyphs
+  // (✶, ✢, ⊕, etc.) without false-positives on (, [, →, -, etc.
   normalized = normalized.replace(
-    /^[^\w\s][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u,
+    /^[\p{So}\p{Sm}][^\n]*(?:Cerebrating|Churning|Thinking|Osmosing|Reasoning|running\s+(?:stop\s+)?hooks)[^\n]*\n{1,2}/u,
     ""
   );
   return normalized.trim();
@@ -197,7 +199,6 @@ function structuralFallback(transcript: ParsedTranscript): ClassifiedMessage[] {
     const text = normalizeForClassification(turn.humanMessage.text).trim();
     if (text.length < MIN_CORRECTIVE_LENGTH) continue;
     if (CONTINUATION_TOKENS.has(text.toLowerCase())) continue;
-    if (CONTINUATION_TOKENS.has(text)) continue;
 
     // Exclude agreement/confirmation patterns
     if (AGREEMENT_SUFFIXES.some((s) => text.endsWith(s))) continue;
