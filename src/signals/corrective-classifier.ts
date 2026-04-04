@@ -193,7 +193,8 @@ export async function classifyCorrections(
   for (const classification of llmResults) {
     if (
       typeof classification.index !== "number" ||
-      typeof classification.corrective !== "boolean"
+      typeof classification.corrective !== "boolean" ||
+      typeof classification.confidence !== "number"
     ) {
       continue;
     }

@@ -13,9 +13,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const AVAILABILITY_TIMEOUT_MS = 2_000;
 // --- LLM Classification Prompt ---
 function buildClassificationPrompt(messages) {
-    const messageList = messages
-        .map((m) => `${m.index}. "${m.text.slice(0, 200)}"`)
-        .join("\n");
+    const messageList = messages.map((m) => `${m.index}. "${m.text.slice(0, 200)}"`).join("\n");
     return `You are analyzing a conversation between a user and an AI coding assistant.
 For each user message below, determine if it is a "corrective instruction" —
 meaning the user is expressing dissatisfaction, requesting a change of approach,
@@ -141,7 +139,9 @@ export async function classifyCorrections(transcript, config) {
     // Map LLM results back to transcript turns
     const results = [];
     for (const classification of llmResults) {
-        if (typeof classification.index !== "number" || typeof classification.corrective !== "boolean") {
+        if (typeof classification.index !== "number" ||
+            typeof classification.corrective !== "boolean" ||
+            typeof classification.confidence !== "number") {
             continue;
         }
         if (!classification.corrective)
