@@ -35,8 +35,8 @@ export class SignalCollector {
         if (counts.interrupt > 0 && counts.post_interrupt_turn < this.options.capture_turns) {
             this.store.addSignal(sessionId, "post_interrupt_turn", { prompt });
         }
-        // Corrective instruction detection is handled by Claude Code
-        // via acm_record_signal MCP tool (see formatSignalInstruction in src/retrieval/injector.ts)
+        // Corrective instruction detection is handled by transcript analysis
+        // at session-end (see src/signals/corrective-classifier.ts)
     }
     handleToolSuccess(sessionId, toolName, toolInput, exitCode) {
         const isTestRunner = this.isTestRunnerCommand(toolName, toolInput);
