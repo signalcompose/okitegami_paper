@@ -42,7 +42,7 @@ export class JsonlLogger {
    * Uses CLAUDE_PLUGIN_DATA/logs when available, falls back to ~/.acm/logs.
    */
   static resolveLogDir(pluginDataDir: string | undefined): string {
-    if (pluginDataDir) {
+    if (pluginDataDir && pluginDataDir.trim()) {
       return join(pluginDataDir, "logs");
     }
     return join(homedir(), ".acm", "logs");
@@ -68,8 +68,9 @@ export class JsonlLogger {
       const filename = `acm-${entry.timestamp.slice(0, 10)}.jsonl`;
       appendFileSync(join(this.logDir, filename), JSON.stringify(entry) + "\n");
     } catch (err) {
+      this.dirEnsured = false;
       console.error(
-        `[ACM] jsonl-logger: failed to write log entry: ` +
+        `[ACM] jsonl-logger: failed to write ${category}/${event}: ` +
           `${err instanceof Error ? err.message : String(err)}`
       );
     }

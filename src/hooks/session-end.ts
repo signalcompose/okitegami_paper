@@ -82,14 +82,12 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
                 confidence: c.confidence,
               });
             }
-            if (corrections.length > 0) {
-              ctx.logger.log("detection", "correctives_detected", {
-                session_id: sessionId,
-                count: corrections.length,
-                methods: corrections.map((c) => c.method),
-                confidences: corrections.map((c) => c.confidence),
-              });
-            }
+            ctx.logger.log("detection", "correctives_detected", {
+              session_id: sessionId,
+              count: corrections.length,
+              methods: corrections.map((c) => c.method),
+              confidences: corrections.map((c) => c.confidence),
+            });
           }
         } catch (err) {
           console.error(
@@ -150,6 +148,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);
     if (summary.total_signals === 0) {
+      ctx.logger.log("skip", "no_signals_recorded", { session_id: sessionId });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
@@ -164,6 +163,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
     if (entries.length === 0) {
+      ctx.logger.log("skip", "no_entries_generated", { session_id: sessionId });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
