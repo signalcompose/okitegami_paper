@@ -130,7 +130,7 @@ describe("formatSessionEndMessage", () => {
       expect(msg).toContain("[ACM] 2 corrective instructions detected");
       expect(msg).toContain("テストを先に書いて");
       expect(msg).toContain("[ACM] 3 experiences generated, 2 persisted");
-      expect(msg).toContain("[ACM] ============================");
+      expect(msg).toContain("[ACM] ==============================");
     });
   });
 

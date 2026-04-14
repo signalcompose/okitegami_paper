@@ -80,6 +80,6 @@ export function formatSessionEndMessage(summary: SessionEndSummary, verbosity: V
     );
   }
 
-  lines.push("[ACM] ============================");
+  lines.push("[ACM] ==============================");
   return lines.join("\n");
 }
