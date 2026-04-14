@@ -2,69 +2,21 @@
  * Tests for PreCompact hook — corrective signal preservation (Issue #90)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { mkdirSync, rmSync } from "node:fs";
 import { handlePreCompact } from "../../src/hooks/pre-compact.js";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
+import {
+  userLine,
+  interruptLine,
+  assistantLine,
+  setupEnv,
+  cleanupEnv,
+  writeTranscript,
+  makeTmpDir,
+} from "./_fixtures.js";
 
-const TMP_DIR = join(tmpdir(), "acm-test-pre-compact");
-
-/** Create a config file and set env, return db path */
-function setupEnv(): string {
-  mkdirSync(TMP_DIR, { recursive: true });
-  const dbPath = join(TMP_DIR, `test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
-  const configPath = join(TMP_DIR, `config-${Date.now()}.json`);
-  writeFileSync(
-    configPath,
-    JSON.stringify({
-      mode: "full",
-      db_path: dbPath,
-      promotion_threshold: 0.1,
-    })
-  );
-  process.env.ACM_CONFIG_PATH = configPath;
-  return dbPath;
-}
-
-function cleanupEnv(): void {
-  delete process.env.ACM_CONFIG_PATH;
-}
-
-/** Create a transcript JSONL line for a real user message */
-function userLine(text: string): string {
-  return JSON.stringify({
-    type: "user",
-    timestamp: new Date().toISOString(),
-    uuid: crypto.randomUUID(),
-    parentUuid: null,
-    permissionMode: "default",
-    promptId: crypto.randomUUID(),
-    message: { role: "user", content: text },
-  });
-}
-
-/** Create a transcript JSONL line for an interrupt */
-function interruptLine(): string {
-  return JSON.stringify({
-    type: "user",
-    timestamp: new Date().toISOString(),
-    uuid: crypto.randomUUID(),
-    parentUuid: null,
-    message: { role: "user", content: "[Request interrupted by user]" },
-  });
-}
-
-/** Create a transcript JSONL line for an assistant response */
-function assistantLine(text: string): string {
-  return JSON.stringify({
-    type: "assistant",
-    timestamp: new Date().toISOString(),
-    uuid: crypto.randomUUID(),
-    message: { role: "assistant", content: text },
-  });
-}
+const TMP_DIR = makeTmpDir("pre-compact");
 
 describe("PreCompact hook", () => {
   beforeEach(() => {
@@ -77,18 +29,14 @@ describe("PreCompact hook", () => {
   });
 
   it("preserves corrective signals from transcript before compaction", async () => {
-    const dbPath = setupEnv();
-    const transcriptPath = join(TMP_DIR, "transcript.jsonl");
-    writeFileSync(
-      transcriptPath,
-      [
-        userLine("Implement feature X"),
-        assistantLine("Working on it..."),
-        interruptLine(),
-        userLine("No, that's wrong. Use a different approach please"),
-        assistantLine("OK, using a different approach"),
-      ].join("\n") + "\n"
-    );
+    const dbPath = setupEnv(TMP_DIR);
+    const transcriptPath = writeTranscript(TMP_DIR, [
+      userLine("Implement feature X"),
+      assistantLine("Working on it..."),
+      interruptLine(),
+      userLine("No, that's wrong. Use a different approach please"),
+      assistantLine("OK, using a different approach"),
+    ]);
 
     const stdin = JSON.stringify({
       session_id: "pre-compact-s1",
@@ -98,7 +46,6 @@ describe("PreCompact hook", () => {
 
     await handlePreCompact(stdin);
 
-    // Verify signals were preserved
     const db = await initializeDatabase(dbPath);
     try {
       const store = new SessionSignalStore(db);
@@ -106,7 +53,6 @@ describe("PreCompact hook", () => {
       const correctives = signals.filter((s) => s.event_type === "corrective_instruction");
       expect(correctives.length).toBeGreaterThan(0);
 
-      // Check source marker
       const data = correctives[0].data as Record<string, unknown>;
       expect(data.source).toBe("pre_compact");
     } finally {
@@ -115,18 +61,14 @@ describe("PreCompact hook", () => {
   });
 
   it("skips when corrective signals already exist (idempotent)", async () => {
-    const dbPath = setupEnv();
-    const transcriptPath = join(TMP_DIR, "transcript.jsonl");
-    writeFileSync(
-      transcriptPath,
-      [
-        userLine("Implement feature X"),
-        assistantLine("Working on it..."),
-        interruptLine(),
-        userLine("No, use a different approach"),
-        assistantLine("OK"),
-      ].join("\n") + "\n"
-    );
+    const dbPath = setupEnv(TMP_DIR);
+    const transcriptPath = writeTranscript(TMP_DIR, [
+      userLine("Implement feature X"),
+      assistantLine("Working on it..."),
+      interruptLine(),
+      userLine("No, use a different approach"),
+      assistantLine("OK"),
+    ]);
 
     const stdin = JSON.stringify({
       session_id: "pre-compact-s2",
@@ -134,10 +76,8 @@ describe("PreCompact hook", () => {
       cwd: TMP_DIR,
     });
 
-    // First call: should preserve signals
     await handlePreCompact(stdin);
 
-    // Verify first call stored signals
     const db1 = await initializeDatabase(dbPath);
     let firstCallCount: number;
     try {
@@ -149,10 +89,8 @@ describe("PreCompact hook", () => {
       db1.close();
     }
 
-    // Second call: should skip (idempotent)
     await handlePreCompact(stdin);
 
-    // Verify signals were not duplicated
     const db2 = await initializeDatabase(dbPath);
     try {
       const store = new SessionSignalStore(db2);
@@ -165,20 +103,18 @@ describe("PreCompact hook", () => {
   });
 
   it("skips without transcript_path", async () => {
-    setupEnv();
+    setupEnv(TMP_DIR);
     const stdin = JSON.stringify({
       session_id: "pre-compact-s3",
       cwd: TMP_DIR,
     });
 
-    // Should not throw
     await handlePreCompact(stdin);
   });
 
   it("skips for single-turn transcripts", async () => {
-    const dbPath = setupEnv();
-    const transcriptPath = join(TMP_DIR, "transcript.jsonl");
-    writeFileSync(transcriptPath, userLine("Hello") + "\n");
+    const dbPath = setupEnv(TMP_DIR);
+    const transcriptPath = writeTranscript(TMP_DIR, [userLine("Hello")]);
 
     const stdin = JSON.stringify({
       session_id: "pre-compact-s4",
@@ -188,7 +124,6 @@ describe("PreCompact hook", () => {
 
     await handlePreCompact(stdin);
 
-    // Verify no signals were added
     const db = await initializeDatabase(dbPath);
     try {
       const store = new SessionSignalStore(db);
@@ -200,19 +135,13 @@ describe("PreCompact hook", () => {
   });
 
   it("continues gracefully when transcript analysis fails", async () => {
-    setupEnv();
-    // Use a valid multi-turn transcript so parseTranscript succeeds,
-    // then mock classifyCorrections to throw — exercises the catch block
-    const transcriptPath = join(TMP_DIR, "transcript-fail.jsonl");
-    writeFileSync(
-      transcriptPath,
-      [
-        userLine("Do something"),
-        assistantLine("Working..."),
-        userLine("Fix it"),
-        assistantLine("Fixed"),
-      ].join("\n") + "\n"
-    );
+    setupEnv(TMP_DIR);
+    const transcriptPath = writeTranscript(TMP_DIR, [
+      userLine("Do something"),
+      assistantLine("Working..."),
+      userLine("Fix it"),
+      assistantLine("Fixed"),
+    ]);
 
     const stdin = JSON.stringify({
       session_id: "pre-compact-s5",
@@ -220,17 +149,14 @@ describe("PreCompact hook", () => {
       cwd: TMP_DIR,
     });
 
-    // Mock classifyCorrections to throw
     const classifier = await import("../../src/signals/corrective-classifier.js");
     vi.spyOn(classifier, "classifyCorrections").mockRejectedValueOnce(
       new Error("LLM connection refused")
     );
 
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    // Should not throw despite classifyCorrections failure
     await handlePreCompact(stdin);
 
-    // Verify error was logged
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("transcript analysis failed"));
     spy.mockRestore();
   });
