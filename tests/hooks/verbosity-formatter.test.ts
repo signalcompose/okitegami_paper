@@ -84,6 +84,13 @@ describe("formatInjectionMessage", () => {
       expect(msg).toContain("score:");
     });
   });
+
+  it("handles entries with no project gracefully", () => {
+    const results = [makeResult({ project: undefined })];
+    const msg = formatInjectionMessage(results, "normal");
+    expect(msg).toContain("[ACM] 1 experiences injected");
+    expect(msg).not.toContain("from ");
+  });
 });
 
 describe("formatSessionEndMessage", () => {

@@ -15,6 +15,27 @@ import { parseTranscript } from "../signals/transcript-parser.js";
 import { classifyCorrections } from "../signals/corrective-classifier.js";
 import { formatSessionEndMessage, type SessionEndSummary } from "./verbosity-formatter.js";
 import type { Embedder as EmbedderType } from "../retrieval/embedder.js";
+import type { Verbosity } from "../store/types.js";
+
+function emitSummary(
+  correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]>,
+  entriesGenerated: number,
+  entriesPersisted: number,
+  verbosity: Verbosity
+): void {
+  const systemMsg = formatSessionEndMessage(
+    {
+      corrective_count: correctiveDetails.length,
+      entries_generated: entriesGenerated,
+      entries_persisted: entriesPersisted,
+      corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
+    },
+    verbosity
+  );
+  if (systemMsg) {
+    console.error(systemMsg);
+  }
+}
 
 export async function handleSessionEnd(stdin: string): Promise<void> {
   const ctx = await bootstrapHook(stdin);
@@ -24,7 +45,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "SessionEnd");
-    const correctiveDetails: SessionEndSummary["corrective_details"] = [];
+    const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
     if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
@@ -66,17 +87,38 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       }
     }
 
+    // --- Phase 1b: Build corrective summary from signal store ---
+    // When transcript analysis was skipped (correctives already existed),
+    // populate correctiveDetails from stored signals for the summary.
+    if (correctiveDetails.length === 0) {
+      const storedSignals = signalStore.getBySession(sessionId);
+      for (const sig of storedSignals) {
+        if (sig.event_type === "corrective_instruction") {
+          const data = sig.data as Record<string, unknown>;
+          correctiveDetails.push({
+            prompt: typeof data.prompt === "string" ? data.prompt : "",
+            method: typeof data.method === "string" ? data.method : "unknown",
+            confidence: typeof data.confidence === "number" ? data.confidence : undefined,
+          });
+        }
+      }
+    }
+
     // --- Phase 2: Experience generation (existing flow) ---
     if (experienceStore.hasEntriesForSession(sessionId)) {
       console.error(
         `[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`
       );
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
 
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);
-    if (summary.total_signals === 0) return;
+    if (summary.total_signals === 0) {
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
+      return;
+    }
 
     const signals = signalStore.getBySession(sessionId);
 
@@ -87,7 +129,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     });
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
+      return;
+    }
 
     // Dynamic import to avoid loading @xenova/transformers WASM at module level
     // Fallback: if Embedder fails, store entries without embedding so they can be
@@ -123,19 +168,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       if (saved) persisted++;
     }
 
-    // Output systemMessage with session summary
-    const systemMsg = formatSessionEndMessage(
-      {
-        corrective_count: correctiveDetails.length,
-        entries_generated: entries.length,
-        entries_persisted: persisted,
-        corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
-      },
-      config.verbosity
-    );
-    if (systemMsg) {
-      console.error(systemMsg);
-    }
+    emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {
     if (embedder) embedder.dispose();
     ctx.cleanup();
