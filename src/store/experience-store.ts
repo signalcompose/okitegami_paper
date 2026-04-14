@@ -66,7 +66,7 @@ export class ExperienceStore {
       "SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL"
     );
     this.stmtAllWithEmbeddingByType = this.db.prepare(
-      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND type = ?"
+      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND (type = ? OR type = 'insight')"
     );
     this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
     this.stmtExistsForSession = this.db.prepare(

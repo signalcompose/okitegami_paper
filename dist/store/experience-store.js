@@ -37,7 +37,7 @@ export class ExperienceStore {
         this.stmtDelete = this.db.prepare("DELETE FROM experiences WHERE id = ?");
         this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
         this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL");
-        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND type = ?");
+        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND (type = ? OR type = 'insight')");
         this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
         this.stmtExistsForSession = this.db.prepare("SELECT 1 FROM experiences WHERE session_id = ? LIMIT 1");
         this.stmtCrossProjectReport = this.db.prepare(`
