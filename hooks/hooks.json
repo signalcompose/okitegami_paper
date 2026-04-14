@@ -9,24 +9,30 @@
         "timeout": 15000
       }]
     }],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [{
-          "type": "command",
-          "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stop.js",
-          "timeout": 5000
-        }]
-      },
-      {
-        "matcher": "",
-        "hooks": [{
-          "type": "command",
-          "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/session-end.js",
-          "timeout": 15000
-        }]
-      }
-    ],
+    "Stop": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stop.js",
+        "timeout": 5000
+      }]
+    }],
+    "SessionEnd": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/session-end.js",
+        "timeout": 30000
+      }]
+    }],
+    "PreCompact": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hooks/pre-compact.js",
+        "timeout": 30000
+      }]
+    }],
     "PostToolUse": [{
       "matcher": "Bash|Edit|Write|Read|Grep|Glob|NotebookEdit|WebFetch|WebSearch",
       "hooks": [{
