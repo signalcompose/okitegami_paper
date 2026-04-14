@@ -111,6 +111,7 @@ export function aggregateByCondition(results: BenchmarkResult[]): ConditionSumma
       mean_forward_transfer: optionalMean(runs.map((r) => r.metrics.forward_transfer)),
       mean_forgetting: optionalMean(runs.map((r) => r.metrics.forgetting)),
       mean_corrective_rate: optionalMean(runs.map((r) => r.metrics.corrective_rate)),
+      mean_completion_rate: optionalMean(runs.map((r) => r.metrics.completion_rate)),
     });
   }
 
@@ -142,6 +143,7 @@ export function formatMarkdownTable(table: ComparisonTable): string {
     "Fwd Transfer",
     "Forgetting",
     "Corrective",
+    "Completion",
   ];
   lines.push(`| ${headers.join(" | ")} |`);
   lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
@@ -155,6 +157,7 @@ export function formatMarkdownTable(table: ComparisonTable): string {
       c.mean_forward_transfer?.toFixed(3) ?? "-",
       c.mean_forgetting?.toFixed(3) ?? "-",
       c.mean_corrective_rate?.toFixed(3) ?? "-",
+      c.mean_completion_rate?.toFixed(3) ?? "-",
     ];
     lines.push(`| ${row.join(" | ")} |`);
   }

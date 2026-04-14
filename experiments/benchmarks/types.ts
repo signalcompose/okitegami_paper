@@ -84,6 +84,7 @@ export interface ConditionSummary {
   mean_forward_transfer?: number;
   mean_forgetting?: number;
   mean_corrective_rate?: number;
+  mean_completion_rate?: number;
 }
 
 export interface ComparisonTable {

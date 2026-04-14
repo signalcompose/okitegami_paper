@@ -195,6 +195,20 @@ describe("aggregation", () => {
     expect(acm.mean_forward_transfer).toBeCloseTo(0.2, 4);
   });
 
+  it("aggregates completion_rate when present", () => {
+    const results = [
+      makeResult("acm", 0.7, {
+        metrics: { pass_at_1: 0.7, completion_rate: 0.8 },
+      }),
+      makeResult("acm", 0.8, {
+        metrics: { pass_at_1: 0.8, completion_rate: 0.9 },
+      }),
+    ];
+
+    const summaries = aggregateByCondition(results);
+    expect(summaries[0].mean_completion_rate).toBeCloseTo(0.85, 4);
+  });
+
   it("handles all three conditions including mem0", () => {
     const results: BenchmarkResult[] = [
       makeResult("baseline", 0.5),
