@@ -9,6 +9,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   benchmarkResultSchema,
   type BenchmarkResult,
@@ -68,11 +69,12 @@ export function aggregateByCondition(results: BenchmarkResult[]): ConditionSumma
 
   const summaries: ConditionSummary[] = [];
   for (const [condition, runs] of grouped) {
+    const passAt1Values = runs.map((r) => r.metrics.pass_at_1);
     summaries.push({
       condition,
       run_count: runs.length,
-      mean_pass_at_1: mean(runs.map((r) => r.metrics.pass_at_1)),
-      std_pass_at_1: stddev(runs.map((r) => r.metrics.pass_at_1)),
+      mean_pass_at_1: mean(passAt1Values),
+      std_pass_at_1: stddev(passAt1Values),
       mean_forward_transfer: optionalMean(runs.map((r) => r.metrics.forward_transfer)),
       mean_forgetting: optionalMean(runs.map((r) => r.metrics.forgetting)),
       mean_corrective_rate: optionalMean(runs.map((r) => r.metrics.corrective_rate)),
@@ -127,8 +129,7 @@ export function formatMarkdownTable(table: ComparisonTable): string {
   return lines.join("\n");
 }
 
-// CLI entry point
-if (process.argv[1]?.endsWith("aggregate.ts") || process.argv[1]?.endsWith("aggregate.js")) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const benchmarkName = process.argv[2];
   if (!benchmarkName) {
     console.error("Usage: npx tsx experiments/benchmarks/scripts/aggregate.ts <benchmark-name>");
