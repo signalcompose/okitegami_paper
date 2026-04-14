@@ -99,12 +99,15 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
                 });
               }
             }
-            ctx.logger.log("detection", "correctives_detected", {
-              session_id: sessionId,
-              count: corrections.length,
-              methods: corrections.map((c) => c.method),
-              confidences: corrections.map((c) => c.confidence),
-            });
+            if (correctiveDetails.length > 0) {
+              ctx.logger.log("detection", "correctives_detected", {
+                session_id: sessionId,
+                detected: corrections.length,
+                stored: correctiveDetails.length,
+                methods: correctiveDetails.map((c) => c.method),
+                confidences: correctiveDetails.map((c) => c.confidence),
+              });
+            }
           }
         } catch (err) {
           console.error(

@@ -80,6 +80,10 @@ export async function handlePreCompact(stdin: string): Promise<void> {
         });
         storedCorrections.push(c);
       } catch (storeErr) {
+        console.error(
+          `[ACM] pre-compact: failed to store corrective signal for session "${sessionId}": ` +
+            `${storeErr instanceof Error ? storeErr.message : String(storeErr)}`
+        );
         ctx.logger.log("error", "pre_compact_signal_store_failed", {
           session_id: sessionId,
           error: storeErr instanceof Error ? storeErr.message : String(storeErr),
