@@ -127,6 +127,103 @@ export class ExperienceStore {
         const result = this.stmtDelete.run(id);
         return result.changes > 0;
     }
+    // --- Measurement Infrastructure (Issue #87) ---
+    getRecurrenceRate(project) {
+        // Extract individual retrieval_keys from JSON array, count occurrences across failure entries.
+        // Dynamic SQL: optional project filter.
+        let sql = `
+      SELECT jk.value AS key,
+             COUNT(DISTINCT e.id) AS occurrence_count,
+             MIN(e.timestamp) AS first_seen,
+             MAX(e.timestamp) AS last_seen
+      FROM experiences e, json_each(e.retrieval_keys) jk
+      WHERE e.type = 'failure'
+    `;
+        const params = [];
+        if (project) {
+            sql += ` AND e.project = ?`;
+            params.push(project);
+        }
+        sql += ` GROUP BY jk.value HAVING COUNT(DISTINCT e.id) > 1 ORDER BY occurrence_count DESC`;
+        return this.db.prepare(sql).all(...params);
+    }
+    getTemporalTrend(project) {
+        // Compute corrective_rate = corrective_count / tool_success_count per session.
+        // Only sessions with at least 1 tool_success are included (avoid division by zero).
+        // Dynamic SQL: optional project filter via experience table join.
+        let sql = `
+      SELECT ss.session_id,
+             SUM(CASE WHEN ss.event_type = 'corrective_instruction' THEN 1 ELSE 0 END) AS corrective_count,
+             SUM(CASE WHEN ss.event_type = 'tool_success' THEN 1 ELSE 0 END) AS tool_success_count,
+             CAST(SUM(CASE WHEN ss.event_type = 'corrective_instruction' THEN 1 ELSE 0 END) AS REAL)
+               / SUM(CASE WHEN ss.event_type = 'tool_success' THEN 1 ELSE 0 END) AS corrective_rate,
+             MIN(ss.timestamp) AS timestamp
+      FROM session_signals ss
+    `;
+        const params = [];
+        if (project) {
+            // Use DISTINCT subquery to avoid N-duplication when multiple experience entries exist per session
+            sql += ` JOIN (SELECT DISTINCT session_id FROM experiences WHERE project = ?) ep ON ep.session_id = ss.session_id`;
+            params.push(project);
+        }
+        sql += `
+      WHERE ss.event_type IN ('corrective_instruction', 'tool_success')
+      GROUP BY ss.session_id
+      HAVING SUM(CASE WHEN ss.event_type = 'tool_success' THEN 1 ELSE 0 END) > 0
+      ORDER BY timestamp ASC
+    `;
+        return this.db.prepare(sql).all(...params);
+    }
+    getInjectionOutcomeCorrelation(project) {
+        // For each injection episode, count how many corrective_instructions occurred in the same session.
+        let sql = `
+      SELECT inj.session_id,
+             COALESCE(json_array_length(json_extract(inj.data, '$.injected_ids')), 0) AS injected_count,
+             COALESCE(cor.corrective_count, 0) AS corrective_count,
+             inj.timestamp
+      FROM session_signals inj
+      LEFT JOIN (
+        SELECT session_id, COUNT(*) AS corrective_count
+        FROM session_signals
+        WHERE event_type = 'corrective_instruction'
+        GROUP BY session_id
+      ) cor ON cor.session_id = inj.session_id
+      WHERE inj.event_type = 'injection'
+    `;
+        const params = [];
+        if (project) {
+            sql += ` AND json_extract(inj.data, '$.project') = ?`;
+            params.push(project);
+        }
+        sql += ` ORDER BY inj.timestamp DESC`;
+        return this.db.prepare(sql).all(...params);
+    }
+    getCrossProjectTransfer() {
+        // Detect when experiences from project A are injected into sessions associated with project B.
+        // Join injection signals with experience entries to determine source and target projects.
+        const sql = `
+      SELECT src.project AS source_project,
+             json_extract(inj.data, '$.project') AS target_project,
+             COUNT(*) AS transfer_count
+      FROM session_signals inj, json_each(json_extract(inj.data, '$.injected_ids')) jid
+      JOIN experiences src ON src.id = jid.value
+      WHERE inj.event_type = 'injection'
+        AND src.project IS NOT NULL
+        AND json_extract(inj.data, '$.project') IS NOT NULL
+        AND src.project != json_extract(inj.data, '$.project')
+      GROUP BY src.project, json_extract(inj.data, '$.project')
+      ORDER BY transfer_count DESC
+    `;
+        return this.db.prepare(sql).all();
+    }
+    getMeasurementReport(project) {
+        return {
+            recurrence_rate: this.getRecurrenceRate(project),
+            temporal_trend: this.getTemporalTrend(project),
+            injection_outcome_correlation: this.getInjectionOutcomeCorrelation(project),
+            cross_project_transfer: this.getCrossProjectTransfer(),
+        };
+    }
     close() {
         this.db.close();
     }

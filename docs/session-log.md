@@ -349,3 +349,121 @@ Milestone 6-A（exp_6ac）の acm-sf 条件で null result が出た。DB 調査
 - .claude/plans/scalable-drifting-walrus.md
 
 ---
+
+#### Auto-logged: 2026-04-04 22:22 (session: 3780262b)
+
+編集ファイル:
+- src/signals/session-store.ts
+- src/hooks/session-end.ts
+- src/signals/corrective-classifier.ts
+
+---
+
+#### Auto-logged: 2026-04-04 22:24 (session: 3780262b)
+
+編集ファイル:
+- src/hooks/session-end.ts
+- src/signals/corrective-classifier.ts
+
+---
+
+#### Auto-logged: 2026-04-14 11:45 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 11:49 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 11:52 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 11:53 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 11:56 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 12:06 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 12:34 (session: 3780262b)
+
+編集ファイル:
+- CLAUDE.md
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 12:40 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 12:46 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 12:46 (session: 3780262b)
+
+編集ファイル:
+- docs/research/acm-future-directions-2026-04-14.md
+
+---
+
+#### Auto-logged: 2026-04-14 13:10 (session: 3780262b)
+
+編集ファイル:
+- .claude/plans/golden-hopping-kahn.md
+
+---
+
+#### Auto-logged: 2026-04-14 13:24 (session: 3780262b)
+
+編集ファイル:
+- .claude/plans/golden-hopping-kahn.md
+
+---
+
+#### Auto-logged: 2026-04-14 14:44 (session: 3780262b)
+
+編集ファイル:
+- docs/SPECIFICATION.md
+- src/store/experience-store.ts
+- src/store/types.ts
+
+---
+
+#### Auto-logged: 2026-04-14 14:48 (session: 3780262b)
+
+編集ファイル:
+- src/store/experience-store.ts
+
+---

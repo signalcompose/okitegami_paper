@@ -121,14 +121,15 @@ export function createAcmServer(options) {
                     return toolError(`Error generating experience: ${errorMessage(err)}`);
                 }
             });
-            server.tool("acm_report", "Cross-project analysis and injection→outcome episode tracing", {
+            server.tool("acm_report", "Cross-project analysis, injection→outcome episode tracing, and natural experiment measurement (4 axes: recurrence rate, temporal trend, injection-outcome correlation, cross-project transfer)", {
                 project: z.string().optional().describe("Filter by project name"),
                 limit: z.number().optional().describe("Max episodes to return (default: 10)"),
             }, (params) => {
                 try {
                     const summary = experienceStore.getCrossProjectReport();
                     const episodes = experienceStore.getInjectionEpisodes(params.project, params.limit ?? 10);
-                    return toolResult({ summary, episodes });
+                    const measurement = experienceStore.getMeasurementReport(params.project);
+                    return toolResult({ summary, episodes, measurement });
                 }
                 catch (err) {
                     console.error(`[ACM] acm_report: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);

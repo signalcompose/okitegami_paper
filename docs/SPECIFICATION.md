@@ -430,6 +430,22 @@ interface InjectionEpisode {
 }
 ```
 
+### 8.1.1 Measurement Report
+
+**Purpose**: Natural experiment measurement for in-situ effectiveness evaluation.
+
+`acm_report` output includes a `measurement` section with 4 axes:
+
+1. **Recurrence Rate** (`recurrence_rate`): Frequency of failure pattern re-occurrence. Counts how many times the same `retrieval_keys` value appears across distinct failure experience entries. Only keys with occurrence_count > 1 are reported.
+
+2. **Temporal Trend** (`temporal_trend`): Per-session `corrective_rate = corrective_count / tool_success_count`. Sessions with zero tool_success are excluded. Ordered chronologically to show improvement over time.
+
+3. **Injection-Outcome Correlation** (`injection_outcome_correlation`): Per injection episode, how many corrective_instructions occurred in the same session. Low corrective_count after injection suggests the injected experience was effective.
+
+4. **Cross-project Transfer** (`cross_project_transfer`): Detects when experiences from project A are injected into sessions associated with project B. Counts transfer occurrences per source→target project pair.
+
+Axes 1–3 accept an optional `project` filter. Axis 4 (`cross_project_transfer`) is always computed globally, as filtering by a single project would eliminate the cross-project dimension.
+
 ### 8.2 Session Signal: `injection` Event
 
 When the SessionStart hook injects experiences, it records an `injection` event in `session_signals` with:
