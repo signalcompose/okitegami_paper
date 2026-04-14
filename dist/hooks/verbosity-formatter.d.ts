@@ -18,7 +18,7 @@ export interface SessionEndSummary {
     }>;
 }
 /**
- * Format session-end results as a systemMessage string for SessionEnd/Stop.
+ * Format session-end results as a systemMessage string for SessionEnd.
  */
 export declare function formatSessionEndMessage(summary: SessionEndSummary, verbosity: Verbosity): string;
 //# sourceMappingURL=verbosity-formatter.d.ts.map
