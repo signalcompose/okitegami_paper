@@ -201,8 +201,18 @@ describe("PreCompact hook", () => {
 
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv();
-    const transcriptPath = join(TMP_DIR, "bad-transcript.jsonl");
-    writeFileSync(transcriptPath, "not valid jsonl content here\n");
+    // Use a valid multi-turn transcript so parseTranscript succeeds,
+    // then mock classifyCorrections to throw — exercises the catch block
+    const transcriptPath = join(TMP_DIR, "transcript-fail.jsonl");
+    writeFileSync(
+      transcriptPath,
+      [
+        userLine("Do something"),
+        assistantLine("Working..."),
+        userLine("Fix it"),
+        assistantLine("Fixed"),
+      ].join("\n") + "\n"
+    );
 
     const stdin = JSON.stringify({
       session_id: "pre-compact-s5",
@@ -210,9 +220,18 @@ describe("PreCompact hook", () => {
       cwd: TMP_DIR,
     });
 
+    // Mock classifyCorrections to throw
+    const classifier = await import("../../src/signals/corrective-classifier.js");
+    vi.spyOn(classifier, "classifyCorrections").mockRejectedValueOnce(
+      new Error("LLM connection refused")
+    );
+
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    // Should not throw
+    // Should not throw despite classifyCorrections failure
     await handlePreCompact(stdin);
+
+    // Verify error was logged
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("transcript analysis failed"));
     spy.mockRestore();
   });
 });

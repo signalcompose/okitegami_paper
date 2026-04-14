@@ -4,8 +4,8 @@
  *
  * Runs before context compaction to analyze the current transcript and
  * preserve corrective signals that would otherwise be lost when the
- * transcript is truncated. Blocks compaction (via decision: "block")
- * until signal preservation is complete.
+ * transcript is truncated. PreCompact is non-blocking; Claude Code
+ * proceeds with compaction concurrently. Best-effort preservation.
  */
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
@@ -83,6 +83,7 @@ export async function handlePreCompact(stdin: string): Promise<void> {
         session_id: sessionId,
         transcript_path: transcriptPath,
         error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
       });
     }
   } finally {
