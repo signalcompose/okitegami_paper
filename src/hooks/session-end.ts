@@ -76,17 +76,28 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
             });
             for (const c of corrections) {
               const prompt = c.message.text.slice(0, 200);
-              signalStore.addSignal(sessionId, "corrective_instruction", {
-                prompt,
-                reason: c.reason,
-                confidence: c.confidence,
-                method: c.method,
-              });
-              correctiveDetails.push({
-                prompt,
-                method: c.method,
-                confidence: c.confidence,
-              });
+              try {
+                signalStore.addSignal(sessionId, "corrective_instruction", {
+                  prompt,
+                  reason: c.reason,
+                  confidence: c.confidence,
+                  method: c.method,
+                });
+                correctiveDetails.push({
+                  prompt,
+                  method: c.method,
+                  confidence: c.confidence,
+                });
+              } catch (storeErr) {
+                console.error(
+                  `[ACM] session-end: failed to store corrective signal for session "${sessionId}": ` +
+                    `${storeErr instanceof Error ? storeErr.message : String(storeErr)}`
+                );
+                ctx.logger.log("error", "corrective_signal_store_failed", {
+                  session_id: sessionId,
+                  error: storeErr instanceof Error ? storeErr.message : String(storeErr),
+                });
+              }
             }
             ctx.logger.log("detection", "correctives_detected", {
               session_id: sessionId,
@@ -218,6 +229,11 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
         }
         if (saved) persisted++;
       } catch (entryErr) {
+        console.error(
+          `[ACM] session-end: failed to persist entry (type="${entryData.type}") ` +
+            `for session "${sessionId}": ` +
+            `${entryErr instanceof Error ? entryErr.message : String(entryErr)}`
+        );
         ctx.logger.log("error", "experience_entry_persist_failed", {
           session_id: sessionId,
           entry_type: entryData.type,

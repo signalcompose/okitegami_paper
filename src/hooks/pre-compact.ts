@@ -69,7 +69,6 @@ export async function handlePreCompact(stdin: string): Promise<void> {
     }
 
     const storedCorrections: typeof corrections = [];
-    let storeErrors = 0;
     for (const c of corrections) {
       try {
         signalStore.addSignal(sessionId, "corrective_instruction", {
@@ -81,7 +80,6 @@ export async function handlePreCompact(stdin: string): Promise<void> {
         });
         storedCorrections.push(c);
       } catch (storeErr) {
-        storeErrors++;
         ctx.logger.log("error", "pre_compact_signal_store_failed", {
           session_id: sessionId,
           error: storeErr instanceof Error ? storeErr.message : String(storeErr),
@@ -89,9 +87,9 @@ export async function handlePreCompact(stdin: string): Promise<void> {
       }
     }
 
-    if (storeErrors > 0) {
+    if (storedCorrections.length < corrections.length) {
       console.error(
-        `[ACM] pre-compact: ${storeErrors} of ${corrections.length} signal(s) failed to store for session "${sessionId}"`
+        `[ACM] pre-compact: ${corrections.length - storedCorrections.length} of ${corrections.length} signal(s) failed to store for session "${sessionId}"`
       );
     }
 
