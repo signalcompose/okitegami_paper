@@ -142,7 +142,7 @@ Layer 2: SQLite acm_logs  → Structured queries / reports
 Layer 3: JSONL files      → Operational logs / debugging (this section)
 ```
 
-**Output path**: `${CLAUDE_PLUGIN_DATA}/logs/acm-YYYY-MM-DD.jsonl`. Falls back to `~/.acm/logs/` when `CLAUDE_PLUGIN_DATA` is not set.
+**Output path**: `${CLAUDE_PLUGIN_DATA}/logs/acm-YYYY-MM-DD.jsonl`. Falls back to `~/.acm/logs/` when `CLAUDE_PLUGIN_DATA` is unset, empty, or whitespace-only. Filenames use UTC dates.
 
 **Line format**: `{ "timestamp": "<ISO 8601>", "category": "<string>", "event": "<string>", "data": { ... } }`
 

@@ -1,7 +1,7 @@
 /**
  * Tests for JSONL operational logger (Issue #89)
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -107,6 +107,26 @@ describe("JsonlLogger", () => {
       const logger = new JsonlLogger("/dev/null/impossible");
       expect(() => logger.log("error", "test", {})).not.toThrow();
     });
+
+    it("reports first failure to stderr with category and event", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const logger = new JsonlLogger("/dev/null/impossible");
+      logger.log("detection", "test_event", {});
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("[ACM] jsonl-logger:"));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("detection/test_event"));
+      spy.mockRestore();
+    });
+
+    it("suppresses repeated failures after first report", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const logger = new JsonlLogger("/dev/null/impossible");
+      logger.log("error", "first", {});
+      logger.log("error", "second", {});
+      logger.log("error", "third", {});
+      // Only the first failure should be reported
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
   });
 
   describe("directory creation", () => {
@@ -129,6 +149,16 @@ describe("JsonlLogger", () => {
 
     it("falls back to ~/.acm/logs when env is not set", () => {
       const dir = JsonlLogger.resolveLogDir(undefined);
+      expect(dir).toContain(".acm/logs");
+    });
+
+    it("falls back to ~/.acm/logs for whitespace-only pluginDataDir", () => {
+      const dir = JsonlLogger.resolveLogDir("   ");
+      expect(dir).toContain(".acm/logs");
+    });
+
+    it("falls back to ~/.acm/logs for empty string pluginDataDir", () => {
+      const dir = JsonlLogger.resolveLogDir("");
       expect(dir).toContain(".acm/logs");
     });
   });

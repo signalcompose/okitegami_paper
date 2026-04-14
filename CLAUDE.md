@@ -66,7 +66,7 @@ Corrective instruction（ユーザーの修正指示）は session-end 時に tr
 
 ### ACM データへのアクセス境界
 
-ACM は JSONL 運用ログを `${CLAUDE_PLUGIN_DATA}/logs/` に出力する。これはユーザー向け診断ツールである。Claude は ACM データに MCP ツール (`acm_retrieve`, `acm_report`) 経由でのみアクセスすること。JSONL ログファイルを直接読んではならない。
+ACM は JSONL 運用ログを `${CLAUDE_PLUGIN_DATA}/logs/` に出力する。これはユーザー向け診断ツールである。Claude は ACM データに MCP ツール経由でのみアクセスすること（`acm_retrieve`, `acm_report` など）。JSONL ログファイルを直接読んではならない。
 
 ## セッション開始時の必須確認
 
