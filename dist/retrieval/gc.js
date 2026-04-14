@@ -2,6 +2,10 @@ import { cosineSimilarity } from "./similarity.js";
 /**
  * Simple greedy clustering by embedding similarity.
  * Groups entries where pairwise similarity exceeds threshold.
+ *
+ * Known limitation: order-dependent and non-transitive. If A≈B and B≈C
+ * but A≉C, B joins A's cluster first, leaving C isolated. Acceptable
+ * for research prototype — exact clustering is not required for reflection.
  */
 export function clusterByEmbedding(entries, similarityThreshold = 0.75) {
     const assigned = new Set();

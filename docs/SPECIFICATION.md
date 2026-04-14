@@ -381,7 +381,7 @@ CREATE INDEX idx_experiences_archived ON experiences(archived_at);
 
 **Retrieval Score**:
 ```
-retrieval_score = cosine_similarity × recency_decay(last_retrieved_at) × log(retrieval_count + 1) × signal_strength
+retrieval_score = cosine_similarity × recency_decay(last_retrieved_at) × (1 + log1p(retrieval_count)) × signal_strength
 ```
 
 - `recency_decay(t) = exp(-λ × days_since(t))` where λ is configurable (default half-life: 30 days)
@@ -419,10 +419,10 @@ retrieval_score = cosine_similarity × recency_decay(last_retrieved_at) × log(r
 
 #### 4.4.4 MCP Tool: `acm_pin_experience`
 
-Pin an experience entry to protect it from GC eviction.
+Pin or unpin an experience entry to control GC eviction protection.
 
-**Input**: `{ id: string }`
-**Output**: `{ success: boolean, entry_id: string }`
+**Input**: `{ id: string, pinned?: boolean }` (default: `true`)
+**Output**: `{ success: boolean, entry_id: string, pinned: boolean }`
 
 ---
 

@@ -38,7 +38,7 @@ export class Retriever {
       try {
         const similarity = cosineSimilarity(queryEmbedding, embedding);
         const decay = recencyDecay(entry.last_retrieved_at, entry.timestamp, this.halfLifeDays);
-        const retrievalBoost = Math.log((entry.retrieval_count ?? 0) + 1) || 1;
+        const retrievalBoost = 1 + Math.log1p(entry.retrieval_count ?? 0);
         const score = similarity * decay * retrievalBoost * entry.signal_strength;
         scored.push({ entry, similarity, score });
       } catch (err) {
@@ -52,9 +52,12 @@ export class Retriever {
     const results = scored.slice(0, topK);
 
     // Update retrieval tracking for selected entries
+    const now = new Date().toISOString();
     for (const result of results) {
       try {
         this.store.updateRetrievalTracking(result.entry.id);
+        result.entry.retrieval_count = (result.entry.retrieval_count ?? 0) + 1;
+        result.entry.last_retrieved_at = now;
       } catch {
         // Non-critical: tracking update failure should not break retrieval
       }

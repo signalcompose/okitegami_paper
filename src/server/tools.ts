@@ -277,12 +277,15 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
       const pinStore = options.experienceStore;
       server.tool(
         "acm_pin_experience",
-        "Pin an experience entry to protect it from GC eviction",
-        { id: z.string().describe("Experience entry ID to pin") },
-        async ({ id }) => {
+        "Pin or unpin an experience entry to control GC eviction protection",
+        {
+          id: z.string().describe("Experience entry ID"),
+          pinned: z.boolean().default(true).describe("true to pin, false to unpin"),
+        },
+        async ({ id, pinned }) => {
           try {
-            const success = pinStore.setPinned(id, true);
-            return toolResult({ success, entry_id: id });
+            const success = pinStore.setPinned(id, pinned);
+            return toolResult({ success, entry_id: id, pinned });
           } catch (err) {
             return toolError(`Error pinning experience: ${errorMessage(err)}`);
           }
