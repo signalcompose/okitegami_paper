@@ -1,0 +1,11 @@
+{
+  "benchmark": "swe-exp",
+  "description": "SWE-Exp protocol: Single-session pass@1 comparison",
+  "conditions": ["baseline", "acm"],
+  "metrics": ["pass_at_1", "completion_rate", "corrective_rate"],
+  "sessions_per_condition": 1,
+  "tasks": {
+    "source": "Internal task suite (task-a through task-d)",
+    "count": 4
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "benchmark": "swe-bench-cl",
+  "description": "SWE-Bench-CL: Cross-session continual learning evaluation",
+  "reference": "arXiv:2507.00014",
+  "conditions": ["baseline", "acm", "mem0"],
+  "metrics": ["pass_at_1", "forward_transfer", "forgetting", "corrective_rate"],
+  "sessions_per_condition": 5,
+  "tasks": {
+    "source": "SWE-Bench-CL task set",
+    "count": "TBD"
+  }
+}

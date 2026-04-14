@@ -42,7 +42,7 @@
     "vitest": "^4.0.18"
   },
   "lint-staged": {
-    "{src,tests,experiments/harness,experiments/runner}/**/*.ts": [
+    "{src,tests,experiments/harness,experiments/runner,experiments/benchmarks}/**/*.ts": [
       "eslint --fix",
       "prettier --write"
     ],
