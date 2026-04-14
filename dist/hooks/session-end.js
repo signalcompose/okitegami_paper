@@ -13,6 +13,17 @@ import { buildEmbeddingText } from "../retrieval/embedding-text.js";
 import { parseTranscript } from "../signals/transcript-parser.js";
 import { classifyCorrections } from "../signals/corrective-classifier.js";
 import { formatSessionEndMessage } from "./verbosity-formatter.js";
+function emitSummary(correctiveDetails, entriesGenerated, entriesPersisted, verbosity) {
+    const systemMsg = formatSessionEndMessage({
+        corrective_count: correctiveDetails.length,
+        entries_generated: entriesGenerated,
+        entries_persisted: entriesPersisted,
+        corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
+    }, verbosity);
+    if (systemMsg) {
+        console.error(systemMsg);
+    }
+}
 export async function handleSessionEnd(stdin) {
     const ctx = await bootstrapHook(stdin);
     if (!ctx)
@@ -59,15 +70,34 @@ export async function handleSessionEnd(stdin) {
                 }
             }
         }
+        // --- Phase 1b: Build corrective summary from signal store ---
+        // When transcript analysis was skipped (correctives already existed),
+        // populate correctiveDetails from stored signals for the summary.
+        if (correctiveDetails.length === 0) {
+            const storedSignals = signalStore.getBySession(sessionId);
+            for (const sig of storedSignals) {
+                if (sig.event_type === "corrective_instruction") {
+                    const data = sig.data;
+                    correctiveDetails.push({
+                        prompt: typeof data.prompt === "string" ? data.prompt : "",
+                        method: typeof data.method === "string" ? data.method : "unknown",
+                        confidence: typeof data.confidence === "number" ? data.confidence : undefined,
+                    });
+                }
+            }
+        }
         // --- Phase 2: Experience generation (existing flow) ---
         if (experienceStore.hasEntriesForSession(sessionId)) {
             console.error(`[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`);
+            emitSummary(correctiveDetails, 0, 0, config.verbosity);
             return;
         }
         // Get session summary and signals
         const summary = collector.getSessionSummary(sessionId);
-        if (summary.total_signals === 0)
+        if (summary.total_signals === 0) {
+            emitSummary(correctiveDetails, 0, 0, config.verbosity);
             return;
+        }
         const signals = signalStore.getBySession(sessionId);
         // Generate experience entries
         const generator = new ExperienceGenerator({
@@ -75,8 +105,10 @@ export async function handleSessionEnd(stdin) {
             promotion_threshold: config.promotion_threshold,
         });
         const entries = generator.generate({ session_id: sessionId, summary, signals });
-        if (entries.length === 0)
+        if (entries.length === 0) {
+            emitSummary(correctiveDetails, 0, 0, config.verbosity);
             return;
+        }
         // Dynamic import to avoid loading @xenova/transformers WASM at module level
         // Fallback: if Embedder fails, store entries without embedding so they can be
         // backfilled later via acm_store_embedding. This preserves experience data
@@ -107,16 +139,7 @@ export async function handleSessionEnd(stdin) {
             if (saved)
                 persisted++;
         }
-        // Output systemMessage with session summary
-        const systemMsg = formatSessionEndMessage({
-            corrective_count: correctiveDetails.length,
-            entries_generated: entries.length,
-            entries_persisted: persisted,
-            corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
-        }, config.verbosity);
-        if (systemMsg) {
-            console.error(systemMsg);
-        }
+        emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
     }
     finally {
         if (embedder)

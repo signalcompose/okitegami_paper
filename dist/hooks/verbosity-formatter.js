@@ -8,10 +8,10 @@ export function formatInjectionMessage(results, verbosity) {
         return `[ACM] ${results.length} experiences injected`;
     }
     const projects = [...new Set(results.map((r) => r.entry.project).filter(Boolean))];
-    const projectStr = projects.join(", ");
+    const fromClause = projects.length > 0 ? ` from ${projects.join(", ")}` : "";
     const lines = [];
     lines.push("[ACM] === Experience Injection ===");
-    lines.push(`[ACM] ${results.length} experiences injected from ${projectStr}`);
+    lines.push(`[ACM] ${results.length} experiences injected${fromClause}`);
     for (const { entry, similarity, score } of results) {
         let line = `[ACM]   - ${entry.type}: "${entry.trigger}" (strength: ${entry.signal_strength.toFixed(2)})`;
         if (verbosity === "verbose") {
