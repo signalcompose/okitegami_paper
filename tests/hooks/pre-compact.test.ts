@@ -157,7 +157,7 @@ describe("PreCompact hook", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     await handlePreCompact(stdin);
 
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("transcript analysis failed"));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("transcript classification failed"));
     spy.mockRestore();
   });
 });

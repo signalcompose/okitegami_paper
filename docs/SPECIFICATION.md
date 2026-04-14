@@ -293,7 +293,7 @@ Past relevant experience:
 
 **Purpose**: Preserve corrective signals before context compaction truncates the transcript (Issue #90).
 
-**Input**: `{ session_id, transcript_path, cwd, trigger }`
+**Input**: `{ session_id, transcript_path, cwd, hook_event_name }`
 
 **Behavior**:
 1. Skip if corrective signals already exist for this session (idempotent)

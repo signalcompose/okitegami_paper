@@ -4,8 +4,8 @@
  *
  * Runs before context compaction to analyze the current transcript and
  * preserve corrective signals that would otherwise be lost when the
- * transcript is truncated. PreCompact is non-blocking; Claude Code
- * proceeds with compaction concurrently. Best-effort preservation.
+ * transcript is truncated. PreCompact cannot block compaction; it runs
+ * before compaction begins. Best-effort preservation.
  */
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
@@ -16,9 +16,10 @@ export async function handlePreCompact(stdin: string): Promise<void> {
   const ctx = await bootstrapHook(stdin);
   if (!ctx) return;
 
+  let sessionId: string | undefined;
   try {
     const { input, config, signalStore } = ctx;
-    const sessionId = requireInputString(input, "session_id", "PreCompact");
+    sessionId = requireInputString(input, "session_id", "PreCompact");
 
     // Skip if corrective signals already exist for this session
     if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
@@ -38,22 +39,38 @@ export async function handlePreCompact(stdin: string): Promise<void> {
       return;
     }
 
-    try {
-      const parsed = parseTranscript(transcriptPath);
-      if (parsed.turns.length <= 1) {
-        ctx.logger.log("skip", "pre_compact_skipped", {
-          session_id: sessionId,
-          reason: "single_turn_transcript",
-        });
-        return;
-      }
+    const parsed = parseTranscript(transcriptPath);
+    if (parsed.turns.length <= 1) {
+      ctx.logger.log("skip", "pre_compact_skipped", {
+        session_id: sessionId,
+        reason: "single_turn_transcript",
+      });
+      return;
+    }
 
-      const corrections = await classifyCorrections(parsed, {
+    let corrections;
+    try {
+      corrections = await classifyCorrections(parsed, {
         ollamaUrl: config.ollama_url,
         model: config.ollama_model,
       });
+    } catch (err) {
+      console.error(
+        `[ACM] pre-compact: transcript classification failed for "${transcriptPath}": ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      ctx.logger.log("error", "pre_compact_classification_failed", {
+        session_id: sessionId,
+        transcript_path: transcriptPath,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      return;
+    }
 
-      for (const c of corrections) {
+    let storeErrors = 0;
+    for (const c of corrections) {
+      try {
         signalStore.addSignal(sessionId, "corrective_instruction", {
           prompt: c.message.text.slice(0, 200),
           reason: c.reason,
@@ -61,33 +78,40 @@ export async function handlePreCompact(stdin: string): Promise<void> {
           method: c.method,
           source: "pre_compact",
         });
+      } catch (storeErr) {
+        storeErrors++;
+        ctx.logger.log("error", "pre_compact_signal_store_failed", {
+          session_id: sessionId,
+          error: storeErr instanceof Error ? storeErr.message : String(storeErr),
+        });
       }
+    }
 
+    if (storeErrors > 0) {
+      console.error(
+        `[ACM] pre-compact: ${storeErrors} of ${corrections.length} signal(s) failed to store for session "${sessionId}"`
+      );
+    }
+
+    if (corrections.length > 0) {
       ctx.logger.log("detection", "pre_compact_signals_preserved", {
         session_id: sessionId,
-        corrective_count: corrections.length,
+        corrective_count: corrections.length - storeErrors,
         methods: corrections.map((c) => c.method),
       });
-
-      if (corrections.length > 0) {
-        console.error(
-          `[ACM] pre-compact: preserved ${corrections.length} corrective signal(s) for session "${sessionId}"`
-        );
-      }
-    } catch (err) {
       console.error(
-        `[ACM] pre-compact: transcript analysis failed for "${transcriptPath}": ` +
-          `${err instanceof Error ? err.message : String(err)}`
+        `[ACM] pre-compact: preserved ${corrections.length - storeErrors} corrective signal(s) for session "${sessionId}"`
       );
-      ctx.logger.log("error", "pre_compact_analysis_failed", {
-        session_id: sessionId,
-        transcript_path: transcriptPath,
-        error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
     }
   } finally {
-    ctx.cleanup();
+    try {
+      ctx.cleanup();
+    } catch (cleanupErr) {
+      console.error(
+        `[ACM] pre-compact: DB close/persist failed for session "${sessionId ?? "unknown"}": ` +
+          `${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`
+      );
+    }
   }
 }
 

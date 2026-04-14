@@ -4,8 +4,8 @@
  *
  * Runs before context compaction to analyze the current transcript and
  * preserve corrective signals that would otherwise be lost when the
- * transcript is truncated. PreCompact is non-blocking; Claude Code
- * proceeds with compaction concurrently. Best-effort preservation.
+ * transcript is truncated. PreCompact cannot block compaction; it runs
+ * before compaction begins. Best-effort preservation.
  */
 export declare function handlePreCompact(stdin: string): Promise<void>;
 //# sourceMappingURL=pre-compact.d.ts.map
