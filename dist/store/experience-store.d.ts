@@ -1,5 +1,5 @@
 import type { AdaptedDatabase } from "./sqlite-adapter.js";
-import type { ExperienceEntry, AcmConfig, ProjectReportRow, InjectionEpisode } from "./types.js";
+import type { ExperienceEntry, AcmConfig, ProjectReportRow, InjectionEpisode, RecurrenceRateRow, TemporalTrendRow, InjectionOutcomeRow, CrossProjectTransferRow, MeasurementReport } from "./types.js";
 export interface EntryWithEmbedding {
     entry: ExperienceEntry;
     embedding: Float32Array;
@@ -32,6 +32,11 @@ export declare class ExperienceStore {
     updateEmbedding(id: string, embedding: Float32Array): boolean;
     getAllWithEmbedding(): EntryWithEmbedding[];
     delete(id: string): boolean;
+    getRecurrenceRate(project?: string): RecurrenceRateRow[];
+    getTemporalTrend(project?: string): TemporalTrendRow[];
+    getInjectionOutcomeCorrelation(project?: string): InjectionOutcomeRow[];
+    getCrossProjectTransfer(): CrossProjectTransferRow[];
+    getMeasurementReport(project?: string): MeasurementReport;
     close(): void;
     private insertEntry;
     private listByType;
