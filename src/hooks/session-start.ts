@@ -79,7 +79,7 @@ export function retrieveAndInject(
   sessionId: string,
   queryText: string
 ): RetrieveAndInjectResult {
-  const retriever = new Retriever(ctx.experienceStore);
+  const retriever = new Retriever(ctx.experienceStore, ctx.config.recency_half_life_days);
   const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
   const injectionText = formatInjection(results);
 

@@ -329,8 +329,8 @@ export class ExperienceStore {
   }
 
   countActiveByProject(project: string): number {
-    const row = this.stmtCountActiveByProject.get(project) as { count: number };
-    return row.count;
+    const row = this.stmtCountActiveByProject.get(project) as { count: number } | undefined;
+    return row?.count ?? 0;
   }
 
   /** Get eviction candidates: lowest-scored active entries that are not protected */
@@ -356,8 +356,11 @@ export class ExperienceStore {
           entry: this.rowToEntry(row),
           embedding: deserializeEmbedding(row.embedding as Uint8Array),
         });
-      } catch {
-        // Skip corrupt rows
+      } catch (err) {
+        console.warn(
+          `[ACM] getActiveWithEmbeddingByProject: skipping corrupt row id="${(row as Record<string, unknown>).id ?? "unknown"}": ` +
+            `${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
     return results;

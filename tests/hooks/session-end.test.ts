@@ -222,4 +222,79 @@ describe("session-end hook", () => {
     expect(failures).toHaveLength(0);
     ctx!.cleanup();
   });
+
+  it("feedback loop: adjusts feedback_score +1 when no corrective after injection", async () => {
+    setupEnv();
+    const sessionId = "end-fb-pos";
+
+    // Create an injection signal with injected_ids
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entry = ctx1!.experienceStore.create({
+      type: "success",
+      trigger: "test trigger",
+      action: "test action",
+      outcome: "test outcome",
+      retrieval_keys: ["test"],
+      signal_strength: 0.75,
+      signal_type: "uninterrupted_completion",
+      session_id: "prev-session",
+      timestamp: new Date().toISOString(),
+    });
+    expect(entry).not.toBeNull();
+
+    // Record injection signal with the entry's id
+    ctx1!.signalStore.addSignal(sessionId, "injection", {
+      injected_ids: [entry!.id],
+      count: 1,
+    });
+    // Record a stop signal (clean session, no corrective)
+    ctx1!.signalStore.addSignal(sessionId, "stop", {});
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    const ctx2 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const updated = ctx2!.experienceStore.getById(entry!.id);
+    expect(updated?.feedback_score).toBe(1);
+    ctx2!.cleanup();
+  });
+
+  it("feedback loop: adjusts feedback_score -1 when corrective after injection", async () => {
+    setupEnv();
+    const sessionId = "end-fb-neg";
+
+    // Create an entry and injection signal
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entry = ctx1!.experienceStore.create({
+      type: "success",
+      trigger: "test trigger",
+      action: "test action",
+      outcome: "test outcome",
+      retrieval_keys: ["test"],
+      signal_strength: 0.75,
+      signal_type: "uninterrupted_completion",
+      session_id: "prev-session",
+      timestamp: new Date().toISOString(),
+    });
+    expect(entry).not.toBeNull();
+
+    ctx1!.signalStore.addSignal(sessionId, "injection", {
+      injected_ids: [entry!.id],
+      count: 1,
+    });
+    // Add corrective signal
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Wrong approach",
+      reason: "incorrect",
+    });
+    ctx1!.signalStore.addSignal(sessionId, "stop", {});
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    const ctx2 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const updated = ctx2!.experienceStore.getById(entry!.id);
+    expect(updated?.feedback_score).toBe(-1);
+    ctx2!.cleanup();
+  });
 });

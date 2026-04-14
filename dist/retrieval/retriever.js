@@ -6,6 +6,10 @@ import { cosineSimilarity } from "./similarity.js";
 export function recencyDecay(referenceDate, fallbackDate, halfLifeDays, now = new Date()) {
     const dateStr = referenceDate ?? fallbackDate;
     const t = new Date(dateStr);
+    if (isNaN(t.getTime())) {
+        console.warn(`[ACM] recencyDecay: invalid date string "${dateStr}", using decay=1.0`);
+        return 1.0;
+    }
     const daysSince = Math.max(0, (now.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
     const lambda = Math.LN2 / halfLifeDays;
     return Math.exp(-lambda * daysSince);
@@ -43,8 +47,9 @@ export class Retriever {
                 result.entry.retrieval_count = (result.entry.retrieval_count ?? 0) + 1;
                 result.entry.last_retrieved_at = now;
             }
-            catch {
-                // Non-critical: tracking update failure should not break retrieval
+            catch (err) {
+                console.warn(`[ACM] retrieve: tracking update failed for entry id="${result.entry.id}": ` +
+                    `${err instanceof Error ? err.message : String(err)}`);
             }
         }
         return results;

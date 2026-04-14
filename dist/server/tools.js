@@ -140,7 +140,7 @@ export function createAcmServer(options) {
         if (options.experienceStore && options.embedder) {
             const experienceStore = options.experienceStore;
             const embedder = options.embedder;
-            const retriever = new Retriever(experienceStore);
+            const retriever = new Retriever(experienceStore, options.recency_half_life_days ?? DEFAULT_CONFIG.recency_half_life_days);
             server.tool("acm_retrieve", "Retrieve relevant past experiences for a query and return injection text (SessionStart hook)", {
                 query: z.string().describe("Query text (e.g., initial user message)"),
                 top_k: z.number().optional().describe("Number of results (default: 5)"),
@@ -208,7 +208,10 @@ export function createAcmServer(options) {
             }, async ({ id, pinned }) => {
                 try {
                     const success = pinStore.setPinned(id, pinned);
-                    return toolResult({ success, entry_id: id, pinned });
+                    if (!success) {
+                        return toolError(`Experience entry id="${id}" not found or already in requested state.`);
+                    }
+                    return toolResult({ success: true, entry_id: id, pinned });
                 }
                 catch (err) {
                     return toolError(`Error pinning experience: ${errorMessage(err)}`);

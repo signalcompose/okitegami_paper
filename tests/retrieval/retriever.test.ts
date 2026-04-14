@@ -114,15 +114,22 @@ describe("Retriever", () => {
     failStore.close();
   });
 
-  it("score = similarity * signal_strength", () => {
+  it("score includes similarity, decay, boost, and signal_strength", () => {
+    const now = new Date();
     const emb = new Float32Array([1, 0, 0]);
-    store.createWithEmbedding(makeEntry({ signal_strength: 0.8 }), emb);
+    // Fresh entry: decay ≈ 1.0, retrieval_count=0 → boost=1.0
+    store.createWithEmbedding(
+      makeEntry({ signal_strength: 0.8, timestamp: now.toISOString() }),
+      emb
+    );
 
     const query = new Float32Array([1, 0, 0]);
     const results = retriever.retrieve(query, 1);
 
     expect(results).toHaveLength(1);
     expect(results[0].similarity).toBeCloseTo(1.0, 4);
-    expect(results[0].score).toBeCloseTo(0.8, 4);
+    // score = similarity(1.0) * decay(≈1.0) * boost(1.0) * strength(0.8) ≈ 0.8
+    expect(results[0].score).toBeCloseTo(0.8, 1);
+    expect(results[0].score).toBeLessThanOrEqual(0.8); // decay < 1.0 for any age > 0
   });
 });

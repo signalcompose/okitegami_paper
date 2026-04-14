@@ -55,8 +55,11 @@ export function clusterByEmbedding(
           cluster.push(entries[j]);
           assigned.add(j);
         }
-      } catch {
-        // Dimension mismatch — skip
+      } catch (err) {
+        console.warn(
+          `[ACM] clusterByEmbedding: skipping pair (${i}, ${j}): ` +
+            `${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
@@ -104,6 +107,15 @@ export function runEviction(
     if (store.archive(entry.id)) archived++;
   }
 
+  const shortfall = excess - archived;
+  if (shortfall > 0) {
+    console.warn(
+      `[ACM] runEviction: could not evict ${shortfall} entries for project "${project}" ` +
+        `(remaining candidates are protected). ` +
+        `Project at ${before - archived} / ${config.max_experiences_per_project} entries.`
+    );
+  }
+
   return { archived, before, after: before - archived };
 }
 
@@ -135,8 +147,15 @@ export async function runReflection(
         config.ollama_model ?? "gemma2:2b"
       );
 
-      if (insight) {
-        store.create({
+      if (!insight) {
+        console.warn(
+          `[ACM] reflection: Ollama returned no valid insight for cluster of ${cluster.length} entries`
+        );
+        continue;
+      }
+
+      {
+        const created = store.create({
           type: "insight",
           trigger: insight.trigger,
           action: insight.action,
@@ -148,10 +167,15 @@ export async function runReflection(
           timestamp: new Date().toISOString(),
           project,
         });
-        insightsGenerated++;
 
-        for (const entry of clusterEntries) {
-          if (store.archive(entry.id)) entriesArchived++;
+        // Only archive source entries if the insight was successfully persisted.
+        // store.create() returns null when signal_strength < promotion_threshold,
+        // in which case archiving would cause data loss.
+        if (created) {
+          insightsGenerated++;
+          for (const entry of clusterEntries) {
+            if (store.archive(entry.id)) entriesArchived++;
+          }
         }
       }
     } catch (err) {
@@ -194,7 +218,15 @@ async function callOllamaForInsight(
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama returned HTTP ${response.status}`);
+      let body = "";
+      try {
+        body = await response.text();
+      } catch {
+        // ignore body read failure
+      }
+      throw new Error(
+        `Ollama returned HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ""}`
+      );
     }
 
     const data = (await response.json()) as { response?: string };

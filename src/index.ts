@@ -19,6 +19,7 @@ async function main(): Promise<void> {
     db,
     capture_turns: config.capture_turns,
     promotion_threshold: config.promotion_threshold,
+    recency_half_life_days: config.recency_half_life_days,
     experienceStore,
     embedder,
   });

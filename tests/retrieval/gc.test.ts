@@ -26,6 +26,12 @@ describe("recencyDecay", () => {
     expect(decay).toBeCloseTo(1.0, 5);
   });
 
+  it("returns 1.0 for invalid date string", () => {
+    const now = new Date();
+    const decay = recencyDecay("not-a-date", "also-not-a-date", 30, now);
+    expect(decay).toBe(1.0);
+  });
+
   it("returns value between 0 and 1 for old entries", () => {
     const now = new Date();
     const old = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
@@ -82,6 +88,23 @@ describe("clusterByEmbedding", () => {
   it("handles empty input", () => {
     const clusters = clusterByEmbedding([]);
     expect(clusters).toEqual([]);
+  });
+
+  it("skips pairs with mismatched embedding dimensions", () => {
+    const entries = [
+      {
+        entry: makeEntry({ session_id: "s1" }) as ExperienceEntry,
+        embedding: new Float32Array([1, 0, 0]),
+      },
+      {
+        entry: makeEntry({ session_id: "s2" }) as ExperienceEntry,
+        embedding: new Float32Array([1, 0]), // different dimension
+      },
+    ];
+
+    const clusters = clusterByEmbedding(entries, 0.9);
+    // Each in its own cluster since comparison is skipped
+    expect(clusters.length).toBe(2);
   });
 });
 

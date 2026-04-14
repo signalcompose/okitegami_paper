@@ -254,7 +254,7 @@ export class ExperienceStore {
     }
     countActiveByProject(project) {
         const row = this.stmtCountActiveByProject.get(project);
-        return row.count;
+        return row?.count ?? 0;
     }
     /** Get eviction candidates: lowest-scored active entries that are not protected */
     getEvictionCandidates(project, limit, protectedFeedbackThreshold = 3) {
@@ -271,8 +271,9 @@ export class ExperienceStore {
                     embedding: deserializeEmbedding(row.embedding),
                 });
             }
-            catch {
-                // Skip corrupt rows
+            catch (err) {
+                console.warn(`[ACM] getActiveWithEmbeddingByProject: skipping corrupt row id="${row.id ?? "unknown"}": ` +
+                    `${err instanceof Error ? err.message : String(err)}`);
             }
         }
         return results;

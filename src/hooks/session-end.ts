@@ -275,8 +275,11 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
               try {
                 experienceStore.adjustFeedbackScore(id, delta);
                 adjusted++;
-              } catch {
-                // Entry may have been archived or deleted — skip
+              } catch (err) {
+                console.warn(
+                  `[ACM] feedback loop: adjustFeedbackScore failed for id="${id}": ` +
+                    `${err instanceof Error ? err.message : String(err)}`
+                );
               }
             }
           }
