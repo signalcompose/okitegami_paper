@@ -216,7 +216,8 @@ export class ExperienceStore {
     `;
     const params: unknown[] = [];
     if (project) {
-      sql += ` JOIN experiences e ON e.session_id = ss.session_id AND e.project = ?`;
+      // Use DISTINCT subquery to avoid N-duplication when multiple experience entries exist per session
+      sql += ` JOIN (SELECT DISTINCT session_id FROM experiences WHERE project = ?) ep ON ep.session_id = ss.session_id`;
       params.push(project);
     }
     sql += `
@@ -233,7 +234,7 @@ export class ExperienceStore {
     // For each injection episode, count how many corrective_instructions occurred in the same session.
     let sql = `
       SELECT inj.session_id,
-             json_array_length(json_extract(inj.data, '$.injected_ids')) AS injected_count,
+             COALESCE(json_array_length(json_extract(inj.data, '$.injected_ids')), 0) AS injected_count,
              COALESCE(cor.corrective_count, 0) AS corrective_count,
              inj.timestamp
       FROM session_signals inj

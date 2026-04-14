@@ -85,7 +85,7 @@ export interface InjectionOutcomeRow {
 export interface CrossProjectTransferRow {
   source_project: string;
   target_project: string;
-  transfer_count: number;
+  transfer_count: number; // Count of individual experience entries transferred (not injection events)
 }
 
 export interface MeasurementReport {
