@@ -24,8 +24,11 @@
 - 実験条件の再現に必要な設定はすべて設定ファイルで制御できること
 
 **プラグイン構造**:
-- `.claude-plugin/plugin.json` — MCP サーバー定義
-- `hooks/hooks.json` — Claude Code hook イベントマッピング（6 hooks）
+- `.claude-plugin/plugin.json` — MCP サーバー定義、hooks 参照、userConfig、skills
+- `hooks/hooks.json` — Claude Code hook イベントマッピング（7 hooks: SessionStart, Stop, SessionEnd, PreCompact, PostToolUse, PostToolUseFailure, UserPromptSubmit）
+- `skills/report/SKILL.md` — `/acm:report` スキル（acm_report の結果をフォーマット表示）
+- `skills/health/SKILL.md` — `/acm:health` スキル（ACM 稼働状態チェック）
+- `userConfig` — ユーザー設定（ollama_url, ollama_model, verbosity, max_experiences_per_project）。値は `CLAUDE_PLUGIN_OPTION_<KEY>` 環境変数として hook プロセスに渡される
 - インストール時、hook は自動的に登録され、`ACM_CONFIG_PATH` 未設定でも `DEFAULT_CONFIG`（`mode: "full"`, `db_path: "~/.acm/experiences.db"`）で動作する
 
 ### 1.1 Functional Overview
