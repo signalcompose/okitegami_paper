@@ -14,7 +14,8 @@ import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
 import { JsonlLogger } from "../logging/jsonl-logger.js";
-import type { AcmConfig } from "../store/types.js";
+import { VERBOSITY_LEVELS } from "../store/types.js";
+import type { AcmConfig, Verbosity } from "../store/types.js";
 import type { AdaptedDatabase } from "../store/sqlite-adapter.js";
 
 export interface HookContext {
@@ -28,9 +29,54 @@ export interface HookContext {
   cleanup: () => void;
 }
 
+/**
+ * Apply CLAUDE_PLUGIN_OPTION_* environment variable overrides to config.
+ * These are set by the Claude Code plugin userConfig system.
+ */
+export function applyPluginOptionOverrides(config: AcmConfig): void {
+  const ollamaUrl = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL?.trim();
+  if (ollamaUrl) {
+    config.ollama_url = ollamaUrl;
+  }
+
+  const ollamaModel = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL?.trim();
+  if (ollamaModel) {
+    config.ollama_model = ollamaModel;
+  }
+
+  const verbosity = process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY?.trim();
+  if (verbosity) {
+    if (VERBOSITY_LEVELS.includes(verbosity as Verbosity)) {
+      config.verbosity = verbosity as Verbosity;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_VERBOSITY: invalid value "${verbosity}". ` +
+          `Expected one of: ${VERBOSITY_LEVELS.join(", ")}. Using default "${config.verbosity}".`
+      );
+    }
+  }
+
+  const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT?.trim();
+  if (maxExp) {
+    const n = Number(maxExp);
+    if (Number.isInteger(n) && n >= 10) {
+      config.max_experiences_per_project = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT: invalid value "${maxExp}". ` +
+          `Expected integer >= 10. Using default ${config.max_experiences_per_project}.`
+      );
+    }
+  }
+}
+
 export async function bootstrapHook(stdin: string): Promise<HookContext | null> {
   // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
   const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
+
+  // Apply plugin userConfig overrides (CLAUDE_PLUGIN_OPTION_* env vars)
+  applyPluginOptionOverrides(config);
+
   if (config.mode === "disabled") {
     return null;
   }

@@ -3,11 +3,13 @@
  * Issue #37: feat(hooks): common bootstrap module for ACM hooks
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { bootstrapHook } from "../../src/hooks/_common.js";
+import { bootstrapHook, applyPluginOptionOverrides } from "../../src/hooks/_common.js";
+import { DEFAULT_CONFIG } from "../../src/store/types.js";
+import type { AcmConfig } from "../../src/store/types.js";
 
 const TMP_DIR = join(tmpdir(), "acm-test-hooks-common");
 
@@ -178,5 +180,129 @@ describe("bootstrapHook", () => {
     const result = await bootstrapHook('{"session_id":"s1"}');
     expect(result).not.toBeNull();
     expect(() => result!.cleanup()).not.toThrow();
+  });
+
+  it("applies CLAUDE_PLUGIN_OPTION_* overrides to returned config", async () => {
+    delete process.env.ACM_CONFIG_PATH;
+    process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY = "quiet";
+    try {
+      const result = await bootstrapHook('{"session_id":"s1"}');
+      expect(result).not.toBeNull();
+      expect(result!.config.verbosity).toBe("quiet");
+      result!.cleanup();
+    } finally {
+      delete process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY;
+    }
+  });
+});
+
+describe("applyPluginOptionOverrides", () => {
+  function makeConfig(): AcmConfig {
+    return { ...DEFAULT_CONFIG };
+  }
+
+  afterEach(() => {
+    delete process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL;
+    delete process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL;
+    delete process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY;
+    delete process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
+  });
+
+  it("overrides ollama_url from env", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL = "http://remote:11434";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.ollama_url).toBe("http://remote:11434");
+  });
+
+  it("overrides ollama_model from env", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL = "llama3:8b";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.ollama_model).toBe("llama3:8b");
+  });
+
+  it("overrides verbosity from env", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY = "verbose";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.verbosity).toBe("verbose");
+  });
+
+  it("warns and ignores invalid verbosity value", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY = "invalid";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.verbosity).toBe("normal");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("overrides max_experiences_per_project from env", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "1000";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(1000);
+  });
+
+  it("warns and ignores max_experiences_per_project below minimum", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "5";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("warns and ignores float max_experiences_per_project", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "100.5";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("warns and ignores non-numeric max_experiences_per_project", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "abc";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("accepts max_experiences_per_project at boundary value 10", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "10";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(10);
+  });
+
+  it("ignores whitespace-only ollama_url", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL = "   ";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.ollama_url).toBeUndefined();
+  });
+
+  it("ignores whitespace-only ollama_model", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL = "   ";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.ollama_model).toBeUndefined();
+  });
+
+  it("does not override when env vars are not set", () => {
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.ollama_url).toBeUndefined();
+    expect(config.ollama_model).toBeUndefined();
+    expect(config.verbosity).toBe("normal");
+    expect(config.max_experiences_per_project).toBe(500);
   });
 });
