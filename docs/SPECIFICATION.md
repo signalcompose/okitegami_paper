@@ -252,7 +252,7 @@ Past relevant experience:
 
 **Behavior**:
 
-**Idempotency**: `handleSessionEnd` is idempotent per session_id. Phase 1 skips if `corrective_instruction` signals already exist for the session. Phase 2 skips if experience entries already exist for the session (via `experienceStore.hasEntriesForSession()`). This is necessary because the hook is registered under the `Stop` event, which fires on every assistant response, not just at session end.
+**Event registration**: SessionEnd fires exactly once per session (Issue #90). Idempotency guards are retained as safety nets: Phase 1 skips if `corrective_instruction` signals already exist (e.g., PreCompact already preserved them). Phase 2 skips if experience entries already exist for the session.
 
 **Phase 1 — Transcript-based corrective detection** (Issue #83):
 1. Read `transcript_path` from hook input
@@ -289,7 +289,21 @@ Past relevant experience:
 
 **Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 
-### 3.7 Hook-Free Experience Generation (Experiment Runner)
+### 3.7 PreCompact Hook
+
+**Purpose**: Preserve corrective signals before context compaction truncates the transcript (Issue #90).
+
+**Input**: `{ session_id, transcript_path, cwd, hook_event_name }`
+
+**Behavior**:
+1. Skip if corrective signals already exist for this session (idempotent)
+2. Parse transcript and classify corrections (same logic as SessionEnd Phase 1)
+3. Store corrective signals with `source: "pre_compact"` marker
+4. Log preservation results
+
+**Rationale**: In long sessions, context compaction may truncate the transcript before SessionEnd runs. PreCompact ensures corrective signals are captured from the full transcript. SessionEnd then skips Phase 1 if PreCompact already preserved signals, and proceeds directly to Phase 2 (experience generation).
+
+### 3.8 Hook-Free Experience Generation (Experiment Runner)
 
 **Purpose**: In `--print` mode (experiment runner), hooks do not fire. Experience entries are generated programmatically from test results.
 

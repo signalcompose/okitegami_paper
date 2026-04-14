@@ -3,9 +3,14 @@
  * Issue #39: feat(hooks): session-end hook
  * Issue #76: fix: generate embedding at session-end
  * Issue #83: transcript-based corrective instruction detection
+ * Issue #90: migrate from Stop to SessionEnd event (fires once per session)
  *
  * Parses transcript → classifies corrections → records signals →
  * aggregates → generates experience entries → embeds → stores.
+ *
+ * SessionEnd fires exactly once per session, so idempotency guards are
+ * retained only as safety nets (e.g., PreCompact may have already stored
+ * corrective signals for this session).
  */
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { ExperienceGenerator } from "../experience/generator.js";
@@ -89,8 +94,9 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // --- Phase 1b: Build corrective summary from signal store ---
-        // Only when transcript analysis was skipped (corrective signals already stored
-        // from a previous session-end invocation), populate correctiveDetails from stored signals.
+        // When transcript analysis was skipped because PreCompact already stored
+        // corrective signals for this session, populate correctiveDetails from
+        // the stored signals for the summary output.
         if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
             try {
                 const storedSignals = signalStore.getBySession(sessionId);
@@ -108,9 +114,13 @@ export async function handleSessionEnd(stdin) {
                 }
             }
             catch (err) {
-                console.error(`[ACM] session-end: failed reading stored corrective signals for "${sessionId}" ` +
-                    `after ${correctiveDetails.length} entries; summary may be incomplete: ` +
+                console.error(`[ACM] session-end: failed reading stored corrective signals for "${sessionId}": ` +
                     `${err instanceof Error ? err.message : String(err)}`);
+                ctx.logger.log("error", "stored_signals_read_failed", {
+                    session_id: sessionId,
+                    error: err instanceof Error ? err.message : String(err),
+                    stack: err instanceof Error ? err.stack : undefined,
+                });
             }
         }
         // --- Phase 2: Experience generation (existing flow) ---

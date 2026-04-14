@@ -7,78 +7,24 @@
  */
 
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { handleSessionEnd } from "../../src/hooks/session-end.js";
 import { handlePostToolUse } from "../../src/hooks/post-tool-use.js";
 import { handlePostToolUseFailure } from "../../src/hooks/post-tool-use-failure.js";
 import { handleStop } from "../../src/hooks/stop.js";
 import { bootstrapHook } from "../../src/hooks/_common.js";
+import {
+  userLine,
+  interruptLine,
+  assistantLine,
+  setupEnv as setupEnvBase,
+  writeTranscript as writeTranscriptBase,
+  makeTmpDir,
+} from "./_fixtures.js";
 
-const TMP_DIR = join(tmpdir(), "acm-test-session-end-transcript");
-
-/** Create a transcript JSONL line for a real user message */
-function userLine(text: string, opts: { promptId?: string; uuid?: string } = {}): string {
-  return JSON.stringify({
-    type: "user",
-    timestamp: new Date().toISOString(),
-    uuid: opts.uuid ?? crypto.randomUUID(),
-    parentUuid: null,
-    permissionMode: "default",
-    promptId: opts.promptId ?? crypto.randomUUID(),
-    message: { role: "user", content: text },
-  });
-}
-
-/** Create a transcript JSONL line for an interrupt */
-function interruptLine(): string {
-  return JSON.stringify({
-    type: "user",
-    timestamp: new Date().toISOString(),
-    uuid: crypto.randomUUID(),
-    parentUuid: null,
-    message: { role: "user", content: "[Request interrupted by user]" },
-  });
-}
-
-/** Create a transcript JSONL line for an assistant response */
-function assistantLine(text: string): string {
-  return JSON.stringify({
-    type: "assistant",
-    timestamp: new Date().toISOString(),
-    uuid: crypto.randomUUID(),
-    message: { role: "assistant", content: text },
-  });
-}
-
-function setupEnv(mode: string = "full"): string {
-  mkdirSync(TMP_DIR, { recursive: true });
-  const dbPath = join(TMP_DIR, `test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
-  const configPath = join(
-    TMP_DIR,
-    `config-${Date.now()}-${Math.random().toString(36).slice(2)}.json`
-  );
-  writeFileSync(
-    configPath,
-    JSON.stringify({
-      mode,
-      db_path: dbPath,
-      promotion_threshold: 0.1,
-    })
-  );
-  process.env.ACM_CONFIG_PATH = configPath;
-  return dbPath;
-}
-
-function writeTranscript(lines: string[]): string {
-  const path = join(
-    TMP_DIR,
-    `transcript-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`
-  );
-  writeFileSync(path, lines.join("\n"));
-  return path;
-}
+const TMP_DIR = makeTmpDir("session-end-transcript");
+const setupEnv = (mode?: string) => setupEnvBase(TMP_DIR, mode);
+const writeTranscript = (lines: string[]) => writeTranscriptBase(TMP_DIR, lines);
 
 describe("session-end transcript-based corrective detection", () => {
   const originalEnv = process.env.ACM_CONFIG_PATH;

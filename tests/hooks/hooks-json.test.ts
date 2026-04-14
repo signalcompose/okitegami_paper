@@ -41,7 +41,7 @@ describe("hooks/hooks.json", () => {
     expect(config.description).toBeTruthy();
   });
 
-  it("maps all 6 hook scripts", () => {
+  it("maps all 7 hook scripts", () => {
     // Collect all script names from commands
     const scriptNames = new Set<string>();
     for (const matchers of Object.values(config.hooks)) {
@@ -60,6 +60,7 @@ describe("hooks/hooks.json", () => {
         "session-start.js",
         "stop.js",
         "session-end.js",
+        "pre-compact.js",
         "post-tool-use.js",
         "post-tool-use-failure.js",
         "user-prompt-submit.js",
@@ -71,6 +72,8 @@ describe("hooks/hooks.json", () => {
     const events = Object.keys(config.hooks);
     expect(events).toContain("SessionStart");
     expect(events).toContain("Stop");
+    expect(events).toContain("SessionEnd");
+    expect(events).toContain("PreCompact");
     expect(events).toContain("PostToolUse");
     expect(events).toContain("PostToolUseFailure");
     expect(events).toContain("UserPromptSubmit");
@@ -124,13 +127,21 @@ describe("hooks/hooks.json", () => {
     }
   });
 
-  it("Stop event has both stop.js and session-end.js in order", () => {
+  it("Stop event has only stop.js (session-end moved to SessionEnd)", () => {
     const stopMatchers = config.hooks.Stop;
-    expect(stopMatchers).toHaveLength(2);
+    expect(stopMatchers).toHaveLength(1);
+    expect(stopMatchers[0].hooks[0].command).toContain("stop.js");
+  });
 
-    const firstCommand = stopMatchers[0].hooks[0].command;
-    const secondCommand = stopMatchers[1].hooks[0].command;
-    expect(firstCommand).toContain("stop.js");
-    expect(secondCommand).toContain("session-end.js");
+  it("SessionEnd event has session-end.js", () => {
+    const matchers = config.hooks.SessionEnd;
+    expect(matchers).toHaveLength(1);
+    expect(matchers[0].hooks[0].command).toContain("session-end.js");
+  });
+
+  it("PreCompact event has pre-compact.js", () => {
+    const matchers = config.hooks.PreCompact;
+    expect(matchers).toHaveLength(1);
+    expect(matchers[0].hooks[0].command).toContain("pre-compact.js");
   });
 });

@@ -3,9 +3,14 @@
  * Issue #39: feat(hooks): session-end hook
  * Issue #76: fix: generate embedding at session-end
  * Issue #83: transcript-based corrective instruction detection
+ * Issue #90: migrate from Stop to SessionEnd event (fires once per session)
  *
  * Parses transcript → classifies corrections → records signals →
  * aggregates → generates experience entries → embeds → stores.
+ *
+ * SessionEnd fires exactly once per session, so idempotency guards are
+ * retained only as safety nets (e.g., PreCompact may have already stored
+ * corrective signals for this session).
  */
 
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
@@ -42,9 +47,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
   if (!ctx) return;
 
   let embedder: EmbedderType | null = null;
+  let sessionId: string | undefined;
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
-    const sessionId = requireInputString(input, "session_id", "SessionEnd");
+    sessionId = requireInputString(input, "session_id", "SessionEnd");
     const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
@@ -70,24 +76,38 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
             });
             for (const c of corrections) {
               const prompt = c.message.text.slice(0, 200);
-              signalStore.addSignal(sessionId, "corrective_instruction", {
-                prompt,
-                reason: c.reason,
-                confidence: c.confidence,
-                method: c.method,
-              });
-              correctiveDetails.push({
-                prompt,
-                method: c.method,
-                confidence: c.confidence,
+              try {
+                signalStore.addSignal(sessionId, "corrective_instruction", {
+                  prompt,
+                  reason: c.reason,
+                  confidence: c.confidence,
+                  method: c.method,
+                });
+                correctiveDetails.push({
+                  prompt,
+                  method: c.method,
+                  confidence: c.confidence,
+                });
+              } catch (storeErr) {
+                console.error(
+                  `[ACM] session-end: failed to store corrective signal for session "${sessionId}": ` +
+                    `${storeErr instanceof Error ? storeErr.message : String(storeErr)}`
+                );
+                ctx.logger.log("error", "corrective_signal_store_failed", {
+                  session_id: sessionId,
+                  error: storeErr instanceof Error ? storeErr.message : String(storeErr),
+                });
+              }
+            }
+            if (correctiveDetails.length > 0) {
+              ctx.logger.log("detection", "correctives_detected", {
+                session_id: sessionId,
+                detected: corrections.length,
+                stored: correctiveDetails.length,
+                methods: correctiveDetails.map((c) => c.method),
+                confidences: correctiveDetails.map((c) => c.confidence),
               });
             }
-            ctx.logger.log("detection", "correctives_detected", {
-              session_id: sessionId,
-              count: corrections.length,
-              methods: corrections.map((c) => c.method),
-              confidences: corrections.map((c) => c.confidence),
-            });
           }
         } catch (err) {
           console.error(
@@ -106,8 +126,9 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     }
 
     // --- Phase 1b: Build corrective summary from signal store ---
-    // Only when transcript analysis was skipped (corrective signals already stored
-    // from a previous session-end invocation), populate correctiveDetails from stored signals.
+    // When transcript analysis was skipped because PreCompact already stored
+    // corrective signals for this session, populate correctiveDetails from
+    // the stored signals for the summary output.
     if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
       try {
         const storedSignals = signalStore.getBySession(sessionId);
@@ -126,10 +147,14 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
         }
       } catch (err) {
         console.error(
-          `[ACM] session-end: failed reading stored corrective signals for "${sessionId}" ` +
-            `after ${correctiveDetails.length} entries; summary may be incomplete: ` +
+          `[ACM] session-end: failed reading stored corrective signals for "${sessionId}": ` +
             `${err instanceof Error ? err.message : String(err)}`
         );
+        ctx.logger.log("error", "stored_signals_read_failed", {
+          session_id: sessionId,
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
       }
     }
 
@@ -193,18 +218,31 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     // Persist each entry with project name (and embedding if available)
     let persisted = 0;
     for (const entryData of entries) {
-      let saved;
-      if (embedderReady && embedder) {
-        const text = buildEmbeddingText(entryData);
-        const embedding = await embedder.embed(text);
-        saved = experienceStore.createWithEmbedding(
-          { ...entryData, project: ctx.projectName },
-          embedding
+      try {
+        let saved;
+        if (embedderReady && embedder) {
+          const text = buildEmbeddingText(entryData);
+          const embedding = await embedder.embed(text);
+          saved = experienceStore.createWithEmbedding(
+            { ...entryData, project: ctx.projectName },
+            embedding
+          );
+        } else {
+          saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+        }
+        if (saved) persisted++;
+      } catch (entryErr) {
+        console.error(
+          `[ACM] session-end: failed to persist entry (type="${entryData.type}") ` +
+            `for session "${sessionId}": ` +
+            `${entryErr instanceof Error ? entryErr.message : String(entryErr)}`
         );
-      } else {
-        saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+        ctx.logger.log("error", "experience_entry_persist_failed", {
+          session_id: sessionId,
+          entry_type: entryData.type,
+          error: entryErr instanceof Error ? entryErr.message : String(entryErr),
+        });
       }
-      if (saved) persisted++;
     }
 
     if (persisted < entries.length) {
@@ -225,7 +263,14 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {
     if (embedder) embedder.dispose();
-    ctx.cleanup();
+    try {
+      ctx.cleanup();
+    } catch (cleanupErr) {
+      console.error(
+        `[ACM] session-end: DB close/persist failed for session "${sessionId ?? "unknown"}": ` +
+          `${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`
+      );
+    }
   }
 }
 
