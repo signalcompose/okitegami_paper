@@ -253,7 +253,8 @@ export class ExperienceStore {
       SELECT src.project AS source_project,
              json_extract(inj.data, '$.project') AS target_project,
              COUNT(*) AS transfer_count
-      FROM session_signals inj, json_each(json_extract(inj.data, '$.injected_ids')) jid
+      FROM session_signals inj
+      CROSS JOIN json_each(json_extract(inj.data, '$.injected_ids')) jid
       JOIN experiences src ON src.id = jid.value
       WHERE inj.event_type = 'injection'
         AND src.project IS NOT NULL

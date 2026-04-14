@@ -444,7 +444,7 @@ interface InjectionEpisode {
 
 4. **Cross-project Transfer** (`cross_project_transfer`): Detects when experiences from project A are injected into sessions associated with project B. Counts transfer occurrences per source→target project pair.
 
-All axes accept an optional `project` filter.
+Axes 1–3 accept an optional `project` filter. Axis 4 (`cross_project_transfer`) is always computed globally, as filtering by a single project would eliminate the cross-project dimension.
 
 ### 8.2 Session Signal: `injection` Event
 
