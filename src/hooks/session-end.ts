@@ -54,6 +54,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
         `[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`
       );
       transcriptAnalysisSkipped = true;
+      ctx.logger.log("skip", "transcript_analysis_skipped", {
+        session_id: sessionId,
+        reason: "corrective_signals_already_exist",
+      });
     } else {
       const transcriptPath = input.transcript_path;
       if (typeof transcriptPath === "string" && transcriptPath) {
@@ -78,6 +82,12 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
                 confidence: c.confidence,
               });
             }
+            ctx.logger.log("detection", "correctives_detected", {
+              session_id: sessionId,
+              count: corrections.length,
+              methods: corrections.map((c) => c.method),
+              confidences: corrections.map((c) => c.confidence),
+            });
           }
         } catch (err) {
           console.error(
@@ -85,6 +95,12 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
               `continuing without corrective signals: ` +
               `${err instanceof Error ? err.message : String(err)}`
           );
+          ctx.logger.log("error", "transcript_analysis_failed", {
+            session_id: sessionId,
+            transcript_path: transcriptPath,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
         }
       }
     }
@@ -122,6 +138,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       console.error(
         `[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`
       );
+      ctx.logger.log("skip", "experience_generation_skipped", {
+        session_id: sessionId,
+        reason: "entries_already_exist",
+      });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
@@ -129,6 +149,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);
     if (summary.total_signals === 0) {
+      ctx.logger.log("skip", "no_signals_recorded", { session_id: sessionId });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
@@ -143,6 +164,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
     if (entries.length === 0) {
+      ctx.logger.log("skip", "no_entries_generated", { session_id: sessionId });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
@@ -162,6 +184,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
         `[ACM] session-end: Embedder initialization failed, storing entries without embedding: ` +
           `${err instanceof Error ? err.message : String(err)}`
       );
+      ctx.logger.log("error", "embedder_init_failed", {
+        session_id: sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     // Persist each entry with project name (and embedding if available)
@@ -187,6 +213,14 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
           `experience entries failed to persist for session "${sessionId}"`
       );
     }
+
+    ctx.logger.log("generation", "experiences_created", {
+      session_id: sessionId,
+      generated: entries.length,
+      persisted,
+      types: entries.map((e) => e.type),
+      embedded: embedderReady,
+    });
 
     emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {

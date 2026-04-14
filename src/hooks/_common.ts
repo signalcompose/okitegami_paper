@@ -13,6 +13,7 @@ import { initializeDatabase } from "../store/schema.js";
 import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
+import { JsonlLogger } from "../logging/jsonl-logger.js";
 import type { AcmConfig } from "../store/types.js";
 import type { AdaptedDatabase } from "../store/sqlite-adapter.js";
 
@@ -23,6 +24,7 @@ export interface HookContext {
   experienceStore: ExperienceStore;
   collector: SignalCollector;
   projectName: string;
+  logger: JsonlLogger;
   cleanup: () => void;
 }
 
@@ -54,6 +56,8 @@ export async function bootstrapHook(stdin: string): Promise<HookContext | null> 
     });
 
     const projectName = basename((input.cwd as string) || "") || "unknown";
+    const logDir = JsonlLogger.resolveLogDir(process.env.CLAUDE_PLUGIN_DATA || undefined);
+    const logger = new JsonlLogger(logDir);
 
     return {
       input,
@@ -62,6 +66,7 @@ export async function bootstrapHook(stdin: string): Promise<HookContext | null> 
       experienceStore,
       collector,
       projectName,
+      logger,
       cleanup: () => {
         try {
           db.close();

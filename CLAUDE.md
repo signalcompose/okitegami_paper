@@ -64,6 +64,10 @@ Corrective instruction（ユーザーの修正指示）は session-end 時に tr
 
 明示的な成功報告は不要。corrective instruction が 0 件のセッションは成功と推定される。
 
+### ACM データへのアクセス境界
+
+ACM は JSONL 運用ログを `${CLAUDE_PLUGIN_DATA}/logs/` に出力する。これはユーザー向け診断ツールである。Claude は ACM データに MCP ツール経由でのみアクセスすること（`acm_retrieve`, `acm_report` など）。JSONL ログファイルを直接読んではならない。
+
 ## セッション開始時の必須確認
 
 1. `docs/session-log.md` の末尾を確認し、前回の作業状況を把握する

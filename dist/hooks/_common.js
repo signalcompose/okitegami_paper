@@ -12,6 +12,7 @@ import { initializeDatabase } from "../store/schema.js";
 import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
+import { JsonlLogger } from "../logging/jsonl-logger.js";
 export async function bootstrapHook(stdin) {
     // Load config: use ACM_CONFIG_PATH if set, otherwise fall back to DEFAULT_CONFIG
     const config = loadConfig(process.env.ACM_CONFIG_PATH || undefined);
@@ -35,6 +36,8 @@ export async function bootstrapHook(stdin) {
             capture_turns: config.capture_turns,
         });
         const projectName = basename(input.cwd || "") || "unknown";
+        const logDir = JsonlLogger.resolveLogDir(process.env.CLAUDE_PLUGIN_DATA || undefined);
+        const logger = new JsonlLogger(logDir);
         return {
             input,
             config,
@@ -42,6 +45,7 @@ export async function bootstrapHook(stdin) {
             experienceStore,
             collector,
             projectName,
+            logger,
             cleanup: () => {
                 try {
                     db.close();
