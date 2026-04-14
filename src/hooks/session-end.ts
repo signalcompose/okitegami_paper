@@ -13,6 +13,7 @@ import { ExperienceGenerator } from "../experience/generator.js";
 import { buildEmbeddingText } from "../retrieval/embedding-text.js";
 import { parseTranscript } from "../signals/transcript-parser.js";
 import { classifyCorrections } from "../signals/corrective-classifier.js";
+import { formatSessionEndMessage, type SessionEndSummary } from "./verbosity-formatter.js";
 import type { Embedder as EmbedderType } from "../retrieval/embedder.js";
 
 export async function handleSessionEnd(stdin: string): Promise<void> {
@@ -23,6 +24,7 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "SessionEnd");
+    const correctiveDetails: SessionEndSummary["corrective_details"] = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
     if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
@@ -40,11 +42,17 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
               model: config.ollama_model,
             });
             for (const c of corrections) {
+              const prompt = c.message.text.slice(0, 200);
               signalStore.addSignal(sessionId, "corrective_instruction", {
-                prompt: c.message.text.slice(0, 200),
+                prompt,
                 reason: c.reason,
                 confidence: c.confidence,
                 method: c.method,
+              });
+              correctiveDetails.push({
+                prompt,
+                method: c.method,
+                confidence: c.confidence,
               });
             }
           }
@@ -99,14 +107,34 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     }
 
     // Persist each entry with project name (and embedding if available)
+    let persisted = 0;
     for (const entryData of entries) {
+      let saved;
       if (embedderReady && embedder) {
         const text = buildEmbeddingText(entryData);
         const embedding = await embedder.embed(text);
-        experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+        saved = experienceStore.createWithEmbedding(
+          { ...entryData, project: ctx.projectName },
+          embedding
+        );
       } else {
-        experienceStore.create({ ...entryData, project: ctx.projectName });
+        saved = experienceStore.create({ ...entryData, project: ctx.projectName });
       }
+      if (saved) persisted++;
+    }
+
+    // Output systemMessage with session summary
+    const systemMsg = formatSessionEndMessage(
+      {
+        corrective_count: correctiveDetails.length,
+        entries_generated: entries.length,
+        entries_persisted: persisted,
+        corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
+      },
+      config.verbosity
+    );
+    if (systemMsg) {
+      console.error(systemMsg);
     }
   } finally {
     if (embedder) embedder.dispose();

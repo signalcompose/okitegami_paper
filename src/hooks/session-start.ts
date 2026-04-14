@@ -12,6 +12,7 @@ import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
+import { formatInjectionMessage } from "./verbosity-formatter.js";
 
 const QUERY_MAX_LENGTH = 200;
 
@@ -66,12 +67,19 @@ export function buildQueryText(projectName: string, transcriptPath: string | und
  * Core logic: retrieve experiences, format injection text, and log injection event.
  * Separated from async Embedder initialization for testability.
  */
+import type { RetrievalResult } from "../retrieval/types.js";
+
+export interface RetrieveAndInjectResult {
+  injectionText: string;
+  results: RetrievalResult[];
+}
+
 export function retrieveAndInject(
   ctx: HookContext,
   queryEmbedding: Float32Array,
   sessionId: string,
   queryText: string
-): string {
+): RetrieveAndInjectResult {
   const retriever = new Retriever(ctx.experienceStore);
   const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
   const injectionText = formatInjection(results);
@@ -93,7 +101,7 @@ export function retrieveAndInject(
     }
   }
 
-  return injectionText;
+  return { injectionText, results };
 }
 
 /**
@@ -118,10 +126,20 @@ export async function handleSessionStart(stdin: string): Promise<void> {
       const queryText = buildQueryText(projectName, transcriptPath);
 
       const queryEmbedding = await embedder.embed(queryText);
-      const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+      const { injectionText, results } = retrieveAndInject(
+        ctx,
+        queryEmbedding,
+        sessionId,
+        queryText
+      );
 
       if (injectionText) {
         process.stdout.write(injectionText);
+      }
+
+      const systemMsg = formatInjectionMessage(results, ctx.config.verbosity);
+      if (systemMsg) {
+        console.error(systemMsg);
       }
     } finally {
       embedder.dispose();

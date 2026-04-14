@@ -13,6 +13,9 @@ export type SignalType = (typeof SIGNAL_TYPES)[number];
 export const ACM_MODES = ["disabled", "success_only", "failure_only", "full"] as const;
 export type AcmMode = (typeof ACM_MODES)[number];
 
+export const VERBOSITY_LEVELS = ["quiet", "normal", "verbose"] as const;
+export type Verbosity = (typeof VERBOSITY_LEVELS)[number];
+
 export interface InterruptContext {
   turns_captured: number; // Post-interrupt turns captured (configurable via capture_turns)
   dialogue_summary: string; // Why the user interrupted
@@ -101,6 +104,7 @@ export interface AcmConfig {
   capture_turns: number; // Post-interrupt turns to capture
   promotion_threshold: number; // Minimum signal strength to persist
   db_path: string; // SQLite DB path (supports ~)
+  verbosity: Verbosity; // systemMessage detail level (default: normal)
   ollama_url?: string; // Ollama API URL (default: http://localhost:11434)
   ollama_model?: string; // Ollama model for corrective classification (default: gemma2:2b)
 }
@@ -111,4 +115,5 @@ export const DEFAULT_CONFIG: AcmConfig = {
   capture_turns: 5,
   promotion_threshold: 0.3,
   db_path: "~/.acm/experiences.db",
+  verbosity: "normal",
 };

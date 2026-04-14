@@ -193,12 +193,12 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = await bootstrapHook(JSON.stringify({ session_id: "new-session" }));
     const queryEmbedding = makeFakeEmbedding(1); // Same seed = high similarity
-    const result = retrieveAndInject(ctx!, queryEmbedding, "new-session", "test query");
+    const { injectionText } = retrieveAndInject(ctx!, queryEmbedding, "new-session", "test query");
     ctx!.cleanup();
 
-    expect(result).toContain("[ACM Context]");
-    expect(result).toContain("FAILURE");
-    expect(result).toContain("syntax error");
+    expect(injectionText).toContain("[ACM Context]");
+    expect(injectionText).toContain("FAILURE");
+    expect(injectionText).toContain("syntax error");
   });
 
   it("records injection signal in session_signals", async () => {
@@ -259,10 +259,10 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = await bootstrapHook(JSON.stringify({ session_id: "empty-session" }));
     const queryEmbedding = makeFakeEmbedding(42);
-    const result = retrieveAndInject(ctx!, queryEmbedding, "empty-session", "query");
+    const { injectionText } = retrieveAndInject(ctx!, queryEmbedding, "empty-session", "query");
     ctx!.cleanup();
 
-    expect(result).toBe("");
+    expect(injectionText).toBe("");
   });
 
   it("returns empty string when mode is disabled", async () => {
@@ -296,11 +296,11 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = await bootstrapHook(JSON.stringify({ session_id: "topk-session" }));
     const queryEmbedding = makeFakeEmbedding(3); // Most similar to entry 3
-    const result = retrieveAndInject(ctx!, queryEmbedding, "topk-session", "query");
+    const { injectionText } = retrieveAndInject(ctx!, queryEmbedding, "topk-session", "query");
     ctx!.cleanup();
 
     // Should have at most 3 entries (top_k=3)
-    const successCount = (result.match(/SUCCESS/g) || []).length;
+    const successCount = (injectionText.match(/SUCCESS/g) || []).length;
     expect(successCount).toBeLessThanOrEqual(3);
   });
 
@@ -344,12 +344,12 @@ describe("session-start hook: retrieveAndInject", () => {
 
     const ctx = await bootstrapHook(JSON.stringify({ session_id: "order-session" }));
     const queryEmbedding = makeFakeEmbedding(10); // Similar to first entry
-    const result = retrieveAndInject(ctx!, queryEmbedding, "order-session", "query");
+    const { injectionText } = retrieveAndInject(ctx!, queryEmbedding, "order-session", "query");
     ctx!.cleanup();
 
     // FAILURE (high score) should appear before SUCCESS (low score)
-    const failurePos = result.indexOf("FAILURE");
-    const successPos = result.indexOf("SUCCESS");
+    const failurePos = injectionText.indexOf("FAILURE");
+    const successPos = injectionText.indexOf("SUCCESS");
     if (failurePos >= 0 && successPos >= 0) {
       expect(failurePos).toBeLessThan(successPos);
     }
