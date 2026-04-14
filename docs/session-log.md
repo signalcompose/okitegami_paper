@@ -467,3 +467,11 @@ Milestone 6-A（exp_6ac）の acm-sf 条件で null result が出た。DB 調査
 - src/store/experience-store.ts
 
 ---
+
+#### Auto-logged: 2026-04-14 14:54 (session: 3780262b)
+
+編集ファイル:
+- src/store/experience-store.ts
+- docs/SPECIFICATION.md
+
+---

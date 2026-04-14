@@ -16,7 +16,12 @@ export declare function buildQueryText(projectName: string, transcriptPath: stri
  * Core logic: retrieve experiences, format injection text, and log injection event.
  * Separated from async Embedder initialization for testability.
  */
-export declare function retrieveAndInject(ctx: HookContext, queryEmbedding: Float32Array, sessionId: string, queryText: string): string;
+import type { RetrievalResult } from "../retrieval/types.js";
+export interface RetrieveAndInjectResult {
+    injectionText: string;
+    results: RetrievalResult[];
+}
+export declare function retrieveAndInject(ctx: HookContext, queryEmbedding: Float32Array, sessionId: string, queryText: string): RetrieveAndInjectResult;
 /**
  * Full async handler: initializes Embedder, generates query embedding,
  * retrieves experiences, and writes injection text to stdout.
