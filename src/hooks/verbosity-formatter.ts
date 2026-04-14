@@ -45,7 +45,7 @@ export interface SessionEndSummary {
 }
 
 /**
- * Format session-end results as a systemMessage string for SessionEnd/Stop.
+ * Format session-end results as a systemMessage string for SessionEnd.
  */
 export function formatSessionEndMessage(summary: SessionEndSummary, verbosity: Verbosity): string {
   if (summary.corrective_count === 0 && summary.entries_generated === 0) return "";

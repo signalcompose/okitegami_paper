@@ -48,10 +48,12 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
+    let transcriptAnalysisSkipped = false;
     if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
       console.error(
         `[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`
       );
+      transcriptAnalysisSkipped = true;
     } else {
       const transcriptPath = input.transcript_path;
       if (typeof transcriptPath === "string" && transcriptPath) {
@@ -88,19 +90,27 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     }
 
     // --- Phase 1b: Build corrective summary from signal store ---
-    // When transcript analysis was skipped (correctives already existed),
-    // populate correctiveDetails from stored signals for the summary.
-    if (correctiveDetails.length === 0) {
-      const storedSignals = signalStore.getBySession(sessionId);
-      for (const sig of storedSignals) {
-        if (sig.event_type === "corrective_instruction") {
-          const data = sig.data as Record<string, unknown>;
-          correctiveDetails.push({
-            prompt: typeof data.prompt === "string" ? data.prompt : "",
-            method: typeof data.method === "string" ? data.method : "unknown",
-            confidence: typeof data.confidence === "number" ? data.confidence : undefined,
-          });
+    // Only when transcript analysis was skipped (correctives already existed
+    // from a prior hook), populate correctiveDetails from stored signals.
+    if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
+      try {
+        const storedSignals = signalStore.getBySession(sessionId);
+        for (const sig of storedSignals) {
+          if (sig.event_type === "corrective_instruction") {
+            const data = sig.data as Record<string, unknown>;
+            correctiveDetails.push({
+              prompt: typeof data.prompt === "string" ? data.prompt : "",
+              method: typeof data.method === "string" ? data.method : "unknown",
+              confidence: typeof data.confidence === "number" ? data.confidence : undefined,
+            });
+          }
         }
+      } catch (err) {
+        console.error(
+          `[ACM] session-end: failed to read stored corrective signals for "${sessionId}", ` +
+            `summary will omit corrective details: ` +
+            `${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 

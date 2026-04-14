@@ -13,6 +13,7 @@ import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } 
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
 import { formatInjectionMessage } from "./verbosity-formatter.js";
+import type { RetrievalResult } from "../retrieval/types.js";
 
 const QUERY_MAX_LENGTH = 200;
 
@@ -67,8 +68,6 @@ export function buildQueryText(projectName: string, transcriptPath: string | und
  * Core logic: retrieve experiences, format injection text, and log injection event.
  * Separated from async Embedder initialization for testability.
  */
-import type { RetrievalResult } from "../retrieval/types.js";
-
 export interface RetrieveAndInjectResult {
   injectionText: string;
   results: RetrievalResult[];
