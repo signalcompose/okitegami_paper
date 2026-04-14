@@ -6,6 +6,7 @@ export interface AcmServerOptions {
     db?: AdaptedDatabase;
     capture_turns?: number;
     promotion_threshold?: number;
+    recency_half_life_days?: number;
     experienceStore?: ExperienceStore;
     embedder?: Embedder;
 }

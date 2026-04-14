@@ -65,7 +65,7 @@ export function buildQueryText(projectName, transcriptPath) {
     return `${projectName} ${truncated}`.trim();
 }
 export function retrieveAndInject(ctx, queryEmbedding, sessionId, queryText) {
-    const retriever = new Retriever(ctx.experienceStore);
+    const retriever = new Retriever(ctx.experienceStore, ctx.config.recency_half_life_days);
     const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
     const injectionText = formatInjection(results);
     // Record injection log — best-effort, must not abort injection delivery

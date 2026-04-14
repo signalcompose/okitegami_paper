@@ -16,6 +16,13 @@ export class ExperienceStore {
     stmtExistsForSession;
     stmtCrossProjectReport;
     stmtSignalSummaryBySession;
+    stmtUpdateRetrievalTracking;
+    stmtAdjustFeedbackScore;
+    stmtSetPinned;
+    stmtArchive;
+    stmtCountActiveByProject;
+    stmtGetEvictionCandidates;
+    stmtGetActiveWithEmbeddingByProject;
     constructor(db, config) {
         this.config = config;
         this.db = db;
@@ -29,8 +36,8 @@ export class ExperienceStore {
         this.stmtListByType = this.db.prepare("SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC");
         this.stmtDelete = this.db.prepare("DELETE FROM experiences WHERE id = ?");
         this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
-        this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL");
-        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?");
+        this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL");
+        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND (type = ? OR type = 'insight')");
         this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
         this.stmtExistsForSession = this.db.prepare("SELECT 1 FROM experiences WHERE session_id = ? LIMIT 1");
         this.stmtCrossProjectReport = this.db.prepare(`
@@ -48,6 +55,19 @@ export class ExperienceStore {
        FROM session_signals
        WHERE session_id = ? AND event_type != 'injection'
        GROUP BY event_type`);
+        this.stmtUpdateRetrievalTracking = this.db.prepare(`UPDATE experiences SET retrieval_count = retrieval_count + 1,
+       last_retrieved_at = ? WHERE id = ?`);
+        this.stmtAdjustFeedbackScore = this.db.prepare("UPDATE experiences SET feedback_score = feedback_score + ? WHERE id = ?");
+        this.stmtSetPinned = this.db.prepare("UPDATE experiences SET pinned = ? WHERE id = ?");
+        this.stmtArchive = this.db.prepare("UPDATE experiences SET archived_at = ? WHERE id = ?");
+        this.stmtCountActiveByProject = this.db.prepare("SELECT COUNT(*) as count FROM experiences WHERE project = ? AND archived_at IS NULL");
+        this.stmtGetEvictionCandidates = this.db.prepare(`SELECT * FROM experiences
+       WHERE project = ? AND archived_at IS NULL
+         AND pinned = 0 AND feedback_score < ? AND type != 'insight'
+       ORDER BY signal_strength ASC, timestamp ASC
+       LIMIT ?`);
+        this.stmtGetActiveWithEmbeddingByProject = this.db.prepare(`SELECT * FROM experiences
+       WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`);
     }
     getDb() {
         return this.db;
@@ -216,6 +236,48 @@ export class ExperienceStore {
             cross_project_transfer: this.getCrossProjectTransfer(),
         };
     }
+    // --- GC / recency tracking methods (Issue #91) ---
+    /** Update retrieval tracking: increment count and set last_retrieved_at */
+    updateRetrievalTracking(id) {
+        this.stmtUpdateRetrievalTracking.run(new Date().toISOString(), id);
+    }
+    adjustFeedbackScore(id, delta) {
+        this.stmtAdjustFeedbackScore.run(delta, id);
+    }
+    setPinned(id, pinned) {
+        const result = this.stmtSetPinned.run(pinned ? 1 : 0, id);
+        return result.changes > 0;
+    }
+    archive(id) {
+        const result = this.stmtArchive.run(new Date().toISOString(), id);
+        return result.changes > 0;
+    }
+    countActiveByProject(project) {
+        const row = this.stmtCountActiveByProject.get(project);
+        return row?.count ?? 0;
+    }
+    /** Get eviction candidates: lowest-scored active entries that are not protected */
+    getEvictionCandidates(project, limit, protectedFeedbackThreshold = 3) {
+        const rows = this.stmtGetEvictionCandidates.all(project, protectedFeedbackThreshold, limit);
+        return rows.map((row) => this.rowToEntry(row));
+    }
+    getActiveWithEmbeddingByProject(project) {
+        const rows = this.stmtGetActiveWithEmbeddingByProject.all(project);
+        const results = [];
+        for (const row of rows) {
+            try {
+                results.push({
+                    entry: this.rowToEntry(row),
+                    embedding: deserializeEmbedding(row.embedding),
+                });
+            }
+            catch (err) {
+                console.warn(`[ACM] getActiveWithEmbeddingByProject: skipping corrupt row id="${row.id ?? "unknown"}": ` +
+                    `${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        return results;
+    }
     close() {
         this.db.close();
     }
@@ -230,7 +292,12 @@ export class ExperienceStore {
             return null;
         }
         const id = randomUUID();
-        const entry = { id, ...data };
+        const entry = {
+            id,
+            ...data,
+            retrieval_count: data.retrieval_count ?? 0,
+            feedback_score: data.feedback_score ?? 0,
+        };
         this.stmtInsert.run(entry.id, entry.type, entry.trigger, entry.action, entry.outcome, JSON.stringify(entry.retrieval_keys), entry.signal_strength, entry.signal_type, entry.session_id, entry.timestamp, entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null, embeddingBlob, entry.project ?? null);
         return entry;
     }
@@ -349,9 +416,18 @@ export class ExperienceStore {
                     ? JSON.parse(row.interrupt_context)
                     : undefined,
             };
-            if (row.project) {
+            if (row.project)
                 entry.project = row.project;
-            }
+            if (row.last_retrieved_at)
+                entry.last_retrieved_at = row.last_retrieved_at;
+            if (row.retrieval_count != null)
+                entry.retrieval_count = row.retrieval_count;
+            if (row.feedback_score != null)
+                entry.feedback_score = row.feedback_score;
+            if (row.pinned === 1)
+                entry.pinned = true;
+            if (row.archived_at)
+                entry.archived_at = row.archived_at;
             return entry;
         }
         catch (err) {

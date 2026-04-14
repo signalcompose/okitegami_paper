@@ -260,6 +260,50 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       embedded: embedderReady,
     });
 
+    // --- Phase 3: Feedback Loop (SPECIFICATION 4.4.3) ---
+    try {
+      const injectionSignal = signals.find((s) => s.event_type === "injection");
+      if (injectionSignal && injectionSignal.data) {
+        const injData = injectionSignal.data as Record<string, unknown>;
+        const injectedIds = injData.injected_ids;
+        if (Array.isArray(injectedIds) && injectedIds.length > 0) {
+          const hadCorrective = correctiveDetails.length > 0;
+          const delta = hadCorrective ? -1 : 1;
+          let adjusted = 0;
+          for (const id of injectedIds) {
+            if (typeof id === "string") {
+              try {
+                experienceStore.adjustFeedbackScore(id, delta);
+                adjusted++;
+              } catch (err) {
+                console.warn(
+                  `[ACM] feedback loop: adjustFeedbackScore failed for id="${id}": ` +
+                    `${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            }
+          }
+          if (adjusted > 0) {
+            ctx.logger.log("generation", "feedback_adjusted", {
+              session_id: sessionId,
+              delta,
+              adjusted_count: adjusted,
+              had_corrective: hadCorrective,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[ACM] session-end: feedback loop failed for session "${sessionId}": ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      ctx.logger.log("error", "feedback_loop_failed", {
+        session_id: sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {
     if (embedder) embedder.dispose();

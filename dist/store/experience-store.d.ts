@@ -19,6 +19,13 @@ export declare class ExperienceStore {
     private stmtExistsForSession;
     private stmtCrossProjectReport;
     private stmtSignalSummaryBySession;
+    private stmtUpdateRetrievalTracking;
+    private stmtAdjustFeedbackScore;
+    private stmtSetPinned;
+    private stmtArchive;
+    private stmtCountActiveByProject;
+    private stmtGetEvictionCandidates;
+    private stmtGetActiveWithEmbeddingByProject;
     constructor(db: AdaptedDatabase, config: AcmConfig);
     getDb(): AdaptedDatabase;
     create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null;
@@ -37,6 +44,15 @@ export declare class ExperienceStore {
     getInjectionOutcomeCorrelation(project?: string): InjectionOutcomeRow[];
     getCrossProjectTransfer(): CrossProjectTransferRow[];
     getMeasurementReport(project?: string): MeasurementReport;
+    /** Update retrieval tracking: increment count and set last_retrieved_at */
+    updateRetrievalTracking(id: string): void;
+    adjustFeedbackScore(id: string, delta: number): void;
+    setPinned(id: string, pinned: boolean): boolean;
+    archive(id: string): boolean;
+    countActiveByProject(project: string): number;
+    /** Get eviction candidates: lowest-scored active entries that are not protected */
+    getEvictionCandidates(project: string, limit: number, protectedFeedbackThreshold?: number): ExperienceEntry[];
+    getActiveWithEmbeddingByProject(project: string): EntryWithEmbedding[];
     close(): void;
     private insertEntry;
     private listByType;

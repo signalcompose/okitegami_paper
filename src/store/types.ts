@@ -21,9 +21,12 @@ export interface InterruptContext {
   dialogue_summary: string; // Why the user interrupted
 }
 
+export const EXPERIENCE_TYPES = ["success", "failure", "insight"] as const;
+export type ExperienceType = (typeof EXPERIENCE_TYPES)[number];
+
 export interface ExperienceEntry {
   id: string; // UUID
-  type: "success" | "failure";
+  type: ExperienceType;
   trigger: string; // Task description / context
   action: string; // What the agent did
   outcome: string; // Result description
@@ -34,6 +37,13 @@ export interface ExperienceEntry {
   timestamp: string; // ISO 8601
   project?: string; // Project name (derived from cwd basename)
   interrupt_context?: InterruptContext; // Failure-specific
+
+  // GC / recency tracking fields (SPECIFICATION Section 4.4)
+  last_retrieved_at?: string; // ISO 8601, updated on retrieval
+  retrieval_count?: number; // Incremented on each retrieval (default: 0)
+  feedback_score?: number; // +1 helpful injection, -1 same-category corrective (default: 0)
+  pinned?: boolean; // Protected from eviction (default: false)
+  archived_at?: string; // ISO 8601, soft-deleted by GC (null = active)
 }
 
 export interface ProjectReportRow {
@@ -107,6 +117,8 @@ export interface AcmConfig {
   verbosity: Verbosity; // systemMessage detail level (default: normal)
   ollama_url?: string; // Ollama API URL (default: http://localhost:11434)
   ollama_model?: string; // Ollama model for corrective classification (default: gemma2:2b)
+  max_experiences_per_project: number; // GC capacity limit per project (default: 500)
+  recency_half_life_days: number; // Half-life for recency decay in days (default: 30)
 }
 
 export const DEFAULT_CONFIG: AcmConfig = {
@@ -116,4 +128,6 @@ export const DEFAULT_CONFIG: AcmConfig = {
   promotion_threshold: 0.3,
   db_path: "~/.acm/experiences.db",
   verbosity: "normal",
+  max_experiences_per_project: 500,
+  recency_half_life_days: 30,
 };

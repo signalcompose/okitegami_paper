@@ -34,9 +34,10 @@ export async function handleSessionEnd(stdin) {
     if (!ctx)
         return;
     let embedder = null;
+    let sessionId;
     try {
         const { input, config, signalStore, experienceStore, collector } = ctx;
-        const sessionId = requireInputString(input, "session_id", "SessionEnd");
+        sessionId = requireInputString(input, "session_id", "SessionEnd");
         const correctiveDetails = [];
         // --- Phase 1: Transcript-based corrective instruction detection ---
         let transcriptAnalysisSkipped = false;
@@ -60,24 +61,37 @@ export async function handleSessionEnd(stdin) {
                         });
                         for (const c of corrections) {
                             const prompt = c.message.text.slice(0, 200);
-                            signalStore.addSignal(sessionId, "corrective_instruction", {
-                                prompt,
-                                reason: c.reason,
-                                confidence: c.confidence,
-                                method: c.method,
-                            });
-                            correctiveDetails.push({
-                                prompt,
-                                method: c.method,
-                                confidence: c.confidence,
+                            try {
+                                signalStore.addSignal(sessionId, "corrective_instruction", {
+                                    prompt,
+                                    reason: c.reason,
+                                    confidence: c.confidence,
+                                    method: c.method,
+                                });
+                                correctiveDetails.push({
+                                    prompt,
+                                    method: c.method,
+                                    confidence: c.confidence,
+                                });
+                            }
+                            catch (storeErr) {
+                                console.error(`[ACM] session-end: failed to store corrective signal for session "${sessionId}": ` +
+                                    `${storeErr instanceof Error ? storeErr.message : String(storeErr)}`);
+                                ctx.logger.log("error", "corrective_signal_store_failed", {
+                                    session_id: sessionId,
+                                    error: storeErr instanceof Error ? storeErr.message : String(storeErr),
+                                });
+                            }
+                        }
+                        if (correctiveDetails.length > 0) {
+                            ctx.logger.log("detection", "correctives_detected", {
+                                session_id: sessionId,
+                                detected: corrections.length,
+                                stored: correctiveDetails.length,
+                                methods: correctiveDetails.map((c) => c.method),
+                                confidences: correctiveDetails.map((c) => c.confidence),
                             });
                         }
-                        ctx.logger.log("detection", "correctives_detected", {
-                            session_id: sessionId,
-                            count: corrections.length,
-                            methods: corrections.map((c) => c.method),
-                            confidences: corrections.map((c) => c.confidence),
-                        });
                     }
                 }
                 catch (err) {
@@ -174,17 +188,29 @@ export async function handleSessionEnd(stdin) {
         // Persist each entry with project name (and embedding if available)
         let persisted = 0;
         for (const entryData of entries) {
-            let saved;
-            if (embedderReady && embedder) {
-                const text = buildEmbeddingText(entryData);
-                const embedding = await embedder.embed(text);
-                saved = experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+            try {
+                let saved;
+                if (embedderReady && embedder) {
+                    const text = buildEmbeddingText(entryData);
+                    const embedding = await embedder.embed(text);
+                    saved = experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+                }
+                else {
+                    saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+                }
+                if (saved)
+                    persisted++;
             }
-            else {
-                saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+            catch (entryErr) {
+                console.error(`[ACM] session-end: failed to persist entry (type="${entryData.type}") ` +
+                    `for session "${sessionId}": ` +
+                    `${entryErr instanceof Error ? entryErr.message : String(entryErr)}`);
+                ctx.logger.log("error", "experience_entry_persist_failed", {
+                    session_id: sessionId,
+                    entry_type: entryData.type,
+                    error: entryErr instanceof Error ? entryErr.message : String(entryErr),
+                });
             }
-            if (saved)
-                persisted++;
         }
         if (persisted < entries.length) {
             console.error(`[ACM] session-end: ${entries.length - persisted} of ${entries.length} ` +
@@ -197,12 +223,59 @@ export async function handleSessionEnd(stdin) {
             types: entries.map((e) => e.type),
             embedded: embedderReady,
         });
+        // --- Phase 3: Feedback Loop (SPECIFICATION 4.4.3) ---
+        try {
+            const injectionSignal = signals.find((s) => s.event_type === "injection");
+            if (injectionSignal && injectionSignal.data) {
+                const injData = injectionSignal.data;
+                const injectedIds = injData.injected_ids;
+                if (Array.isArray(injectedIds) && injectedIds.length > 0) {
+                    const hadCorrective = correctiveDetails.length > 0;
+                    const delta = hadCorrective ? -1 : 1;
+                    let adjusted = 0;
+                    for (const id of injectedIds) {
+                        if (typeof id === "string") {
+                            try {
+                                experienceStore.adjustFeedbackScore(id, delta);
+                                adjusted++;
+                            }
+                            catch (err) {
+                                console.warn(`[ACM] feedback loop: adjustFeedbackScore failed for id="${id}": ` +
+                                    `${err instanceof Error ? err.message : String(err)}`);
+                            }
+                        }
+                    }
+                    if (adjusted > 0) {
+                        ctx.logger.log("generation", "feedback_adjusted", {
+                            session_id: sessionId,
+                            delta,
+                            adjusted_count: adjusted,
+                            had_corrective: hadCorrective,
+                        });
+                    }
+                }
+            }
+        }
+        catch (err) {
+            console.error(`[ACM] session-end: feedback loop failed for session "${sessionId}": ` +
+                `${err instanceof Error ? err.message : String(err)}`);
+            ctx.logger.log("error", "feedback_loop_failed", {
+                session_id: sessionId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
         emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
     }
     finally {
         if (embedder)
             embedder.dispose();
-        ctx.cleanup();
+        try {
+            ctx.cleanup();
+        }
+        catch (cleanupErr) {
+            console.error(`[ACM] session-end: DB close/persist failed for session "${sessionId ?? "unknown"}": ` +
+                `${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+        }
     }
 }
 runAsHookScript(handleSessionEnd, "session-end");

@@ -133,6 +133,35 @@ describe("loadConfig", () => {
     });
   });
 
+  it("throws on max_experiences_per_project < 10", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, JSON.stringify({ max_experiences_per_project: 5 }));
+
+    expect(() => loadConfig(configPath)).toThrow("max_experiences_per_project must be >= 10");
+  });
+
+  it("throws on recency_half_life_days <= 0", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "bad.json");
+    writeFileSync(configPath, JSON.stringify({ recency_half_life_days: 0 }));
+
+    expect(() => loadConfig(configPath)).toThrow("recency_half_life_days must be > 0");
+  });
+
+  it("accepts valid max_experiences_per_project and recency_half_life_days", () => {
+    mkdirSync(testDir, { recursive: true });
+    const configPath = join(testDir, "good.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ max_experiences_per_project: 100, recency_half_life_days: 7 })
+    );
+
+    const config = loadConfig(configPath);
+    expect(config.max_experiences_per_project).toBe(100);
+    expect(config.recency_half_life_days).toBe(7);
+  });
+
   describe("verbosity config", () => {
     it("defaults to normal when not specified", () => {
       const config = loadConfig();

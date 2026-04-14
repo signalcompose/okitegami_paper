@@ -33,6 +33,7 @@ export interface AcmServerOptions {
   db?: AdaptedDatabase;
   capture_turns?: number;
   promotion_threshold?: number;
+  recency_half_life_days?: number;
   experienceStore?: ExperienceStore;
   embedder?: Embedder;
 }
@@ -196,7 +197,10 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
     if (options.experienceStore && options.embedder) {
       const experienceStore = options.experienceStore;
       const embedder = options.embedder;
-      const retriever = new Retriever(experienceStore);
+      const retriever = new Retriever(
+        experienceStore,
+        options.recency_half_life_days ?? DEFAULT_CONFIG.recency_half_life_days
+      );
 
       server.tool(
         "acm_retrieve",
@@ -267,6 +271,32 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
             });
           } catch (err) {
             return toolError(`Error storing embedding: ${errorMessage(err)}`);
+          }
+        }
+      );
+    }
+
+    // --- acm_pin_experience (SPECIFICATION 4.4.4) ---
+    if (options.experienceStore) {
+      const pinStore = options.experienceStore;
+      server.tool(
+        "acm_pin_experience",
+        "Pin or unpin an experience entry to control GC eviction protection",
+        {
+          id: z.string().describe("Experience entry ID"),
+          pinned: z.boolean().default(true).describe("true to pin, false to unpin"),
+        },
+        async ({ id, pinned }) => {
+          try {
+            const success = pinStore.setPinned(id, pinned);
+            if (!success) {
+              return toolError(
+                `Experience entry id="${id}" not found or already in requested state.`
+              );
+            }
+            return toolResult({ success: true, entry_id: id, pinned });
+          } catch (err) {
+            return toolError(`Error pinning experience: ${errorMessage(err)}`);
           }
         }
       );
