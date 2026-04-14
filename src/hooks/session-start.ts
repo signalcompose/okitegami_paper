@@ -100,6 +100,22 @@ export function retrieveAndInject(
     }
   }
 
+  // JSONL operational log
+  ctx.logger.log("retrieval", "query_executed", {
+    session_id: sessionId,
+    query_text: queryText,
+    candidate_count: results.length,
+    top_scores: results.slice(0, 3).map((r) => r.score),
+  });
+  if (results.length > 0) {
+    ctx.logger.log("injection", "injected", {
+      session_id: sessionId,
+      count: results.length,
+      project: ctx.projectName,
+      sources: [...new Set(results.map((r) => r.entry.project).filter(Boolean))],
+    });
+  }
+
   return { injectionText, results };
 }
 

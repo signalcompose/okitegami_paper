@@ -9,6 +9,7 @@
 import { SessionSignalStore } from "../signals/session-store.js";
 import { ExperienceStore } from "../store/experience-store.js";
 import { SignalCollector } from "../signals/signal-collector.js";
+import { JsonlLogger } from "../logging/jsonl-logger.js";
 import type { AcmConfig } from "../store/types.js";
 export interface HookContext {
     input: Record<string, unknown>;
@@ -17,6 +18,7 @@ export interface HookContext {
     experienceStore: ExperienceStore;
     collector: SignalCollector;
     projectName: string;
+    logger: JsonlLogger;
     cleanup: () => void;
 }
 export declare function bootstrapHook(stdin: string): Promise<HookContext | null>;

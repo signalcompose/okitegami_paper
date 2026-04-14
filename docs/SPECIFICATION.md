@@ -132,6 +132,36 @@ All levels: no output when corrective_count = 0 and entries_generated = 0.
 
 systemMessage is written to stderr and displayed as hook output in Claude Code.
 
+### 2.4 JSONL Operational Logging
+
+ACM operations are logged to JSONL files for diagnostics and debugging. This is layer 3 of the 3-layer logging architecture:
+
+```
+Layer 1: console.error    → Real-time diagnostics (existing)
+Layer 2: SQLite acm_logs  → Structured queries / reports
+Layer 3: JSONL files      → Operational logs / debugging (this section)
+```
+
+**Output path**: `${CLAUDE_PLUGIN_DATA}/logs/acm-YYYY-MM-DD.jsonl`. Falls back to `~/.acm/logs/` when `CLAUDE_PLUGIN_DATA` is not set.
+
+**Line format**: `{ "timestamp": "<ISO 8601>", "category": "<string>", "event": "<string>", "data": { ... } }`
+
+**Event categories**:
+
+| Category | Events | Purpose |
+|----------|--------|---------|
+| injection | count, sources | Effectiveness measurement |
+| detection | corrective count, method, confidence | Detection accuracy analysis |
+| generation | experience count, types | Generation pattern analysis |
+| retrieval | candidate count, selected count, scores | Retrieval quality |
+| llm_eval | response time, classification result | LLM performance monitoring |
+| error | timeouts, DB errors | Failure analysis |
+| skip | idempotency guard triggered | Deduplication verification |
+
+**Error resilience**: Logging failures must never abort the primary hook operation. All log writes are best-effort with errors caught and reported to stderr.
+
+**Boundary**: JSONL logs are for operator diagnostics. Claude must access ACM data only via MCP tools (`acm_retrieve`, `acm_report`), never by reading log files directly.
+
 ---
 
 ## 3. Hook Implementations
