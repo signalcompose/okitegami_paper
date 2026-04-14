@@ -33,6 +33,7 @@ describe("plugin.json", () => {
     expect(plugin.description).toBeTruthy();
     expect(plugin.mcpServers).toBeDefined();
     expect(plugin.hooks).toBe("./hooks/hooks.json");
+    expect(plugin.skills).toBe("./skills");
   });
 
   it("has author with correct name", () => {
@@ -80,6 +81,7 @@ describe("hooks.json", () => {
     const hookEvents = hooks.hooks as Record<string, unknown>;
     const requiredEvents = [
       "SessionStart",
+      "Stop",
       "SessionEnd",
       "PreCompact",
       "UserPromptSubmit",

@@ -237,6 +237,13 @@ describe("applyPluginOptionOverrides", () => {
     expect(config.max_experiences_per_project).toBe(500);
   });
 
+  it("ignores float max_experiences_per_project", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "100.5";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.max_experiences_per_project).toBe(500);
+  });
+
   it("ignores non-numeric max_experiences_per_project", () => {
     process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "abc";
     const config = makeConfig();

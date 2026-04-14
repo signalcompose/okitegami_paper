@@ -52,7 +52,7 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
   const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
   if (maxExp) {
     const n = Number(maxExp);
-    if (Number.isFinite(n) && n >= 10) {
+    if (Number.isInteger(n) && n >= 10) {
       config.max_experiences_per_project = n;
     }
   }
