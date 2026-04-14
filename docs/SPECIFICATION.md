@@ -154,7 +154,7 @@ Layer 3: JSONL files      → Operational logs / debugging (this section)
 | detection | corrective count, method, confidence | Detection accuracy analysis |
 | generation | experience count, types | Generation pattern analysis |
 | retrieval | candidate count, selected count, scores | Retrieval quality |
-| llm_eval | response time, classification result | LLM performance monitoring |
+| llm_eval | response time, classification result | LLM performance monitoring (reserved for #93) |
 | error | timeouts, DB errors | Failure analysis |
 | skip | idempotency guard triggered | Deduplication verification |
 

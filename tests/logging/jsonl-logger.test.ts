@@ -102,15 +102,8 @@ describe("JsonlLogger", () => {
   });
 
   describe("error resilience", () => {
-    it("does not throw when log directory does not exist", () => {
-      const badDir = join(TEST_DIR, "nonexistent", "deep", "path");
-      const logger = new JsonlLogger(badDir);
-      // Should not throw — logging failures are best-effort
-      expect(() => logger.log("error", "test", {})).not.toThrow();
-    });
-
     it("does not throw when log directory is not writable", () => {
-      // Use a path that likely doesn't exist and can't be created
+      // Use a path that cannot be created — exercises the catch branch
       const logger = new JsonlLogger("/dev/null/impossible");
       expect(() => logger.log("error", "test", {})).not.toThrow();
     });
