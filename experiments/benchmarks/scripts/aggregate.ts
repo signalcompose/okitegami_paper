@@ -53,16 +53,40 @@ export function loadResults(resultsDir: string): BenchmarkResult[] {
   }
 
   const results: BenchmarkResult[] = [];
+  let skipped = 0;
   for (const file of files) {
+    const filePath = join(resultsDir, file);
+    let raw: string;
     try {
-      const raw = readFileSync(join(resultsDir, file), "utf-8");
-      const parsed = JSON.parse(raw) as unknown;
+      raw = readFileSync(filePath, "utf-8");
+    } catch (err) {
+      console.warn(
+        `[benchmark] Cannot read ${file}: ${err instanceof Error ? err.message : String(err)}`
+      );
+      skipped++;
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      console.warn(`[benchmark] Invalid JSON in ${file}`);
+      skipped++;
+      continue;
+    }
+
+    try {
       results.push(benchmarkResultSchema.parse(parsed));
     } catch (err) {
       console.warn(
-        `[benchmark] Skipping ${file}: ${err instanceof Error ? err.message : String(err)}`
+        `[benchmark] Schema validation failed for ${file}: ${err instanceof Error ? err.message : String(err)}`
       );
+      skipped++;
     }
+  }
+  if (skipped > 0) {
+    console.warn(`[benchmark] ${skipped} file(s) skipped in ${resultsDir}`);
   }
   return results;
 }

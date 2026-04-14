@@ -9,6 +9,7 @@ import {
   benchmarkResultSchema,
   benchmarkMetricsSchema,
   benchmarkConditionSchema,
+  type BenchmarkCondition,
   type BenchmarkResult,
 } from "../types.js";
 import {
@@ -105,7 +106,7 @@ describe("benchmarkResultSchema", () => {
 
 describe("aggregation", () => {
   const makeResult = (
-    condition: "baseline" | "acm",
+    condition: BenchmarkCondition,
     pass_at_1: number,
     overrides: Partial<BenchmarkResult> = {}
   ): BenchmarkResult => ({
@@ -198,14 +199,7 @@ describe("aggregation", () => {
     const results: BenchmarkResult[] = [
       makeResult("baseline", 0.5),
       makeResult("acm", 0.7),
-      {
-        benchmark: "swe-bench-cl",
-        condition: "mem0",
-        run_id: "run-mem0",
-        timestamp: "2026-04-14T12:00:00Z",
-        metrics: { pass_at_1: 0.6 },
-        metadata: { model_version: "test" },
-      },
+      makeResult("mem0", 0.6),
     ];
 
     const summaries = aggregateByCondition(results);
