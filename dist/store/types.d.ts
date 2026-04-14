@@ -5,6 +5,8 @@ export declare const SIGNAL_TYPES: readonly ["interrupt_with_dialogue", "rewind"
 export type SignalType = (typeof SIGNAL_TYPES)[number];
 export declare const ACM_MODES: readonly ["disabled", "success_only", "failure_only", "full"];
 export type AcmMode = (typeof ACM_MODES)[number];
+export declare const VERBOSITY_LEVELS: readonly ["quiet", "normal", "verbose"];
+export type Verbosity = (typeof VERBOSITY_LEVELS)[number];
 export interface InterruptContext {
     turns_captured: number;
     dialogue_summary: string;
@@ -83,6 +85,7 @@ export interface AcmConfig {
     capture_turns: number;
     promotion_threshold: number;
     db_path: string;
+    verbosity: Verbosity;
     ollama_url?: string;
     ollama_model?: string;
 }

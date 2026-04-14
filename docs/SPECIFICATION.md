@@ -118,6 +118,20 @@ These are initial working values; will be calibrated by experimental data (RQ3).
 
 **Design rationale**: Interrupt alone is ambiguous (may be benign). Corrective instruction count (detected via transcript analysis at session-end) is the primary failure signal. Interrupt acts as a +0.10 strength modifier when corrective instructions are present.
 
+### 2.3 Verbosity Setting
+
+`AcmConfig.verbosity` controls systemMessage output detail level. Default: `"normal"`.
+
+| Level | SessionStart (injection) | SessionEnd (detection/generation) |
+|-------|--------------------------|-----------------------------------|
+| `quiet` | Count only: `[ACM] N experiences injected` | Count only: `[ACM] N correctives detected, M experiences generated` |
+| `normal` | Count + project + entry list with type/trigger/strength | Count + corrective prompt excerpts + generation/persist counts (method/confidence omitted) |
+| `verbose` | normal + retrieval similarity/score per entry | normal + method/confidence per corrective |
+
+All levels: no output when corrective_count = 0 and entries_generated = 0.
+
+systemMessage is written to stderr and displayed as hook output in Claude Code.
+
 ---
 
 ## 3. Hook Implementations

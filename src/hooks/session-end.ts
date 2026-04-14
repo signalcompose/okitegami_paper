@@ -13,7 +13,29 @@ import { ExperienceGenerator } from "../experience/generator.js";
 import { buildEmbeddingText } from "../retrieval/embedding-text.js";
 import { parseTranscript } from "../signals/transcript-parser.js";
 import { classifyCorrections } from "../signals/corrective-classifier.js";
+import { formatSessionEndMessage, type SessionEndSummary } from "./verbosity-formatter.js";
 import type { Embedder as EmbedderType } from "../retrieval/embedder.js";
+import type { Verbosity } from "../store/types.js";
+
+function emitSummary(
+  correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]>,
+  entriesGenerated: number,
+  entriesPersisted: number,
+  verbosity: Verbosity
+): void {
+  const systemMsg = formatSessionEndMessage(
+    {
+      corrective_count: correctiveDetails.length,
+      entries_generated: entriesGenerated,
+      entries_persisted: entriesPersisted,
+      corrective_details: correctiveDetails.length > 0 ? correctiveDetails : undefined,
+    },
+    verbosity
+  );
+  if (systemMsg) {
+    console.error(systemMsg);
+  }
+}
 
 export async function handleSessionEnd(stdin: string): Promise<void> {
   const ctx = await bootstrapHook(stdin);
@@ -23,12 +45,15 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
     const sessionId = requireInputString(input, "session_id", "SessionEnd");
+    const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
+    let transcriptAnalysisSkipped = false;
     if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
       console.error(
         `[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`
       );
+      transcriptAnalysisSkipped = true;
     } else {
       const transcriptPath = input.transcript_path;
       if (typeof transcriptPath === "string" && transcriptPath) {
@@ -40,11 +65,17 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
               model: config.ollama_model,
             });
             for (const c of corrections) {
+              const prompt = c.message.text.slice(0, 200);
               signalStore.addSignal(sessionId, "corrective_instruction", {
-                prompt: c.message.text.slice(0, 200),
+                prompt,
                 reason: c.reason,
                 confidence: c.confidence,
                 method: c.method,
+              });
+              correctiveDetails.push({
+                prompt,
+                method: c.method,
+                confidence: c.confidence,
               });
             }
           }
@@ -58,17 +89,49 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       }
     }
 
+    // --- Phase 1b: Build corrective summary from signal store ---
+    // Only when transcript analysis was skipped (corrective signals already stored
+    // from a previous session-end invocation), populate correctiveDetails from stored signals.
+    if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
+      try {
+        const storedSignals = signalStore.getBySession(sessionId);
+        for (const sig of storedSignals) {
+          if (sig.event_type === "corrective_instruction") {
+            const data =
+              sig.data != null && typeof sig.data === "object"
+                ? (sig.data as Record<string, unknown>)
+                : {};
+            correctiveDetails.push({
+              prompt: typeof data.prompt === "string" ? data.prompt : "",
+              method: typeof data.method === "string" ? data.method : "unknown",
+              confidence: typeof data.confidence === "number" ? data.confidence : undefined,
+            });
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[ACM] session-end: failed reading stored corrective signals for "${sessionId}" ` +
+            `after ${correctiveDetails.length} entries; summary may be incomplete: ` +
+            `${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
     // --- Phase 2: Experience generation (existing flow) ---
     if (experienceStore.hasEntriesForSession(sessionId)) {
       console.error(
         `[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`
       );
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
 
     // Get session summary and signals
     const summary = collector.getSessionSummary(sessionId);
-    if (summary.total_signals === 0) return;
+    if (summary.total_signals === 0) {
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
+      return;
+    }
 
     const signals = signalStore.getBySession(sessionId);
 
@@ -79,7 +142,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     });
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      emitSummary(correctiveDetails, 0, 0, config.verbosity);
+      return;
+    }
 
     // Dynamic import to avoid loading @xenova/transformers WASM at module level
     // Fallback: if Embedder fails, store entries without embedding so they can be
@@ -99,15 +165,30 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     }
 
     // Persist each entry with project name (and embedding if available)
+    let persisted = 0;
     for (const entryData of entries) {
+      let saved;
       if (embedderReady && embedder) {
         const text = buildEmbeddingText(entryData);
         const embedding = await embedder.embed(text);
-        experienceStore.createWithEmbedding({ ...entryData, project: ctx.projectName }, embedding);
+        saved = experienceStore.createWithEmbedding(
+          { ...entryData, project: ctx.projectName },
+          embedding
+        );
       } else {
-        experienceStore.create({ ...entryData, project: ctx.projectName });
+        saved = experienceStore.create({ ...entryData, project: ctx.projectName });
       }
+      if (saved) persisted++;
     }
+
+    if (persisted < entries.length) {
+      console.error(
+        `[ACM] session-end: ${entries.length - persisted} of ${entries.length} ` +
+          `experience entries failed to persist for session "${sessionId}"`
+      );
+    }
+
+    emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {
     if (embedder) embedder.dispose();
     ctx.cleanup();

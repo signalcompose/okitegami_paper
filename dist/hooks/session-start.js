@@ -11,6 +11,7 @@ import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
 import { formatInjection } from "../retrieval/injector.js";
+import { formatInjectionMessage } from "./verbosity-formatter.js";
 const QUERY_MAX_LENGTH = 200;
 /**
  * Extract the first user message text from a Claude Code transcript JSONL file.
@@ -63,10 +64,6 @@ export function buildQueryText(projectName, transcriptPath) {
     const truncated = userMessage.slice(0, QUERY_MAX_LENGTH);
     return `${projectName} ${truncated}`.trim();
 }
-/**
- * Core logic: retrieve experiences, format injection text, and log injection event.
- * Separated from async Embedder initialization for testability.
- */
 export function retrieveAndInject(ctx, queryEmbedding, sessionId, queryText) {
     const retriever = new Retriever(ctx.experienceStore);
     const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
@@ -86,7 +83,7 @@ export function retrieveAndInject(ctx, queryEmbedding, sessionId, queryText) {
                 `${err instanceof Error ? err.message : String(err)}`);
         }
     }
-    return injectionText;
+    return { injectionText, results };
 }
 /**
  * Full async handler: initializes Embedder, generates query embedding,
@@ -107,9 +104,20 @@ export async function handleSessionStart(stdin) {
             const transcriptPath = ctx.input.transcript_path;
             const queryText = buildQueryText(projectName, transcriptPath);
             const queryEmbedding = await embedder.embed(queryText);
-            const injectionText = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
+            const { injectionText, results } = retrieveAndInject(ctx, queryEmbedding, sessionId, queryText);
             if (injectionText) {
                 process.stdout.write(injectionText);
+            }
+            // Verbosity message is cosmetic (stderr); must not abort the hook after injection was delivered
+            try {
+                const systemMsg = formatInjectionMessage(results, ctx.config.verbosity);
+                if (systemMsg) {
+                    console.error(systemMsg);
+                }
+            }
+            catch (err) {
+                console.error(`[ACM] session-start: formatInjectionMessage failed (non-critical): ` +
+                    `${err instanceof Error ? err.message : String(err)}`);
             }
         }
         finally {

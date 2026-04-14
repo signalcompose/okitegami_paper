@@ -132,4 +132,43 @@ describe("loadConfig", () => {
       expect(config.mode).toBe(DEFAULT_CONFIG.mode);
     });
   });
+
+  describe("verbosity config", () => {
+    it("defaults to normal when not specified", () => {
+      const config = loadConfig();
+      expect(config.verbosity).toBe("normal");
+    });
+
+    it("accepts valid verbosity values", () => {
+      mkdirSync(testDir, { recursive: true });
+      for (const v of ["quiet", "normal", "verbose"] as const) {
+        const configPath = join(testDir, `acm-${v}.json`);
+        writeFileSync(configPath, JSON.stringify({ verbosity: v }));
+        const config = loadConfig(configPath);
+        expect(config.verbosity).toBe(v);
+      }
+    });
+
+    it("rejects invalid verbosity value", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm-bad.json");
+      writeFileSync(configPath, JSON.stringify({ verbosity: "debug" }));
+      expect(() => loadConfig(configPath)).toThrow(/Invalid verbosity/);
+    });
+
+    it("normalizes empty verbosity to default", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm-empty.json");
+      writeFileSync(configPath, JSON.stringify({ verbosity: "" }));
+      const config = loadConfig(configPath);
+      expect(config.verbosity).toBe("normal");
+    });
+
+    it("rejects non-string verbosity value", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm-num.json");
+      writeFileSync(configPath, JSON.stringify({ verbosity: 1 }));
+      expect(() => loadConfig(configPath)).toThrow(/Invalid verbosity/);
+    });
+  });
 });

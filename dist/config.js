@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ACM_MODES, DEFAULT_CONFIG } from "./store/types.js";
+import { ACM_MODES, VERBOSITY_LEVELS, DEFAULT_CONFIG } from "./store/types.js";
 const KNOWN_CONFIG_KEYS = new Set([
     "mode",
     "top_k",
     "capture_turns",
     "promotion_threshold",
     "db_path",
+    "verbosity",
     "ollama_url",
     "ollama_model",
 ]);
@@ -23,6 +24,9 @@ export function expandTilde(filePath) {
 function validate(config) {
     if (!ACM_MODES.includes(config.mode)) {
         throw new Error(`Invalid mode "${config.mode}". Must be one of: ${ACM_MODES.join(", ")}`);
+    }
+    if (!VERBOSITY_LEVELS.includes(config.verbosity)) {
+        throw new Error(`Invalid verbosity "${config.verbosity}". Must be one of: ${VERBOSITY_LEVELS.join(", ")}`);
     }
     if (config.promotion_threshold < 0 || config.promotion_threshold > 1) {
         throw new Error(`promotion_threshold must be between 0 and 1, got ${config.promotion_threshold}`);
@@ -61,7 +65,10 @@ export function loadConfig(pathOrOptions) {
         ...DEFAULT_CONFIG,
         ...overrides,
         db_path: expandTilde(dbPath),
-        // Normalize empty strings to undefined so defaults are used
+        // Normalize empty verbosity string to default; non-string values pass through to validate()
+        verbosity: overrides.verbosity === ""
+            ? DEFAULT_CONFIG.verbosity
+            : (overrides.verbosity ?? DEFAULT_CONFIG.verbosity),
         ollama_url: overrides.ollama_url || undefined,
         ollama_model: overrides.ollama_model || undefined,
     };

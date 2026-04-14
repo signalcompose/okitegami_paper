@@ -161,12 +161,12 @@ describe("ACM hooks full lifecycle", () => {
 
     // Step 7: New session starts — retrieve and inject
     const queryEmbedding = makeFakeEmbedding(42); // Same seed = high similarity
-    const injection = retrieveAndInject(ctx!, queryEmbedding, "retrieve-session", "query");
+    const { injectionText } = retrieveAndInject(ctx!, queryEmbedding, "retrieve-session", "query");
     ctx!.cleanup();
 
-    expect(injection).toContain("[ACM Context]");
-    expect(injection).toContain("FAILURE");
-    expect(injection).toContain("npm install failed");
+    expect(injectionText).toContain("[ACM Context]");
+    expect(injectionText).toContain("FAILURE");
+    expect(injectionText).toContain("npm install failed");
   });
 
   it("handles success-only session lifecycle", async () => {
