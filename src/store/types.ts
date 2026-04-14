@@ -60,6 +60,41 @@ export interface InjectionEpisode {
   outcome_experiences: ExperienceEntry[];
 }
 
+export interface RecurrenceRateRow {
+  key: string;
+  occurrence_count: number;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface TemporalTrendRow {
+  session_id: string;
+  corrective_count: number;
+  tool_success_count: number;
+  corrective_rate: number;
+  timestamp: string;
+}
+
+export interface InjectionOutcomeRow {
+  session_id: string;
+  injected_count: number;
+  corrective_count: number;
+  timestamp: string;
+}
+
+export interface CrossProjectTransferRow {
+  source_project: string;
+  target_project: string;
+  transfer_count: number;
+}
+
+export interface MeasurementReport {
+  recurrence_rate: RecurrenceRateRow[];
+  temporal_trend: TemporalTrendRow[];
+  injection_outcome_correlation: InjectionOutcomeRow[];
+  cross_project_transfer: CrossProjectTransferRow[];
+}
+
 export interface AcmConfig {
   mode: AcmMode;
   top_k: number; // Number of entries to retrieve
