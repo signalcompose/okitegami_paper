@@ -68,6 +68,7 @@ export async function handlePreCompact(stdin: string): Promise<void> {
       return;
     }
 
+    const storedCorrections: typeof corrections = [];
     let storeErrors = 0;
     for (const c of corrections) {
       try {
@@ -78,6 +79,7 @@ export async function handlePreCompact(stdin: string): Promise<void> {
           method: c.method,
           source: "pre_compact",
         });
+        storedCorrections.push(c);
       } catch (storeErr) {
         storeErrors++;
         ctx.logger.log("error", "pre_compact_signal_store_failed", {
@@ -93,14 +95,14 @@ export async function handlePreCompact(stdin: string): Promise<void> {
       );
     }
 
-    if (corrections.length > 0) {
+    if (storedCorrections.length > 0) {
       ctx.logger.log("detection", "pre_compact_signals_preserved", {
         session_id: sessionId,
-        corrective_count: corrections.length - storeErrors,
-        methods: corrections.map((c) => c.method),
+        corrective_count: storedCorrections.length,
+        methods: storedCorrections.map((c) => c.method),
       });
       console.error(
-        `[ACM] pre-compact: preserved ${corrections.length - storeErrors} corrective signal(s) for session "${sessionId}"`
+        `[ACM] pre-compact: preserved ${storedCorrections.length} corrective signal(s) for session "${sessionId}"`
       );
     }
   } finally {

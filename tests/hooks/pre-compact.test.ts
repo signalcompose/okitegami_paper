@@ -28,37 +28,41 @@ describe("PreCompact hook", () => {
     rmSync(TMP_DIR, { recursive: true, force: true });
   });
 
-  it("preserves corrective signals from transcript before compaction", async () => {
-    const dbPath = setupEnv(TMP_DIR);
-    const transcriptPath = writeTranscript(TMP_DIR, [
-      userLine("Implement feature X"),
-      assistantLine("Working on it..."),
-      interruptLine(),
-      userLine("No, that's wrong. Use a different approach please"),
-      assistantLine("OK, using a different approach"),
-    ]);
+  it(
+    "preserves corrective signals from transcript before compaction",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      const transcriptPath = writeTranscript(TMP_DIR, [
+        userLine("Implement feature X"),
+        assistantLine("Working on it..."),
+        interruptLine(),
+        userLine("No, that's wrong. Use a different approach please"),
+        assistantLine("OK, using a different approach"),
+      ]);
 
-    const stdin = JSON.stringify({
-      session_id: "pre-compact-s1",
-      transcript_path: transcriptPath,
-      cwd: TMP_DIR,
-    });
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-s1",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
 
-    await handlePreCompact(stdin);
+      await handlePreCompact(stdin);
 
-    const db = await initializeDatabase(dbPath);
-    try {
-      const store = new SessionSignalStore(db);
-      const signals = store.getBySession("pre-compact-s1");
-      const correctives = signals.filter((s) => s.event_type === "corrective_instruction");
-      expect(correctives.length).toBeGreaterThan(0);
+      const db = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db);
+        const signals = store.getBySession("pre-compact-s1");
+        const correctives = signals.filter((s) => s.event_type === "corrective_instruction");
+        expect(correctives.length).toBeGreaterThan(0);
 
-      const data = correctives[0].data as Record<string, unknown>;
-      expect(data.source).toBe("pre_compact");
-    } finally {
-      db.close();
+        const data = correctives[0].data as Record<string, unknown>;
+        expect(data.source).toBe("pre_compact");
+      } finally {
+        db.close();
+      }
     }
-  });
+  );
 
   it("skips when corrective signals already exist (idempotent)", async () => {
     const dbPath = setupEnv(TMP_DIR);

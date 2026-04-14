@@ -47,9 +47,10 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
   if (!ctx) return;
 
   let embedder: EmbedderType | null = null;
+  let sessionId: string | undefined;
   try {
     const { input, config, signalStore, experienceStore, collector } = ctx;
-    const sessionId = requireInputString(input, "session_id", "SessionEnd");
+    sessionId = requireInputString(input, "session_id", "SessionEnd");
     const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
     // --- Phase 1: Transcript-based corrective instruction detection ---
@@ -203,18 +204,26 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     // Persist each entry with project name (and embedding if available)
     let persisted = 0;
     for (const entryData of entries) {
-      let saved;
-      if (embedderReady && embedder) {
-        const text = buildEmbeddingText(entryData);
-        const embedding = await embedder.embed(text);
-        saved = experienceStore.createWithEmbedding(
-          { ...entryData, project: ctx.projectName },
-          embedding
-        );
-      } else {
-        saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+      try {
+        let saved;
+        if (embedderReady && embedder) {
+          const text = buildEmbeddingText(entryData);
+          const embedding = await embedder.embed(text);
+          saved = experienceStore.createWithEmbedding(
+            { ...entryData, project: ctx.projectName },
+            embedding
+          );
+        } else {
+          saved = experienceStore.create({ ...entryData, project: ctx.projectName });
+        }
+        if (saved) persisted++;
+      } catch (entryErr) {
+        ctx.logger.log("error", "experience_entry_persist_failed", {
+          session_id: sessionId,
+          entry_type: entryData.type,
+          error: entryErr instanceof Error ? entryErr.message : String(entryErr),
+        });
       }
-      if (saved) persisted++;
     }
 
     if (persisted < entries.length) {
@@ -235,7 +244,14 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
   } finally {
     if (embedder) embedder.dispose();
-    ctx.cleanup();
+    try {
+      ctx.cleanup();
+    } catch (cleanupErr) {
+      console.error(
+        `[ACM] session-end: DB close/persist failed for session "${sessionId ?? "unknown"}": ` +
+          `${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`
+      );
+    }
   }
 }
 

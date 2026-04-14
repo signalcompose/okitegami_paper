@@ -77,7 +77,7 @@ export function writeTranscript(tmpDir: string, lines: string[]): string {
   return path;
 }
 
-/** Create a standard temp directory path for a given test suite */
+/** Create a standard temp directory path for a given test suite (unique per process) */
 export function makeTmpDir(suiteName: string): string {
-  return join(tmpdir(), `acm-test-${suiteName}`);
+  return join(tmpdir(), `acm-test-${suiteName}-${process.pid}`);
 }
