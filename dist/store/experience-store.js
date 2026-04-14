@@ -29,8 +29,8 @@ export class ExperienceStore {
         this.stmtListByType = this.db.prepare("SELECT * FROM experiences WHERE type = ? ORDER BY timestamp DESC");
         this.stmtDelete = this.db.prepare("DELETE FROM experiences WHERE id = ?");
         this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
-        this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL");
-        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?");
+        this.stmtAllWithEmbedding = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL");
+        this.stmtAllWithEmbeddingByType = this.db.prepare("SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND type = ?");
         this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
         this.stmtExistsForSession = this.db.prepare("SELECT 1 FROM experiences WHERE session_id = ? LIMIT 1");
         this.stmtCrossProjectReport = this.db.prepare(`
@@ -216,6 +216,72 @@ export class ExperienceStore {
             cross_project_transfer: this.getCrossProjectTransfer(),
         };
     }
+    // --- GC / recency tracking methods (Issue #91) ---
+    /** Update retrieval tracking: increment count and set last_retrieved_at */
+    updateRetrievalTracking(id) {
+        this.db
+            .prepare(`UPDATE experiences SET retrieval_count = retrieval_count + 1,
+         last_retrieved_at = ? WHERE id = ?`)
+            .run(new Date().toISOString(), id);
+    }
+    /** Adjust feedback_score by delta (+1 or -1) */
+    adjustFeedbackScore(id, delta) {
+        this.db
+            .prepare("UPDATE experiences SET feedback_score = feedback_score + ? WHERE id = ?")
+            .run(delta, id);
+    }
+    /** Pin/unpin an experience entry */
+    setPinned(id, pinned) {
+        const result = this.db
+            .prepare("UPDATE experiences SET pinned = ? WHERE id = ?")
+            .run(pinned ? 1 : 0, id);
+        return result.changes > 0;
+    }
+    /** Soft-delete (archive) an experience entry */
+    archive(id) {
+        const result = this.db
+            .prepare("UPDATE experiences SET archived_at = ? WHERE id = ?")
+            .run(new Date().toISOString(), id);
+        return result.changes > 0;
+    }
+    /** Count active (non-archived) entries for a project */
+    countActiveByProject(project) {
+        const row = this.db
+            .prepare("SELECT COUNT(*) as count FROM experiences WHERE project = ? AND archived_at IS NULL")
+            .get(project);
+        return row.count;
+    }
+    /** Get eviction candidates: lowest-scored active entries that are not protected */
+    getEvictionCandidates(project, limit, protectedFeedbackThreshold = 3) {
+        const rows = this.db
+            .prepare(`SELECT * FROM experiences
+         WHERE project = ? AND archived_at IS NULL
+           AND pinned = 0 AND feedback_score < ? AND type != 'insight'
+         ORDER BY signal_strength ASC, timestamp ASC
+         LIMIT ?`)
+            .all(project, protectedFeedbackThreshold, limit);
+        return rows.map((row) => this.rowToEntry(row));
+    }
+    /** Get all active entries with embeddings for a project (for clustering) */
+    getActiveWithEmbeddingByProject(project) {
+        const rows = this.db
+            .prepare(`SELECT * FROM experiences
+         WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`)
+            .all(project);
+        const results = [];
+        for (const row of rows) {
+            try {
+                results.push({
+                    entry: this.rowToEntry(row),
+                    embedding: deserializeEmbedding(row.embedding),
+                });
+            }
+            catch {
+                // Skip corrupt rows
+            }
+        }
+        return results;
+    }
     close() {
         this.db.close();
     }
@@ -349,9 +415,18 @@ export class ExperienceStore {
                     ? JSON.parse(row.interrupt_context)
                     : undefined,
             };
-            if (row.project) {
+            if (row.project)
                 entry.project = row.project;
-            }
+            if (row.last_retrieved_at)
+                entry.last_retrieved_at = row.last_retrieved_at;
+            if (row.retrieval_count)
+                entry.retrieval_count = row.retrieval_count;
+            if (row.feedback_score)
+                entry.feedback_score = row.feedback_score;
+            if (row.pinned === 1)
+                entry.pinned = true;
+            if (row.archived_at)
+                entry.archived_at = row.archived_at;
             return entry;
         }
         catch (err) {

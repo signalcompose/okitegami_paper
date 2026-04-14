@@ -9,6 +9,7 @@ export const SIGNAL_TYPES = [
 ];
 export const ACM_MODES = ["disabled", "success_only", "failure_only", "full"];
 export const VERBOSITY_LEVELS = ["quiet", "normal", "verbose"];
+export const EXPERIENCE_TYPES = ["success", "failure", "insight"];
 export const DEFAULT_CONFIG = {
     mode: "full",
     top_k: 5,
@@ -16,5 +17,7 @@ export const DEFAULT_CONFIG = {
     promotion_threshold: 0.3,
     db_path: "~/.acm/experiences.db",
     verbosity: "normal",
+    max_experiences_per_project: 500,
+    recency_half_life_days: 30,
 };
 //# sourceMappingURL=types.js.map

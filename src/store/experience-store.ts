@@ -3,6 +3,7 @@ import type { AdaptedDatabase, Statement } from "./sqlite-adapter.js";
 import { SIGNAL_TYPES } from "./types.js";
 import type {
   ExperienceEntry,
+  ExperienceType,
   AcmConfig,
   ProjectReportRow,
   InjectionEpisode,
@@ -55,10 +56,10 @@ export class ExperienceStore {
     this.stmtDelete = this.db.prepare("DELETE FROM experiences WHERE id = ?");
     this.stmtUpdateEmbedding = this.db.prepare("UPDATE experiences SET embedding = ? WHERE id = ?");
     this.stmtAllWithEmbedding = this.db.prepare(
-      "SELECT * FROM experiences WHERE embedding IS NOT NULL"
+      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL"
     );
     this.stmtAllWithEmbeddingByType = this.db.prepare(
-      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND type = ?"
+      "SELECT * FROM experiences WHERE embedding IS NOT NULL AND archived_at IS NULL AND type = ?"
     );
     this.stmtOutcomesBySession = this.db.prepare("SELECT * FROM experiences WHERE session_id = ?");
     this.stmtExistsForSession = this.db.prepare(
@@ -276,6 +277,91 @@ export class ExperienceStore {
     };
   }
 
+  // --- GC / recency tracking methods (Issue #91) ---
+
+  /** Update retrieval tracking: increment count and set last_retrieved_at */
+  updateRetrievalTracking(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE experiences SET retrieval_count = retrieval_count + 1,
+         last_retrieved_at = ? WHERE id = ?`
+      )
+      .run(new Date().toISOString(), id);
+  }
+
+  /** Adjust feedback_score by delta (+1 or -1) */
+  adjustFeedbackScore(id: string, delta: number): void {
+    this.db
+      .prepare("UPDATE experiences SET feedback_score = feedback_score + ? WHERE id = ?")
+      .run(delta, id);
+  }
+
+  /** Pin/unpin an experience entry */
+  setPinned(id: string, pinned: boolean): boolean {
+    const result = this.db
+      .prepare("UPDATE experiences SET pinned = ? WHERE id = ?")
+      .run(pinned ? 1 : 0, id);
+    return result.changes > 0;
+  }
+
+  /** Soft-delete (archive) an experience entry */
+  archive(id: string): boolean {
+    const result = this.db
+      .prepare("UPDATE experiences SET archived_at = ? WHERE id = ?")
+      .run(new Date().toISOString(), id);
+    return result.changes > 0;
+  }
+
+  /** Count active (non-archived) entries for a project */
+  countActiveByProject(project: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) as count FROM experiences WHERE project = ? AND archived_at IS NULL"
+      )
+      .get(project) as { count: number };
+    return row.count;
+  }
+
+  /** Get eviction candidates: lowest-scored active entries that are not protected */
+  getEvictionCandidates(
+    project: string,
+    limit: number,
+    protectedFeedbackThreshold: number = 3
+  ): ExperienceEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM experiences
+         WHERE project = ? AND archived_at IS NULL
+           AND pinned = 0 AND feedback_score < ? AND type != 'insight'
+         ORDER BY signal_strength ASC, timestamp ASC
+         LIMIT ?`
+      )
+      .all(project, protectedFeedbackThreshold, limit) as Record<string, unknown>[];
+    return rows.map((row) => this.rowToEntry(row));
+  }
+
+  /** Get all active entries with embeddings for a project (for clustering) */
+  getActiveWithEmbeddingByProject(project: string): EntryWithEmbedding[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM experiences
+         WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`
+      )
+      .all(project) as Record<string, unknown>[];
+    const results: EntryWithEmbedding[] = [];
+    for (const row of rows) {
+      try {
+        results.push({
+          entry: this.rowToEntry(row),
+          embedding: deserializeEmbedding(row.embedding as Uint8Array),
+        });
+      } catch {
+        // Skip corrupt rows
+      }
+    }
+    return results;
+  }
+
   close(): void {
     this.db.close();
   }
@@ -448,7 +534,7 @@ export class ExperienceStore {
     try {
       const entry: ExperienceEntry = {
         id,
-        type: row.type as "success" | "failure",
+        type: row.type as ExperienceType,
         trigger: row.trigger_text as string,
         action: row.action_text as string,
         outcome: row.outcome_text as string,
@@ -461,9 +547,12 @@ export class ExperienceStore {
           ? (JSON.parse(row.interrupt_context as string) as ExperienceEntry["interrupt_context"])
           : undefined,
       };
-      if (row.project) {
-        entry.project = row.project as string;
-      }
+      if (row.project) entry.project = row.project as string;
+      if (row.last_retrieved_at) entry.last_retrieved_at = row.last_retrieved_at as string;
+      if (row.retrieval_count) entry.retrieval_count = row.retrieval_count as number;
+      if (row.feedback_score) entry.feedback_score = row.feedback_score as number;
+      if (row.pinned === 1) entry.pinned = true;
+      if (row.archived_at) entry.archived_at = row.archived_at as string;
       return entry;
     } catch (err) {
       throw new Error(

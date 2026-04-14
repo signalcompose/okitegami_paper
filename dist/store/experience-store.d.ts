@@ -37,6 +37,20 @@ export declare class ExperienceStore {
     getInjectionOutcomeCorrelation(project?: string): InjectionOutcomeRow[];
     getCrossProjectTransfer(): CrossProjectTransferRow[];
     getMeasurementReport(project?: string): MeasurementReport;
+    /** Update retrieval tracking: increment count and set last_retrieved_at */
+    updateRetrievalTracking(id: string): void;
+    /** Adjust feedback_score by delta (+1 or -1) */
+    adjustFeedbackScore(id: string, delta: number): void;
+    /** Pin/unpin an experience entry */
+    setPinned(id: string, pinned: boolean): boolean;
+    /** Soft-delete (archive) an experience entry */
+    archive(id: string): boolean;
+    /** Count active (non-archived) entries for a project */
+    countActiveByProject(project: string): number;
+    /** Get eviction candidates: lowest-scored active entries that are not protected */
+    getEvictionCandidates(project: string, limit: number, protectedFeedbackThreshold?: number): ExperienceEntry[];
+    /** Get all active entries with embeddings for a project (for clustering) */
+    getActiveWithEmbeddingByProject(project: string): EntryWithEmbedding[];
     close(): void;
     private insertEntry;
     private listByType;

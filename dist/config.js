@@ -11,6 +11,8 @@ const KNOWN_CONFIG_KEYS = new Set([
     "verbosity",
     "ollama_url",
     "ollama_model",
+    "max_experiences_per_project",
+    "recency_half_life_days",
 ]);
 export function expandTilde(filePath) {
     if (filePath === "~") {
@@ -36,6 +38,12 @@ function validate(config) {
     }
     if (config.capture_turns < 1) {
         throw new Error(`capture_turns must be >= 1, got ${config.capture_turns}`);
+    }
+    if (config.max_experiences_per_project < 10) {
+        throw new Error(`max_experiences_per_project must be >= 10, got ${config.max_experiences_per_project}`);
+    }
+    if (config.recency_half_life_days <= 0) {
+        throw new Error(`recency_half_life_days must be > 0, got ${config.recency_half_life_days}`);
     }
 }
 export function loadConfig(pathOrOptions) {

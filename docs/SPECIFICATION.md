@@ -75,7 +75,7 @@ Claude Code
 ```typescript
 interface ExperienceEntry {
   id: string;                    // UUID
-  type: "success" | "failure";
+  type: "success" | "failure" | "insight";
   trigger: string;               // Task description / context
   action: string;                // What the agent did
   outcome: string;               // Result description
@@ -91,6 +91,13 @@ interface ExperienceEntry {
     turns_captured: number;      // N=3–5 post-interrupt turns
     dialogue_summary: string;    // Why the user interrupted
   };
+
+  // GC / recency tracking fields (Section 4.4)
+  last_retrieved_at?: string;    // ISO 8601, updated on retrieval
+  retrieval_count?: number;      // Incremented on each retrieval (default: 0)
+  feedback_score?: number;       // +1 on helpful injection, -1 on same-category corrective (default: 0)
+  pinned?: boolean;              // Protected from eviction (default: false)
+  archived_at?: string;          // ISO 8601, soft-deleted by GC (null = active)
 }
 
 type SignalType =
@@ -334,7 +341,7 @@ Past relevant experience:
 ```sql
 CREATE TABLE experiences (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK(type IN ('success', 'failure')),
+  type TEXT NOT NULL CHECK(type IN ('success', 'failure', 'insight')),
   trigger_text TEXT NOT NULL,
   action_text TEXT NOT NULL,
   outcome_text TEXT NOT NULL,
@@ -345,13 +352,19 @@ CREATE TABLE experiences (
   timestamp TEXT NOT NULL,
   interrupt_context TEXT,        -- JSON, nullable
   embedding BLOB,                -- vector embedding of retrieval_keys
-  project TEXT                   -- Project name (cwd basename), nullable for backward compat
+  project TEXT,                  -- Project name (cwd basename), nullable for backward compat
+  last_retrieved_at TEXT,        -- ISO 8601, updated on retrieval
+  retrieval_count INTEGER NOT NULL DEFAULT 0,
+  feedback_score INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,  -- 0=false, 1=true
+  archived_at TEXT               -- ISO 8601, soft-deleted by GC (null = active)
 );
 
 CREATE INDEX idx_experiences_type ON experiences(type);
 CREATE INDEX idx_experiences_signal_strength ON experiences(signal_strength);
 CREATE INDEX idx_experiences_timestamp ON experiences(timestamp);
 CREATE INDEX idx_experiences_project ON experiences(project);
+CREATE INDEX idx_experiences_archived ON experiences(archived_at);
 ```
 
 ### 4.2 Storage Location
@@ -362,8 +375,54 @@ CREATE INDEX idx_experiences_project ON experiences(project);
 
 1. Compute embedding of query (task description keywords)
 2. Cosine similarity search over `embedding` column
-3. Return top-K results, ordered by `similarity * signal_strength`
-4. Both success and failure entries are returned
+3. Return top-K results, ordered by `retrieval_score`
+4. Both success, failure, and insight entries are returned (archived excluded)
+5. On retrieval, update `last_retrieved_at` and increment `retrieval_count`
+
+**Retrieval Score**:
+```
+retrieval_score = cosine_similarity × recency_decay(last_retrieved_at) × log(retrieval_count + 1) × signal_strength
+```
+
+- `recency_decay(t) = exp(-λ × days_since(t))` where λ is configurable (default half-life: 30 days)
+- For entries never retrieved (`last_retrieved_at = null`), use `timestamp` as fallback
+
+### 4.4 Memory GC (Garbage Collection)
+
+*Reference: Paper Section 4.2 — Memory Management*
+
+**Design Principle**: Important memories are never deleted. Low-quality or stale entries are archived (soft delete). Reflection generalizes lessons before archival.
+
+#### 4.4.1 Capacity Management
+
+- `max_experiences_per_project` config setting (default: 500)
+- Eviction is project-scoped: each project's entries are managed independently
+- When count exceeds limit, lowest-scored entries are archived (`archived_at` set)
+- **Protected entries** (never evicted):
+  - `pinned = 1`
+  - `feedback_score >= 3`
+  - `type = 'insight'` (reflection-generated)
+
+#### 4.4.2 LLM Reflection
+
+- Triggered when experience count reaches 80% of `max_experiences_per_project`
+- Clusters similar experiences by embedding similarity (simple greedy clustering)
+- For each cluster with >= 3 entries, generates a generalized insight via Ollama
+- Insight stored as `type: "insight"`, source entries archived
+- "Memories fade, but lessons remain"
+
+#### 4.4.3 Feedback Loop
+
+- After injection, if session has no corrective instructions → `feedback_score += 1` for injected entries
+- After injection, if session has same-category corrective → `feedback_score -= 1` for injected entries
+- High `feedback_score` entries are protected from eviction
+
+#### 4.4.4 MCP Tool: `acm_pin_experience`
+
+Pin an experience entry to protect it from GC eviction.
+
+**Input**: `{ id: string }`
+**Output**: `{ success: boolean, entry_id: string }`
 
 ---
 
@@ -389,7 +448,9 @@ The implementation must support the following experimental conditions by configu
   "top_k": 5,              // Number of entries to retrieve
   "capture_turns": 5,      // Post-interrupt turns to capture
   "promotion_threshold": 0.3, // Minimum signal strength to persist
-  "db_path": "~/.acm/experiences.db"
+  "db_path": "~/.acm/experiences.db",
+  "max_experiences_per_project": 500,  // GC capacity limit per project
+  "recency_half_life_days": 30         // Half-life for recency decay (days)
 }
 ```
 
@@ -454,7 +515,7 @@ The following are discussed in the paper but NOT implemented in this phase:
 
 - **Rewind detection via dedicated hook**: Claude Code does not provide a rewind hook. Indirect detection via corrective instruction patterns only.
 - **Real-time token count monitoring**: Not available via hooks API. Use post-session token counts from `~/.claude.json` for RQ4 analysis.
-- **Time-decay weighting**: Mentioned in Limitations (Section 6.4) as future work.
+- **Time-decay weighting**: Implemented in Section 4.3/4.4 as recency_decay and GC.
 - **Generalization to non-coding agents**: Paper scope limitation.
 - **Interrupt disambiguation heuristics**: Mentioned in Limitations. All interrupts treated as negative signals for now.
 - **Baseline-Serena condition**: Requires Serena MCP integration. Evaluated separately if time permits.
@@ -516,4 +577,4 @@ This enables tracing the injection→outcome relationship via shared `session_id
 
 ---
 
-*Last updated: 2026-03-30*
+*Last updated: 2026-04-14*

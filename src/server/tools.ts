@@ -271,6 +271,24 @@ export function createAcmServer(options?: AcmServerOptions): McpServer {
         }
       );
     }
+
+    // --- acm_pin_experience (SPECIFICATION 4.4.4) ---
+    if (options.experienceStore) {
+      const pinStore = options.experienceStore;
+      server.tool(
+        "acm_pin_experience",
+        "Pin an experience entry to protect it from GC eviction",
+        { id: z.string().describe("Experience entry ID to pin") },
+        async ({ id }) => {
+          try {
+            const success = pinStore.setPinned(id, true);
+            return toolResult({ success, entry_id: id });
+          } catch (err) {
+            return toolError(`Error pinning experience: ${errorMessage(err)}`);
+          }
+        }
+      );
+    }
   }
 
   return server;

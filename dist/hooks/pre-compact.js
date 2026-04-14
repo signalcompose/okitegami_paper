@@ -60,7 +60,7 @@ export async function handlePreCompact(stdin) {
             });
             return;
         }
-        let storeErrors = 0;
+        const storedCorrections = [];
         for (const c of corrections) {
             try {
                 signalStore.addSignal(sessionId, "corrective_instruction", {
@@ -70,25 +70,27 @@ export async function handlePreCompact(stdin) {
                     method: c.method,
                     source: "pre_compact",
                 });
+                storedCorrections.push(c);
             }
             catch (storeErr) {
-                storeErrors++;
+                console.error(`[ACM] pre-compact: failed to store corrective signal for session "${sessionId}": ` +
+                    `${storeErr instanceof Error ? storeErr.message : String(storeErr)}`);
                 ctx.logger.log("error", "pre_compact_signal_store_failed", {
                     session_id: sessionId,
                     error: storeErr instanceof Error ? storeErr.message : String(storeErr),
                 });
             }
         }
-        if (storeErrors > 0) {
-            console.error(`[ACM] pre-compact: ${storeErrors} of ${corrections.length} signal(s) failed to store for session "${sessionId}"`);
+        if (storedCorrections.length < corrections.length) {
+            console.error(`[ACM] pre-compact: ${corrections.length - storedCorrections.length} of ${corrections.length} signal(s) failed to store for session "${sessionId}"`);
         }
-        if (corrections.length > 0) {
+        if (storedCorrections.length > 0) {
             ctx.logger.log("detection", "pre_compact_signals_preserved", {
                 session_id: sessionId,
-                corrective_count: corrections.length - storeErrors,
-                methods: corrections.map((c) => c.method),
+                corrective_count: storedCorrections.length,
+                methods: storedCorrections.map((c) => c.method),
             });
-            console.error(`[ACM] pre-compact: preserved ${corrections.length - storeErrors} corrective signal(s) for session "${sessionId}"`);
+            console.error(`[ACM] pre-compact: preserved ${storedCorrections.length} corrective signal(s) for session "${sessionId}"`);
         }
     }
     finally {

@@ -11,9 +11,11 @@ export interface InterruptContext {
     turns_captured: number;
     dialogue_summary: string;
 }
+export declare const EXPERIENCE_TYPES: readonly ["success", "failure", "insight"];
+export type ExperienceType = (typeof EXPERIENCE_TYPES)[number];
 export interface ExperienceEntry {
     id: string;
-    type: "success" | "failure";
+    type: ExperienceType;
     trigger: string;
     action: string;
     outcome: string;
@@ -24,6 +26,11 @@ export interface ExperienceEntry {
     timestamp: string;
     project?: string;
     interrupt_context?: InterruptContext;
+    last_retrieved_at?: string;
+    retrieval_count?: number;
+    feedback_score?: number;
+    pinned?: boolean;
+    archived_at?: string;
 }
 export interface ProjectReportRow {
     project: string;
@@ -88,6 +95,8 @@ export interface AcmConfig {
     verbosity: Verbosity;
     ollama_url?: string;
     ollama_model?: string;
+    max_experiences_per_project: number;
+    recency_half_life_days: number;
 }
 export declare const DEFAULT_CONFIG: AcmConfig;
 //# sourceMappingURL=types.d.ts.map
