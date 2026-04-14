@@ -4,12 +4,11 @@
  * Validates that plugin.json, hooks.json, and skill files
  * conform to the expected Claude Code plugin format.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname ?? ".", "..");
-const PLUGIN_DIR = join(ROOT, ".claude-plugin");
 const HOOKS_DIR = join(ROOT, "hooks");
 const SKILLS_DIR = join(ROOT, "skills");
 
@@ -17,15 +16,11 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
+// Read once at module level — fails fast if file is missing
+const pluginPath = join(ROOT, ".claude-plugin", "plugin.json");
+const plugin = readJson(pluginPath) as Record<string, unknown>;
+
 describe("plugin.json", () => {
-  const pluginPath = join(PLUGIN_DIR, "plugin.json");
-  let plugin: Record<string, unknown>;
-
-  beforeAll(() => {
-    expect(existsSync(pluginPath)).toBe(true);
-    plugin = readJson(pluginPath) as Record<string, unknown>;
-  });
-
   it("has required top-level fields", () => {
     expect(plugin.name).toBe("acm");
     expect(plugin.description).toBeTruthy();

@@ -34,17 +34,17 @@ export interface HookContext {
  * These are set by the Claude Code plugin userConfig system.
  */
 export function applyPluginOptionOverrides(config: AcmConfig): void {
-  const ollamaUrl = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL;
+  const ollamaUrl = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL?.trim();
   if (ollamaUrl) {
     config.ollama_url = ollamaUrl;
   }
 
-  const ollamaModel = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL;
+  const ollamaModel = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL?.trim();
   if (ollamaModel) {
     config.ollama_model = ollamaModel;
   }
 
-  const verbosity = process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY;
+  const verbosity = process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY?.trim();
   if (verbosity) {
     if (VERBOSITY_LEVELS.includes(verbosity as Verbosity)) {
       config.verbosity = verbosity as Verbosity;
@@ -56,7 +56,7 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
     }
   }
 
-  const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
+  const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT?.trim();
   if (maxExp) {
     const n = Number(maxExp);
     if (Number.isInteger(n) && n >= 10) {
