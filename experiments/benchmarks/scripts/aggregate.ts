@@ -44,10 +44,15 @@ export function loadResults(resultsDir: string): BenchmarkResult[] {
 
   const results: BenchmarkResult[] = [];
   for (const file of files) {
-    const raw = readFileSync(join(resultsDir, file), "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const validated = benchmarkResultSchema.parse(parsed);
-    results.push(validated);
+    try {
+      const raw = readFileSync(join(resultsDir, file), "utf-8");
+      const parsed = JSON.parse(raw) as unknown;
+      results.push(benchmarkResultSchema.parse(parsed));
+    } catch (err) {
+      console.warn(
+        `[benchmark] Skipping ${file}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
   return results;
 }
@@ -94,7 +99,15 @@ export function formatMarkdownTable(table: ComparisonTable): string {
   lines.push(`Generated: ${table.generated_at}`);
   lines.push("");
 
-  const headers = ["Condition", "Runs", "Pass@1", "Std", "Fwd Transfer", "Forgetting", "Corrective"];
+  const headers = [
+    "Condition",
+    "Runs",
+    "Pass@1",
+    "Std",
+    "Fwd Transfer",
+    "Forgetting",
+    "Corrective",
+  ];
   lines.push(`| ${headers.join(" | ")} |`);
   lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
 

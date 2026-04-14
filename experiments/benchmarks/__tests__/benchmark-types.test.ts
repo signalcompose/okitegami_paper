@@ -76,27 +76,19 @@ describe("benchmarkResultSchema", () => {
   });
 
   it("rejects invalid condition", () => {
-    expect(() =>
-      benchmarkConditionSchema.parse("invalid")
-    ).toThrow();
+    expect(() => benchmarkConditionSchema.parse("invalid")).toThrow();
   });
 
   it("rejects pass_at_1 out of range", () => {
-    expect(() =>
-      benchmarkMetricsSchema.parse({ pass_at_1: 1.5 })
-    ).toThrow();
+    expect(() => benchmarkMetricsSchema.parse({ pass_at_1: 1.5 })).toThrow();
   });
 
   it("rejects pass_at_1 below 0", () => {
-    expect(() =>
-      benchmarkMetricsSchema.parse({ pass_at_1: -0.1 })
-    ).toThrow();
+    expect(() => benchmarkMetricsSchema.parse({ pass_at_1: -0.1 })).toThrow();
   });
 
   it("rejects missing required fields", () => {
-    expect(() =>
-      benchmarkResultSchema.parse({ benchmark: "swe-bench-cl" })
-    ).toThrow();
+    expect(() => benchmarkResultSchema.parse({ benchmark: "swe-bench-cl" })).toThrow();
   });
 
   it("rejects invalid timestamp format", () => {
@@ -144,10 +136,7 @@ describe("aggregation", () => {
   });
 
   it("computes standard deviation", () => {
-    const results = [
-      makeResult("baseline", 0.4),
-      makeResult("baseline", 0.6),
-    ];
+    const results = [makeResult("baseline", 0.4), makeResult("baseline", 0.6)];
 
     const summaries = aggregateByCondition(results);
     const baseline = summaries[0];
@@ -291,8 +280,20 @@ describe("loadResults", () => {
     expect(loaded).toHaveLength(1);
   });
 
-  it("throws on invalid JSON content", () => {
+  it("skips invalid JSON files and returns valid ones", () => {
     writeFileSync(join(testDir, "bad.json"), '{"benchmark":"x"}');
-    expect(() => loadResults(testDir)).toThrow();
+    const valid: BenchmarkResult = {
+      benchmark: "swe-exp",
+      condition: "baseline",
+      run_id: "r3",
+      timestamp: "2026-04-14T12:00:00Z",
+      metrics: { pass_at_1: 0.7 },
+      metadata: { model_version: "test" },
+    };
+    writeFileSync(join(testDir, "good.json"), JSON.stringify(valid));
+
+    const loaded = loadResults(testDir);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].run_id).toBe("r3");
   });
 });

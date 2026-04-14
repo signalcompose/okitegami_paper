@@ -6,7 +6,7 @@ import { z } from "zod";
 
 // --- Condition ---
 
-export const BENCHMARK_CONDITIONS = ["baseline", "acm", "mem0", "expel"] as const;
+export const BENCHMARK_CONDITIONS = ["baseline", "acm", "mem0"] as const;
 export type BenchmarkCondition = (typeof BENCHMARK_CONDITIONS)[number];
 
 export const benchmarkConditionSchema = z.enum(BENCHMARK_CONDITIONS);
@@ -36,7 +36,12 @@ export const benchmarkMetadataSchema = z.object({
     })
     .optional()
     .describe("ACM configuration (only for acm condition)"),
-  experience_count: z.number().int().min(0).optional().describe("Number of experiences at run time"),
+  experience_count: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Number of experiences at run time"),
   environment: z.string().optional().describe("Runtime environment description"),
   run_command: z.string().optional().describe("Command used to execute the benchmark"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
