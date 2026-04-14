@@ -178,11 +178,7 @@ export class ExperienceStore {
     return result.changes > 0;
   }
 
-  // --- Measurement Infrastructure (Issue #87) ---
-
   getRecurrenceRate(project?: string): RecurrenceRateRow[] {
-    // Extract individual retrieval_keys from JSON array, count occurrences across failure entries.
-    // Dynamic SQL: optional project filter.
     let sql = `
       SELECT jk.value AS key,
              COUNT(DISTINCT e.id) AS occurrence_count,
@@ -202,9 +198,6 @@ export class ExperienceStore {
   }
 
   getTemporalTrend(project?: string): TemporalTrendRow[] {
-    // Compute corrective_rate = corrective_count / tool_success_count per session.
-    // Only sessions with at least 1 tool_success are included (avoid division by zero).
-    // Dynamic SQL: optional project filter via experience table join.
     let sql = `
       SELECT ss.session_id,
              SUM(CASE WHEN ss.event_type = 'corrective_instruction' THEN 1 ELSE 0 END) AS corrective_count,
@@ -231,7 +224,6 @@ export class ExperienceStore {
   }
 
   getInjectionOutcomeCorrelation(project?: string): InjectionOutcomeRow[] {
-    // For each injection episode, count how many corrective_instructions occurred in the same session.
     let sql = `
       SELECT inj.session_id,
              COALESCE(json_array_length(json_extract(inj.data, '$.injected_ids')), 0) AS injected_count,
@@ -257,8 +249,6 @@ export class ExperienceStore {
   }
 
   getCrossProjectTransfer(): CrossProjectTransferRow[] {
-    // Detect when experiences from project A are injected into sessions associated with project B.
-    // Join injection signals with experience entries to determine source and target projects.
     const sql = `
       SELECT src.project AS source_project,
              json_extract(inj.data, '$.project') AS target_project,
