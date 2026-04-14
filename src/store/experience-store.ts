@@ -36,6 +36,13 @@ export class ExperienceStore {
   private stmtExistsForSession: Statement;
   private stmtCrossProjectReport: Statement;
   private stmtSignalSummaryBySession: Statement;
+  private stmtUpdateRetrievalTracking: Statement;
+  private stmtAdjustFeedbackScore: Statement;
+  private stmtSetPinned: Statement;
+  private stmtArchive: Statement;
+  private stmtCountActiveByProject: Statement;
+  private stmtGetEvictionCandidates: Statement;
+  private stmtGetActiveWithEmbeddingByProject: Statement;
 
   constructor(db: AdaptedDatabase, config: AcmConfig) {
     this.config = config;
@@ -81,6 +88,29 @@ export class ExperienceStore {
        FROM session_signals
        WHERE session_id = ? AND event_type != 'injection'
        GROUP BY event_type`
+    );
+    this.stmtUpdateRetrievalTracking = this.db.prepare(
+      `UPDATE experiences SET retrieval_count = retrieval_count + 1,
+       last_retrieved_at = ? WHERE id = ?`
+    );
+    this.stmtAdjustFeedbackScore = this.db.prepare(
+      "UPDATE experiences SET feedback_score = feedback_score + ? WHERE id = ?"
+    );
+    this.stmtSetPinned = this.db.prepare("UPDATE experiences SET pinned = ? WHERE id = ?");
+    this.stmtArchive = this.db.prepare("UPDATE experiences SET archived_at = ? WHERE id = ?");
+    this.stmtCountActiveByProject = this.db.prepare(
+      "SELECT COUNT(*) as count FROM experiences WHERE project = ? AND archived_at IS NULL"
+    );
+    this.stmtGetEvictionCandidates = this.db.prepare(
+      `SELECT * FROM experiences
+       WHERE project = ? AND archived_at IS NULL
+         AND pinned = 0 AND feedback_score < ? AND type != 'insight'
+       ORDER BY signal_strength ASC, timestamp ASC
+       LIMIT ?`
+    );
+    this.stmtGetActiveWithEmbeddingByProject = this.db.prepare(
+      `SELECT * FROM experiences
+       WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`
     );
   }
 
@@ -281,44 +311,25 @@ export class ExperienceStore {
 
   /** Update retrieval tracking: increment count and set last_retrieved_at */
   updateRetrievalTracking(id: string): void {
-    this.db
-      .prepare(
-        `UPDATE experiences SET retrieval_count = retrieval_count + 1,
-         last_retrieved_at = ? WHERE id = ?`
-      )
-      .run(new Date().toISOString(), id);
+    this.stmtUpdateRetrievalTracking.run(new Date().toISOString(), id);
   }
 
-  /** Adjust feedback_score by delta (+1 or -1) */
   adjustFeedbackScore(id: string, delta: number): void {
-    this.db
-      .prepare("UPDATE experiences SET feedback_score = feedback_score + ? WHERE id = ?")
-      .run(delta, id);
+    this.stmtAdjustFeedbackScore.run(delta, id);
   }
 
-  /** Pin/unpin an experience entry */
   setPinned(id: string, pinned: boolean): boolean {
-    const result = this.db
-      .prepare("UPDATE experiences SET pinned = ? WHERE id = ?")
-      .run(pinned ? 1 : 0, id);
+    const result = this.stmtSetPinned.run(pinned ? 1 : 0, id);
     return result.changes > 0;
   }
 
-  /** Soft-delete (archive) an experience entry */
   archive(id: string): boolean {
-    const result = this.db
-      .prepare("UPDATE experiences SET archived_at = ? WHERE id = ?")
-      .run(new Date().toISOString(), id);
+    const result = this.stmtArchive.run(new Date().toISOString(), id);
     return result.changes > 0;
   }
 
-  /** Count active (non-archived) entries for a project */
   countActiveByProject(project: string): number {
-    const row = this.db
-      .prepare(
-        "SELECT COUNT(*) as count FROM experiences WHERE project = ? AND archived_at IS NULL"
-      )
-      .get(project) as { count: number };
+    const row = this.stmtCountActiveByProject.get(project) as { count: number };
     return row.count;
   }
 
@@ -328,26 +339,16 @@ export class ExperienceStore {
     limit: number,
     protectedFeedbackThreshold: number = 3
   ): ExperienceEntry[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM experiences
-         WHERE project = ? AND archived_at IS NULL
-           AND pinned = 0 AND feedback_score < ? AND type != 'insight'
-         ORDER BY signal_strength ASC, timestamp ASC
-         LIMIT ?`
-      )
-      .all(project, protectedFeedbackThreshold, limit) as Record<string, unknown>[];
+    const rows = this.stmtGetEvictionCandidates.all(
+      project,
+      protectedFeedbackThreshold,
+      limit
+    ) as Record<string, unknown>[];
     return rows.map((row) => this.rowToEntry(row));
   }
 
-  /** Get all active entries with embeddings for a project (for clustering) */
   getActiveWithEmbeddingByProject(project: string): EntryWithEmbedding[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM experiences
-         WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`
-      )
-      .all(project) as Record<string, unknown>[];
+    const rows = this.stmtGetActiveWithEmbeddingByProject.all(project) as Record<string, unknown>[];
     const results: EntryWithEmbedding[] = [];
     for (const row of rows) {
       try {
@@ -383,7 +384,12 @@ export class ExperienceStore {
     }
 
     const id = randomUUID();
-    const entry: ExperienceEntry = { id, ...data };
+    const entry: ExperienceEntry = {
+      id,
+      ...data,
+      retrieval_count: data.retrieval_count ?? 0,
+      feedback_score: data.feedback_score ?? 0,
+    };
 
     this.stmtInsert.run(
       entry.id,
@@ -549,8 +555,8 @@ export class ExperienceStore {
       };
       if (row.project) entry.project = row.project as string;
       if (row.last_retrieved_at) entry.last_retrieved_at = row.last_retrieved_at as string;
-      if (row.retrieval_count) entry.retrieval_count = row.retrieval_count as number;
-      if (row.feedback_score) entry.feedback_score = row.feedback_score as number;
+      if (row.retrieval_count != null) entry.retrieval_count = row.retrieval_count as number;
+      if (row.feedback_score != null) entry.feedback_score = row.feedback_score as number;
       if (row.pinned === 1) entry.pinned = true;
       if (row.archived_at) entry.archived_at = row.archived_at as string;
       return entry;

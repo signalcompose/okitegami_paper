@@ -261,11 +261,8 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     });
 
     // --- Phase 3: Feedback Loop (SPECIFICATION 4.4.3) ---
-    // Check if experiences were injected at session-start and adjust feedback_score
-    // based on whether corrective instructions occurred during this session.
     try {
-      const allSignals = signalStore.getBySession(sessionId);
-      const injectionSignal = allSignals.find((s) => s.event_type === "injection");
+      const injectionSignal = signals.find((s) => s.event_type === "injection");
       if (injectionSignal && injectionSignal.data) {
         const injData = injectionSignal.data as Record<string, unknown>;
         const injectedIds = injData.injected_ids;

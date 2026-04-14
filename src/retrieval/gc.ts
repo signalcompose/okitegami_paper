@@ -132,7 +132,6 @@ export async function runReflection(
       );
 
       if (insight) {
-        // Store insight as new experience entry
         store.create({
           type: "insight",
           trigger: insight.trigger,
@@ -147,7 +146,6 @@ export async function runReflection(
         });
         insightsGenerated++;
 
-        // Archive source entries
         for (const entry of clusterEntries) {
           if (store.archive(entry.id)) entriesArchived++;
         }
@@ -174,44 +172,52 @@ interface InsightData {
   retrieval_keys: string[];
 }
 
+const OLLAMA_TIMEOUT_MS = 30_000;
+
 async function callOllamaForInsight(
   prompt: string,
   ollamaUrl: string,
   model: string
 ): Promise<InsightData | null> {
-  const response = await fetch(`${ollamaUrl}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0 } }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${ollamaUrl}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0 } }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    throw new Error(`Ollama returned HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Ollama returned HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as { response?: string };
+    if (!data.response) return null;
+
+    const jsonMatch = data.response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+    if (
+      typeof parsed.trigger !== "string" ||
+      typeof parsed.action !== "string" ||
+      typeof parsed.outcome !== "string" ||
+      !Array.isArray(parsed.retrieval_keys)
+    ) {
+      return null;
+    }
+
+    return {
+      trigger: parsed.trigger,
+      action: parsed.action,
+      outcome: parsed.outcome,
+      retrieval_keys: parsed.retrieval_keys.filter((k): k is string => typeof k === "string"),
+    };
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = (await response.json()) as { response?: string };
-  if (!data.response) return null;
-
-  // Extract JSON from response (may be wrapped in markdown code block)
-  const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
-
-  const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-  if (
-    typeof parsed.trigger !== "string" ||
-    typeof parsed.action !== "string" ||
-    typeof parsed.outcome !== "string" ||
-    !Array.isArray(parsed.retrieval_keys)
-  ) {
-    return null;
-  }
-
-  return {
-    trigger: parsed.trigger,
-    action: parsed.action,
-    outcome: parsed.outcome,
-    retrieval_keys: parsed.retrieval_keys.filter((k): k is string => typeof k === "string"),
-  };
 }
 
 /**
@@ -227,7 +233,6 @@ export async function runGc(
   let reflectionTriggered = false;
   let insightsGenerated = 0;
 
-  // Run reflection if approaching capacity
   if (beforeCount >= reflectionThreshold) {
     reflectionTriggered = true;
     try {
@@ -241,7 +246,6 @@ export async function runGc(
     }
   }
 
-  // Run eviction if still over capacity
   const { archived } = runEviction(store, project, config);
   const afterCount = store.countActiveByProject(project);
 

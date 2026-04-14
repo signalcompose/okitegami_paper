@@ -74,7 +74,6 @@ export async function runReflection(store, project, config, minClusterSize = 3) 
         try {
             const insight = await callOllamaForInsight(prompt, config.ollama_url ?? "http://localhost:11434", config.ollama_model ?? "gemma2:2b");
             if (insight) {
-                // Store insight as new experience entry
                 store.create({
                     type: "insight",
                     trigger: insight.trigger,
@@ -88,7 +87,6 @@ export async function runReflection(store, project, config, minClusterSize = 3) 
                     project,
                 });
                 insightsGenerated++;
-                // Archive source entries
                 for (const entry of clusterEntries) {
                     if (store.archive(entry.id))
                         entriesArchived++;
@@ -106,35 +104,43 @@ export async function runReflection(store, project, config, minClusterSize = 3) 
         entries_archived: entriesArchived,
     };
 }
+const OLLAMA_TIMEOUT_MS = 30_000;
 async function callOllamaForInsight(prompt, ollamaUrl, model) {
-    const response = await fetch(`${ollamaUrl}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0 } }),
-    });
-    if (!response.ok) {
-        throw new Error(`Ollama returned HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+    try {
+        const response = await fetch(`${ollamaUrl}/api/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0 } }),
+            signal: controller.signal,
+        });
+        if (!response.ok) {
+            throw new Error(`Ollama returned HTTP ${response.status}`);
+        }
+        const data = (await response.json());
+        if (!data.response)
+            return null;
+        const jsonMatch = data.response.match(/\{[\s\S]*\}/);
+        if (!jsonMatch)
+            return null;
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (typeof parsed.trigger !== "string" ||
+            typeof parsed.action !== "string" ||
+            typeof parsed.outcome !== "string" ||
+            !Array.isArray(parsed.retrieval_keys)) {
+            return null;
+        }
+        return {
+            trigger: parsed.trigger,
+            action: parsed.action,
+            outcome: parsed.outcome,
+            retrieval_keys: parsed.retrieval_keys.filter((k) => typeof k === "string"),
+        };
     }
-    const data = (await response.json());
-    if (!data.response)
-        return null;
-    // Extract JSON from response (may be wrapped in markdown code block)
-    const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch)
-        return null;
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (typeof parsed.trigger !== "string" ||
-        typeof parsed.action !== "string" ||
-        typeof parsed.outcome !== "string" ||
-        !Array.isArray(parsed.retrieval_keys)) {
-        return null;
+    finally {
+        clearTimeout(timer);
     }
-    return {
-        trigger: parsed.trigger,
-        action: parsed.action,
-        outcome: parsed.outcome,
-        retrieval_keys: parsed.retrieval_keys.filter((k) => typeof k === "string"),
-    };
 }
 /**
  * Full GC cycle: check capacity → optionally reflect → evict excess.
@@ -144,7 +150,6 @@ export async function runGc(store, project, config) {
     const reflectionThreshold = Math.floor(config.max_experiences_per_project * 0.8);
     let reflectionTriggered = false;
     let insightsGenerated = 0;
-    // Run reflection if approaching capacity
     if (beforeCount >= reflectionThreshold) {
         reflectionTriggered = true;
         try {
@@ -156,7 +161,6 @@ export async function runGc(store, project, config) {
                 `${err instanceof Error ? err.message : String(err)}`);
         }
     }
-    // Run eviction if still over capacity
     const { archived } = runEviction(store, project, config);
     const afterCount = store.countActiveByProject(project);
     return {
