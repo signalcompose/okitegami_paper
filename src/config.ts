@@ -89,11 +89,11 @@ export function loadConfig(pathOrOptions?: string | LoadConfigOptions): AcmConfi
     ...DEFAULT_CONFIG,
     ...overrides,
     db_path: expandTilde(dbPath),
-    // Normalize empty strings to defaults; let validate() catch other invalid types
+    // Normalize empty verbosity string to default; non-string values pass through to validate()
     verbosity:
-      typeof overrides.verbosity === "string" && overrides.verbosity
-        ? overrides.verbosity
-        : DEFAULT_CONFIG.verbosity,
+      (overrides.verbosity as string) === ""
+        ? DEFAULT_CONFIG.verbosity
+        : (overrides.verbosity ?? DEFAULT_CONFIG.verbosity),
     ollama_url: overrides.ollama_url || undefined,
     ollama_model: overrides.ollama_model || undefined,
   };

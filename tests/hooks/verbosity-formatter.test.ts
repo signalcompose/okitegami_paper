@@ -131,6 +131,24 @@ describe("formatSessionEndMessage", () => {
       expect(msg).toContain("テストを先に書いて");
       expect(msg).toContain("[ACM] 3 experiences generated, 2 persisted");
       expect(msg).toContain("[ACM] ==============================");
+      // method/confidence omitted at normal level
+      expect(msg).not.toContain("method:");
+      expect(msg).not.toContain("confidence:");
+    });
+
+    it("shows corrective details even when no entries generated", () => {
+      const msg = formatSessionEndMessage(
+        {
+          corrective_count: 1,
+          entries_generated: 0,
+          entries_persisted: 0,
+          corrective_details: [{ prompt: "fix this", method: "llm" }],
+        },
+        "normal"
+      );
+      expect(msg).toContain("[ACM] === Session Summary ===");
+      expect(msg).toContain("fix this");
+      expect(msg).not.toContain("experiences generated");
     });
   });
 

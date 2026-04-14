@@ -163,5 +163,12 @@ describe("loadConfig", () => {
       const config = loadConfig(configPath);
       expect(config.verbosity).toBe("normal");
     });
+
+    it("rejects non-string verbosity value", () => {
+      mkdirSync(testDir, { recursive: true });
+      const configPath = join(testDir, "acm-num.json");
+      writeFileSync(configPath, JSON.stringify({ verbosity: 1 }));
+      expect(() => loadConfig(configPath)).toThrow(/Invalid verbosity/);
+    });
   });
 });
