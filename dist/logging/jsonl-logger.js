@@ -15,12 +15,15 @@ import { homedir } from "node:os";
 export class JsonlLogger {
     logDir;
     dirEnsured = false;
+    failureReported = false;
     constructor(logDir) {
         this.logDir = logDir;
     }
     /**
-     * Resolve the log directory path from environment.
-     * Uses CLAUDE_PLUGIN_DATA/logs when available, falls back to ~/.acm/logs.
+     * Resolve the log directory path. `pluginDataDir` should be
+     * `process.env.CLAUDE_PLUGIN_DATA` (pass `undefined` if absent).
+     * Returns `pluginDataDir/logs` when non-empty/non-whitespace;
+     * otherwise falls back to `~/.acm/logs`.
      */
     static resolveLogDir(pluginDataDir) {
         if (pluginDataDir && pluginDataDir.trim()) {
@@ -30,8 +33,12 @@ export class JsonlLogger {
     }
     /**
      * Write a log entry. Best-effort: never throws.
+     * On first failure, reports to stderr and suppresses subsequent
+     * failures for the lifetime of this logger instance.
      */
     log(category, event, data) {
+        if (this.failureReported)
+            return;
         try {
             if (!this.dirEnsured) {
                 mkdirSync(this.logDir, { recursive: true });
@@ -47,8 +54,9 @@ export class JsonlLogger {
             appendFileSync(join(this.logDir, filename), JSON.stringify(entry) + "\n");
         }
         catch (err) {
-            this.dirEnsured = false;
-            console.error(`[ACM] jsonl-logger: failed to write ${category}/${event}: ` +
+            this.failureReported = true;
+            console.error(`[ACM] jsonl-logger: logging degraded, suppressing further failures. ` +
+                `First failure (${category}/${event}): ` +
                 `${err instanceof Error ? err.message : String(err)}`);
         }
     }

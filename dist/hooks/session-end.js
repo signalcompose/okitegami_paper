@@ -83,6 +83,7 @@ export async function handleSessionEnd(stdin) {
                         session_id: sessionId,
                         transcript_path: transcriptPath,
                         error: err instanceof Error ? err.message : String(err),
+                        stack: err instanceof Error ? err.stack : undefined,
                     });
                 }
             }
@@ -155,6 +156,10 @@ export async function handleSessionEnd(stdin) {
         catch (err) {
             console.error(`[ACM] session-end: Embedder initialization failed, storing entries without embedding: ` +
                 `${err instanceof Error ? err.message : String(err)}`);
+            ctx.logger.log("error", "embedder_init_failed", {
+                session_id: sessionId,
+                error: err instanceof Error ? err.message : String(err),
+            });
         }
         // Persist each entry with project name (and embedding if available)
         let persisted = 0;
