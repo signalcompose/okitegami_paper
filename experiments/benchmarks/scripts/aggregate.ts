@@ -8,7 +8,7 @@
  *   npx tsx experiments/benchmarks/scripts/aggregate.ts swe-bench-cl
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   benchmarkResultSchema,
@@ -39,7 +39,16 @@ export function loadResults(resultsDir: string): BenchmarkResult[] {
   let files: string[];
   try {
     files = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
-  } catch {
+  } catch (err) {
+    const code =
+      err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
+    if (code === "ENOENT") {
+      console.warn(`[benchmark] Results directory not found: ${resultsDir}`);
+    } else {
+      console.warn(
+        `[benchmark] Cannot read ${resultsDir}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     return [];
   }
 
@@ -136,7 +145,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   }
 
-  const resultsDir = join(import.meta.dirname ?? ".", "..", "results", benchmarkName);
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const resultsDir = join(__dirname, "..", "results", benchmarkName);
   const results = loadResults(resultsDir);
 
   if (results.length === 0) {

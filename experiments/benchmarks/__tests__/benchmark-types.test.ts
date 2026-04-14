@@ -178,6 +178,42 @@ describe("aggregation", () => {
     const summaries = aggregateByCondition(results);
     expect(summaries[0].mean_forward_transfer).toBeUndefined();
   });
+
+  it("averages only defined values when optional metrics are mixed", () => {
+    const results = [
+      makeResult("acm", 0.7, {
+        metrics: { pass_at_1: 0.7, forward_transfer: 0.2 },
+      }),
+      makeResult("acm", 0.8, {
+        metrics: { pass_at_1: 0.8 },
+      }),
+    ];
+
+    const summaries = aggregateByCondition(results);
+    const acm = summaries[0];
+    expect(acm.mean_forward_transfer).toBeCloseTo(0.2, 4);
+  });
+
+  it("handles all three conditions including mem0", () => {
+    const results: BenchmarkResult[] = [
+      makeResult("baseline", 0.5),
+      makeResult("acm", 0.7),
+      {
+        benchmark: "swe-bench-cl",
+        condition: "mem0",
+        run_id: "run-mem0",
+        timestamp: "2026-04-14T12:00:00Z",
+        metrics: { pass_at_1: 0.6 },
+        metadata: { model_version: "test" },
+      },
+    ];
+
+    const summaries = aggregateByCondition(results);
+    expect(summaries).toHaveLength(3);
+    const mem0 = summaries.find((s) => s.condition === "mem0");
+    expect(mem0).toBeDefined();
+    expect(mem0!.mean_pass_at_1).toBeCloseTo(0.6, 4);
+  });
 });
 
 describe("generateComparisonTable", () => {
