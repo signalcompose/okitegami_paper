@@ -4,7 +4,7 @@
  * Validates that plugin.json, hooks.json, and skill files
  * conform to the expected Claude Code plugin format.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -21,14 +21,12 @@ describe("plugin.json", () => {
   const pluginPath = join(PLUGIN_DIR, "plugin.json");
   let plugin: Record<string, unknown>;
 
-  it("exists and is valid JSON", () => {
+  beforeAll(() => {
     expect(existsSync(pluginPath)).toBe(true);
     plugin = readJson(pluginPath) as Record<string, unknown>;
-    expect(plugin).toBeDefined();
   });
 
   it("has required top-level fields", () => {
-    plugin = readJson(pluginPath) as Record<string, unknown>;
     expect(plugin.name).toBe("acm");
     expect(plugin.description).toBeTruthy();
     expect(plugin.mcpServers).toBeDefined();
@@ -37,17 +35,14 @@ describe("plugin.json", () => {
   });
 
   it("has author with correct name", () => {
-    plugin = readJson(pluginPath) as Record<string, unknown>;
     const author = plugin.author as Record<string, unknown>;
     expect(author.name).toBe("Signal compose");
   });
 
   it("has userConfig with expected keys", () => {
-    plugin = readJson(pluginPath) as Record<string, unknown>;
     const userConfig = plugin.userConfig as Record<string, unknown>;
     expect(userConfig).toBeDefined();
 
-    // Each config key should have a description
     const expectedKeys = ["ollama_url", "ollama_model", "verbosity", "max_experiences_per_project"];
     for (const key of expectedKeys) {
       expect(userConfig[key]).toBeDefined();
@@ -57,11 +52,9 @@ describe("plugin.json", () => {
   });
 
   it("marks no userConfig keys as sensitive", () => {
-    plugin = readJson(pluginPath) as Record<string, unknown>;
     const userConfig = plugin.userConfig as Record<string, unknown>;
     for (const [, value] of Object.entries(userConfig)) {
       const entry = value as Record<string, unknown>;
-      // None of ACM's config values are secrets
       expect(entry.sensitive).not.toBe(true);
     }
   });
@@ -116,14 +109,5 @@ describe("skills", () => {
     expect(content).toMatch(/description:/);
     // Should reference acm_health MCP tool
     expect(content).toContain("acm_health");
-  });
-});
-
-describe("userConfig environment variable integration", () => {
-  it("_common.ts reads CLAUDE_PLUGIN_OPTION_* env vars", () => {
-    // Verify the source file contains env var reading logic
-    const commonPath = join(ROOT, "src", "hooks", "_common.ts");
-    const content = readFileSync(commonPath, "utf-8");
-    expect(content).toContain("CLAUDE_PLUGIN_OPTION_");
   });
 });

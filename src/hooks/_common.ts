@@ -45,8 +45,15 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
   }
 
   const verbosity = process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY;
-  if (verbosity && VERBOSITY_LEVELS.includes(verbosity as Verbosity)) {
-    config.verbosity = verbosity as Verbosity;
+  if (verbosity) {
+    if (VERBOSITY_LEVELS.includes(verbosity as Verbosity)) {
+      config.verbosity = verbosity as Verbosity;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_VERBOSITY: invalid value "${verbosity}". ` +
+          `Expected one of: ${VERBOSITY_LEVELS.join(", ")}. Using default "${config.verbosity}".`
+      );
+    }
   }
 
   const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
@@ -54,6 +61,11 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
     const n = Number(maxExp);
     if (Number.isInteger(n) && n >= 10) {
       config.max_experiences_per_project = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT: invalid value "${maxExp}". ` +
+          `Expected integer >= 10. Using default ${config.max_experiences_per_project}.`
+      );
     }
   }
 }

@@ -3,7 +3,7 @@
  * Issue #37: feat(hooks): common bootstrap module for ACM hooks
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -216,11 +216,14 @@ describe("applyPluginOptionOverrides", () => {
     expect(config.verbosity).toBe("verbose");
   });
 
-  it("ignores invalid verbosity value", () => {
+  it("warns and ignores invalid verbosity value", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY = "invalid";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.verbosity).toBe("normal");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
   });
 
   it("overrides max_experiences_per_project from env", () => {
@@ -230,25 +233,34 @@ describe("applyPluginOptionOverrides", () => {
     expect(config.max_experiences_per_project).toBe(1000);
   });
 
-  it("ignores max_experiences_per_project below minimum", () => {
+  it("warns and ignores max_experiences_per_project below minimum", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "5";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
   });
 
-  it("ignores float max_experiences_per_project", () => {
+  it("warns and ignores float max_experiences_per_project", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "100.5";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
   });
 
-  it("ignores non-numeric max_experiences_per_project", () => {
+  it("warns and ignores non-numeric max_experiences_per_project", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT = "abc";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.max_experiences_per_project).toBe(500);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
   });
 
   it("does not override when env vars are not set", () => {
