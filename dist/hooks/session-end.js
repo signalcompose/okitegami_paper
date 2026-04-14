@@ -73,14 +73,16 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // --- Phase 1b: Build corrective summary from signal store ---
-        // Only when transcript analysis was skipped (correctives already existed
-        // from a prior hook), populate correctiveDetails from stored signals.
+        // Only when transcript analysis was skipped (corrective signals already stored
+        // from a previous session-end invocation), populate correctiveDetails from stored signals.
         if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
             try {
                 const storedSignals = signalStore.getBySession(sessionId);
                 for (const sig of storedSignals) {
                     if (sig.event_type === "corrective_instruction") {
-                        const data = sig.data;
+                        const data = sig.data != null && typeof sig.data === "object"
+                            ? sig.data
+                            : {};
                         correctiveDetails.push({
                             prompt: typeof data.prompt === "string" ? data.prompt : "",
                             method: typeof data.method === "string" ? data.method : "unknown",
@@ -90,8 +92,8 @@ export async function handleSessionEnd(stdin) {
                 }
             }
             catch (err) {
-                console.error(`[ACM] session-end: failed to read stored corrective signals for "${sessionId}", ` +
-                    `summary will omit corrective details: ` +
+                console.error(`[ACM] session-end: failed reading stored corrective signals for "${sessionId}" ` +
+                    `after ${correctiveDetails.length} entries; summary may be incomplete: ` +
                     `${err instanceof Error ? err.message : String(err)}`);
             }
         }
@@ -147,6 +149,10 @@ export async function handleSessionEnd(stdin) {
             }
             if (saved)
                 persisted++;
+        }
+        if (persisted < entries.length) {
+            console.error(`[ACM] session-end: ${entries.length - persisted} of ${entries.length} ` +
+                `experience entries failed to persist for session "${sessionId}"`);
         }
         emitSummary(correctiveDetails, entries.length, persisted, config.verbosity);
     }

@@ -52,7 +52,7 @@ export function formatSessionEndMessage(summary, verbosity) {
     if (summary.entries_generated > 0) {
         lines.push(`[ACM] ${summary.entries_generated} experiences generated, ${summary.entries_persisted} persisted`);
     }
-    lines.push("[ACM] ============================");
+    lines.push("[ACM] ==============================");
     return lines.join("\n");
 }
 //# sourceMappingURL=verbosity-formatter.js.map

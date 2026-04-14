@@ -108,9 +108,16 @@ export async function handleSessionStart(stdin) {
             if (injectionText) {
                 process.stdout.write(injectionText);
             }
-            const systemMsg = formatInjectionMessage(results, ctx.config.verbosity);
-            if (systemMsg) {
-                console.error(systemMsg);
+            // Verbosity message is cosmetic (stderr); must not abort the hook after injection was delivered
+            try {
+                const systemMsg = formatInjectionMessage(results, ctx.config.verbosity);
+                if (systemMsg) {
+                    console.error(systemMsg);
+                }
+            }
+            catch (err) {
+                console.error(`[ACM] session-start: formatInjectionMessage failed (non-critical): ` +
+                    `${err instanceof Error ? err.message : String(err)}`);
             }
         }
         finally {
