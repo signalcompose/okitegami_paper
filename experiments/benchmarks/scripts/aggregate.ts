@@ -114,6 +114,8 @@ export function aggregateByCondition(results: BenchmarkResult[]): ConditionSumma
       mean_completion_rate: optionalMean(runs.map((r) => r.metrics.completion_rate)),
       mean_cl_f_beta: optionalMean(runs.map((r) => r.metrics.cl_f_beta)),
       mean_cl_score: optionalMean(runs.map((r) => r.metrics.cl_score)),
+      mean_token_usage: optionalMean(runs.map((r) => r.metrics.token_usage)),
+      mean_attempt_count: optionalMean(runs.map((r) => r.metrics.attempt_count)),
     });
   }
 
@@ -148,6 +150,8 @@ export function formatMarkdownTable(table: ComparisonTable): string {
     "Completion",
     "CL-Fβ",
     "CL-Score",
+    "Tokens",
+    "Attempts",
   ];
   lines.push(`| ${headers.join(" | ")} |`);
   lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
@@ -164,6 +168,8 @@ export function formatMarkdownTable(table: ComparisonTable): string {
       c.mean_completion_rate?.toFixed(3) ?? "-",
       c.mean_cl_f_beta?.toFixed(3) ?? "-",
       c.mean_cl_score?.toFixed(3) ?? "-",
+      c.mean_token_usage?.toFixed(0) ?? "-",
+      c.mean_attempt_count?.toFixed(1) ?? "-",
     ];
     lines.push(`| ${row.join(" | ")} |`);
   }

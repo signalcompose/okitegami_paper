@@ -21,6 +21,8 @@ const CSV_COLUMNS = [
   "interrupt_count",
   "corrective_instruction_count",
   "context_tokens_used",
+  "token_usage",
+  "attempt_count",
   "duration_ms",
   "error",
   "timestamp",
@@ -80,6 +82,8 @@ export class ReportGenerator {
       const interruptCounts = group.map((r) => r.metrics.interrupt_count);
       const correctiveCounts = group.map((r) => r.metrics.corrective_instruction_count);
       const contextTokens = group.map((r) => r.metrics.context_tokens_used);
+      const tokenUsages = group.map((r) => r.metrics.token_usage);
+      const attemptCounts = group.map((r) => r.metrics.attempt_count);
 
       results.push({
         condition,
@@ -91,6 +95,10 @@ export class ReportGenerator {
         std_corrective_count: standardDeviation(correctiveCounts),
         mean_context_tokens: mean(contextTokens),
         std_context_tokens: standardDeviation(contextTokens),
+        mean_token_usage: mean(tokenUsages),
+        std_token_usage: standardDeviation(tokenUsages),
+        mean_attempt_count: mean(attemptCounts),
+        std_attempt_count: standardDeviation(attemptCounts),
         run_count: group.length,
       });
     }
@@ -118,6 +126,8 @@ export class ReportGenerator {
       m.interrupt_count,
       m.corrective_instruction_count,
       m.context_tokens_used,
+      m.token_usage,
+      m.attempt_count,
       run.duration_ms,
       run.error ?? "",
       m.timestamp,

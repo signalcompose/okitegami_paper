@@ -20,6 +20,8 @@ export interface MetricSet {
   interrupt_count: number;
   corrective_instruction_count: number;
   context_tokens_used: number;
+  token_usage: number;
+  attempt_count: number;
   timestamp: string;
 }
 
@@ -40,6 +42,10 @@ export interface AggregatedConditionResult {
   std_corrective_count: number;
   mean_context_tokens: number;
   std_context_tokens: number;
+  mean_token_usage: number;
+  std_token_usage: number;
+  mean_attempt_count: number;
+  std_attempt_count: number;
   run_count: number;
 }
 
