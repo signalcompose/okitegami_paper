@@ -27,24 +27,22 @@ export function loadSweBenchTasks(path: string): SweBenchTask[] {
 }
 
 function parseJsonLines(content: string): unknown[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line, i) => {
-      try {
-        return JSON.parse(line);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Malformed JSON at line ${i + 1}: ${msg}`);
-      }
-    });
+  return content.split("\n").flatMap((line, lineIndex) => {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return [];
+    try {
+      return [JSON.parse(trimmed)];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Malformed JSON at line ${lineIndex + 1}: ${msg}`);
+    }
+  });
 }
 
 export function loadSubset(tasks: SweBenchTask[], selector: number | string[]): SweBenchTask[] {
   if (typeof selector === "number") {
-    if (selector < 0) {
-      throw new Error(`Subset count must be non-negative: ${selector}`);
+    if (selector <= 0) {
+      throw new Error(`Subset count must be positive: ${selector}`);
     }
     return tasks.slice(0, selector);
   }

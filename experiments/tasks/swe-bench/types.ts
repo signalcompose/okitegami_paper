@@ -5,7 +5,7 @@ export const sweBenchTaskSchema = z.object({
   repo: z.string(),
   base_commit: z.string(),
   problem_statement: z.string(),
-  patch: z.string(),
+  patch: z.string().min(1, "patch must not be empty"),
   test_patch: z.string(),
   FAIL_TO_PASS: z.array(z.string()),
   PASS_TO_PASS: z.array(z.string()),

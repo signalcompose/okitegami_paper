@@ -49,6 +49,10 @@ describe("sweBenchTaskSchema", () => {
   it("rejects non-string instance_id", () => {
     expect(() => sweBenchTaskSchema.parse({ ...valid, instance_id: 123 })).toThrow();
   });
+
+  it("rejects empty patch", () => {
+    expect(() => sweBenchTaskSchema.parse({ ...valid, patch: "" })).toThrow();
+  });
 });
 
 describe("loadSweBenchTasks", () => {
@@ -161,7 +165,8 @@ describe("loadSubset", () => {
     expect(loadSubset(tasks, ["z"])).toEqual([]);
   });
 
-  it("throws on negative count", () => {
+  it("throws on non-positive count", () => {
     expect(() => loadSubset([mkTask("a")], -1)).toThrow();
+    expect(() => loadSubset([mkTask("a")], 0)).toThrow();
   });
 });
