@@ -19,6 +19,8 @@ export const benchmarkMetricsSchema = z.object({
   forgetting: z.number().optional().describe("Forgetting rate (SWE-Bench-CL)"),
   corrective_rate: z.number().min(0).max(1).optional().describe("Corrective instruction rate"),
   completion_rate: z.number().min(0).max(1).optional().describe("Task completion rate"),
+  cl_f_beta: z.number().optional().describe("CL-Fβ: harmonic mean of plasticity and stability"),
+  cl_score: z.number().optional().describe("CL-Score: composite continual learning score"),
 });
 
 export type BenchmarkMetrics = z.infer<typeof benchmarkMetricsSchema>;
@@ -85,6 +87,8 @@ export interface ConditionSummary {
   mean_forgetting?: number;
   mean_corrective_rate?: number;
   mean_completion_rate?: number;
+  mean_cl_f_beta?: number;
+  mean_cl_score?: number;
 }
 
 export interface ComparisonTable {
