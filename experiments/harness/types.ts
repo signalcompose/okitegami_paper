@@ -20,8 +20,8 @@ export interface MetricSet {
   interrupt_count: number;
   corrective_instruction_count: number;
   context_tokens_used: number;
-  token_usage: number; // total tokens consumed in the session
-  attempt_count: number; // number of attempts to complete the task
+  token_usage: number;
+  attempt_count: number;
   timestamp: string;
 }
 
