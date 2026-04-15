@@ -112,6 +112,8 @@ export function aggregateByCondition(results: BenchmarkResult[]): ConditionSumma
       mean_forgetting: optionalMean(runs.map((r) => r.metrics.forgetting)),
       mean_corrective_rate: optionalMean(runs.map((r) => r.metrics.corrective_rate)),
       mean_completion_rate: optionalMean(runs.map((r) => r.metrics.completion_rate)),
+      mean_cl_f_beta: optionalMean(runs.map((r) => r.metrics.cl_f_beta)),
+      mean_cl_score: optionalMean(runs.map((r) => r.metrics.cl_score)),
     });
   }
 
@@ -144,6 +146,8 @@ export function formatMarkdownTable(table: ComparisonTable): string {
     "Forgetting",
     "Corrective",
     "Completion",
+    "CL-Fβ",
+    "CL-Score",
   ];
   lines.push(`| ${headers.join(" | ")} |`);
   lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
@@ -158,6 +162,8 @@ export function formatMarkdownTable(table: ComparisonTable): string {
       c.mean_forgetting?.toFixed(3) ?? "-",
       c.mean_corrective_rate?.toFixed(3) ?? "-",
       c.mean_completion_rate?.toFixed(3) ?? "-",
+      c.mean_cl_f_beta?.toFixed(3) ?? "-",
+      c.mean_cl_score?.toFixed(3) ?? "-",
     ];
     lines.push(`| ${row.join(" | ")} |`);
   }

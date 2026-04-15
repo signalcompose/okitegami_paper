@@ -15,10 +15,21 @@ export const benchmarkConditionSchema = z.enum(BENCHMARK_CONDITIONS);
 
 export const benchmarkMetricsSchema = z.object({
   pass_at_1: z.number().min(0).max(1).describe("Pass@1 rate"),
-  forward_transfer: z.number().optional().describe("Forward transfer score (SWE-Bench-CL)"),
-  forgetting: z.number().optional().describe("Forgetting rate (SWE-Bench-CL)"),
+  forward_transfer: z
+    .number()
+    .finite()
+    .optional()
+    .describe("Forward transfer score (SWE-Bench-CL)"),
+  forgetting: z.number().finite().min(0).optional().describe("Forgetting score (SWE-Bench-CL)"),
   corrective_rate: z.number().min(0).max(1).optional().describe("Corrective instruction rate"),
   completion_rate: z.number().min(0).max(1).optional().describe("Task completion rate"),
+  cl_f_beta: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("CL-Fβ: harmonic mean of plasticity and stability"),
+  cl_score: z.number().finite().optional().describe("CL-Score: composite continual learning score"),
 });
 
 export type BenchmarkMetrics = z.infer<typeof benchmarkMetricsSchema>;
@@ -85,6 +96,8 @@ export interface ConditionSummary {
   mean_forgetting?: number;
   mean_corrective_rate?: number;
   mean_completion_rate?: number;
+  mean_cl_f_beta?: number;
+  mean_cl_score?: number;
 }
 
 export interface ComparisonTable {
