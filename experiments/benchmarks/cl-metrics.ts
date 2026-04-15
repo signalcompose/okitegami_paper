@@ -8,6 +8,7 @@
  *   a[i][j] = performance on task j after training through task i
  *   Rows = training stage (which task was last trained on)
  *   Columns = evaluation task
+ *   Matrix MUST be square (N × N). Non-square input throws RangeError.
  *   a[i][i] = diagonal = performance on task i when first introduced (plasticity)
  *   a[i][i+1] = superdiagonal = performance on next task after training on current
  *   a[N-1][j] = last row = final accuracy on task j after all training
@@ -30,6 +31,18 @@ export interface CLMetricsResult {
   cl_score: number;
 }
 
+/** Validate that a is a square N×N matrix with all finite values. */
+function assertSquareMatrix(a: number[][], caller: string): void {
+  const N = a.length;
+  for (let i = 0; i < N; i++) {
+    if (a[i].length !== N) {
+      throw new RangeError(
+        `${caller}: matrix must be square (row ${i} has ${a[i].length} cols, expected ${N})`
+      );
+    }
+  }
+}
+
 /**
  * Forward Transfer: measures how past experience improves performance on new tasks.
  * FT = (1/(N-1)) * Σ_{i=0}^{N-2} (a[i][i+1] - baseline[i+1])
@@ -37,18 +50,24 @@ export interface CLMetricsResult {
  * Uses the superdiagonal: after training on task i, performance on task i+1
  * compared to baseline.
  *
- * @param a - Performance matrix a[trained_on][eval_task]
- * @param baseline - Baseline performance per task (no memory condition)
+ * @param a - Square performance matrix a[trained_on][eval_task]
+ * @param baseline - Baseline performance per task (length must be >= N)
  * @returns Mean forward transfer score. Returns 0 for N <= 1.
  */
 export function computeForwardTransfer(a: number[][], baseline: number[]): number {
   const N = a.length;
   if (N <= 1) return 0;
+  assertSquareMatrix(a, "computeForwardTransfer");
+
+  if (baseline.length < N) {
+    throw new RangeError(
+      `computeForwardTransfer: baseline length ${baseline.length} must be >= matrix size ${N}`
+    );
+  }
 
   let sum = 0;
   for (let i = 0; i < N - 1; i++) {
-    const a_i_next = a[i][i + 1] ?? 0;
-    sum += a_i_next - baseline[i + 1];
+    sum += a[i][i + 1] - baseline[i + 1];
   }
   return sum / (N - 1);
 }
@@ -61,29 +80,26 @@ export function computeForwardTransfer(a: number[][], baseline: number[]): numbe
  * peak performance (across all training stages) and final performance
  * (after training on all tasks).
  *
- * @param a - Performance matrix a[trained_on][eval_task]
+ * @param a - Square performance matrix a[trained_on][eval_task]
  * @returns Mean forgetting score (0 = no forgetting). Returns 0 for N <= 1.
  */
 export function computeForgetting(a: number[][]): number {
   const N = a.length;
   if (N <= 1) return 0;
-
-  const numTasks = a[0]?.length ?? 0;
-  if (numTasks <= 1) return 0;
+  assertSquareMatrix(a, "computeForgetting");
 
   let totalForgetting = 0;
-  // Sum over eval tasks j = 0..N-2 (exclude last task per paper)
-  for (let j = 0; j < numTasks - 1; j++) {
-    // Read column j: performance on task j across all training stages
+  // Paper excludes the final eval task from the forgetting sum
+  for (let j = 0; j < N - 1; j++) {
     let maxPerf = -Infinity;
     for (let k = 0; k < N; k++) {
-      maxPerf = Math.max(maxPerf, a[k][j] ?? 0);
+      maxPerf = Math.max(maxPerf, a[k][j]);
     }
-    const finalPerf = a[N - 1][j] ?? 0;
+    const finalPerf = a[N - 1][j];
     totalForgetting += Math.max(0, maxPerf - finalPerf);
   }
 
-  return totalForgetting / (numTasks - 1);
+  return totalForgetting / (N - 1);
 }
 
 /**
@@ -92,16 +108,11 @@ export function computeForgetting(a: number[][]): number {
  */
 function computePlasticity(a: number[][]): number {
   if (a.length === 0) return 0;
-
   let sum = 0;
-  let count = 0;
   for (let i = 0; i < a.length; i++) {
-    if (i < a[i].length) {
-      sum += a[i][i];
-      count++;
-    }
+    sum += a[i][i];
   }
-  return count > 0 ? sum / count : 0;
+  return sum / a.length;
 }
 
 /**
@@ -112,7 +123,6 @@ function computePlasticity(a: number[][]): number {
 function computeACC(a: number[][]): number {
   if (a.length === 0) return 0;
   const lastRow = a[a.length - 1];
-  if (lastRow.length === 0) return 0;
   return lastRow.reduce((s, v) => s + v, 0) / lastRow.length;
 }
 
@@ -121,12 +131,11 @@ function computeACC(a: number[][]): number {
  * CL-Fβ = (1 + β²) * P * S / (β² * P + S)
  * where P = plasticity, S = max(0, 1 - forgetting)
  *
- * @param a - Performance matrix a[trained_on][eval_task]
- * @param _baseline - Baseline (unused in Fβ, kept for API consistency)
+ * @param a - Square performance matrix a[trained_on][eval_task]
  * @param beta - Weight parameter (default 1 = equal weight)
  * @returns CL-Fβ score
  */
-export function computeCLFbeta(a: number[][], _baseline: number[], beta: number = 1): number {
+export function computeCLFbeta(a: number[][], beta: number = 1): number {
   if (a.length === 0) return 0;
 
   const plasticity = computePlasticity(a);
@@ -145,7 +154,7 @@ export function computeCLFbeta(a: number[][], _baseline: number[], beta: number 
  *
  * Simplified from the paper's full formula (BWT, AULC, TUE terms omitted).
  *
- * @param a - Performance matrix a[trained_on][eval_task]
+ * @param a - Square performance matrix a[trained_on][eval_task]
  * @param baseline - Baseline performance per task
  * @returns Composite CL score
  */
@@ -160,26 +169,47 @@ export function computeCLScore(a: number[][], baseline: number[]): number {
 }
 
 /**
- * Compute all CL metrics in one call.
+ * Compute all CL metrics in one call. Avoids redundant sub-computations.
  *
- * @param a - Performance matrix a[trained_on][eval_task]
+ * @param a - Square performance matrix a[trained_on][eval_task]
  * @param baseline - Baseline performance per task (no memory condition)
  * @returns All CL metrics
  */
 export function computeAllCLMetrics(a: number[][], baseline: number[]): CLMetricsResult {
+  if (a.length === 0) {
+    return {
+      forward_transfer: 0,
+      forgetting: 0,
+      plasticity: 0,
+      stability: 0,
+      cl_f_beta: 0,
+      cl_score: 0,
+    };
+  }
+
+  assertSquareMatrix(a, "computeAllCLMetrics");
+  const N = a.length;
+  if (baseline.length < N) {
+    throw new RangeError(
+      `computeAllCLMetrics: baseline length ${baseline.length} must be >= matrix size ${N}`
+    );
+  }
+
   const forward_transfer = computeForwardTransfer(a, baseline);
   const forgetting = computeForgetting(a);
   const plasticity = computePlasticity(a);
   const stability = Math.max(0, 1 - forgetting);
-  const cl_f_beta = computeCLFbeta(a, baseline);
-  const cl_score = computeCLScore(a, baseline);
+  const acc = computeACC(a);
 
-  return {
-    forward_transfer,
-    forgetting,
-    plasticity,
-    stability,
-    cl_f_beta,
-    cl_score,
-  };
+  // Inline CL-Fβ to avoid recomputing forgetting/plasticity
+  let cl_f_beta: number;
+  if (plasticity === 0 || stability === 0) {
+    cl_f_beta = 0;
+  } else {
+    cl_f_beta = (2 * plasticity * stability) / (plasticity + stability);
+  }
+
+  const cl_score = acc + forward_transfer - forgetting;
+
+  return { forward_transfer, forgetting, plasticity, stability, cl_f_beta, cl_score };
 }

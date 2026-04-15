@@ -16,6 +16,50 @@ import {
   computeAllCLMetrics,
 } from "../cl-metrics.js";
 
+// --- Input validation ---
+
+describe("input validation", () => {
+  it("throws RangeError for non-square matrix in computeForwardTransfer", () => {
+    const a = [
+      [0.8, 0.7, 0.6],
+      [0.9, 0.9],
+    ];
+    expect(() => computeForwardTransfer(a, [0.5, 0.4, 0.3])).toThrow(RangeError);
+  });
+
+  it("throws RangeError for non-square matrix in computeForgetting", () => {
+    const a = [
+      [0.8, 0.7],
+      [0.9, 0.9, 0.8],
+    ];
+    expect(() => computeForgetting(a)).toThrow(RangeError);
+  });
+
+  it("throws RangeError when baseline is shorter than matrix size", () => {
+    const a = [
+      [0.8, 0.7],
+      [0.7, 0.9],
+    ];
+    expect(() => computeForwardTransfer(a, [0.5])).toThrow(RangeError);
+  });
+
+  it("throws RangeError for non-square matrix in computeAllCLMetrics", () => {
+    const a = [
+      [0.8, 0.7, 0.6],
+      [0.9, 0.9],
+    ];
+    expect(() => computeAllCLMetrics(a, [0.5, 0.4, 0.3])).toThrow(RangeError);
+  });
+
+  it("throws RangeError when baseline is shorter in computeAllCLMetrics", () => {
+    const a = [
+      [0.8, 0.7],
+      [0.7, 0.9],
+    ];
+    expect(() => computeAllCLMetrics(a, [0.5])).toThrow(RangeError);
+  });
+});
+
 // --- computeForwardTransfer ---
 // FT = (1/(N-1)) * Σ_{i=0}^{N-2} (a[i][i+1] - baseline[i+1])
 // Superdiagonal: after training on task i, performance on task i+1
@@ -91,9 +135,9 @@ describe("computeForgetting", () => {
     expect(computeForgetting(a)).toBeCloseTo(0.15, 4);
   });
 
-  it("returns 0 for single session (no forgetting possible)", () => {
+  it("throws RangeError for non-square matrix", () => {
     const a = [[0.5], [0.7]];
-    expect(computeForgetting(a)).toBe(0);
+    expect(() => computeForgetting(a)).toThrow(RangeError);
   });
 
   it("returns 0 for empty matrix", () => {
@@ -135,10 +179,12 @@ describe("computeCLFbeta", () => {
       [0.8, 0.7],
       [0.7, 0.9],
     ];
-    const baseline = [0.5, 0.6];
-    const result = computeCLFbeta(a, baseline);
-    expect(result).toBeGreaterThan(0);
-    expect(result).toBeLessThanOrEqual(1);
+    const result = computeCLFbeta(a);
+    // Plasticity = (0.8+0.9)/2 = 0.85
+    // Forgetting: col 0: max(0.8,0.7)=0.8, final=0.7, f=0.1 → mean=0.1
+    // Stability = 1 - 0.1 = 0.9
+    // Fβ(1) = 2*0.85*0.9 / (0.85+0.9) = 1.53/1.75 ≈ 0.8743
+    expect(result).toBeCloseTo(0.8743, 3);
   });
 
   it("returns 0 when plasticity is 0", () => {
@@ -146,20 +192,16 @@ describe("computeCLFbeta", () => {
       [0.0, 0.5],
       [0.3, 0.0],
     ];
-    const baseline = [0.5, 0.5];
-    expect(computeCLFbeta(a, baseline)).toBe(0);
+    expect(computeCLFbeta(a)).toBe(0);
   });
 
   it("returns 0 when stability is 0 (complete forgetting)", () => {
-    // Column 0: [1.0, 0.0] → max=1.0, final=0.0 → forgetting=1.0
-    // Column 1: excluded
-    // stability = max(0, 1 - 1.0) = 0
+    // Column 0: [1.0, 0.0] → forgetting=1.0, stability=0
     const a = [
       [1.0, 0.0],
       [0.0, 0.5],
     ];
-    const baseline = [0.5, 0.5];
-    expect(computeCLFbeta(a, baseline)).toBe(0);
+    expect(computeCLFbeta(a)).toBe(0);
   });
 
   it("uses default beta=1 (equal weight)", () => {
@@ -167,9 +209,8 @@ describe("computeCLFbeta", () => {
       [0.8, 0.7],
       [0.7, 0.9],
     ];
-    const baseline = [0.5, 0.6];
-    const defaultResult = computeCLFbeta(a, baseline);
-    const beta1Result = computeCLFbeta(a, baseline, 1);
+    const defaultResult = computeCLFbeta(a);
+    const beta1Result = computeCLFbeta(a, 1);
     expect(defaultResult).toBeCloseTo(beta1Result, 10);
   });
 
@@ -178,14 +219,13 @@ describe("computeCLFbeta", () => {
       [0.8, 0.7],
       [0.7, 0.9],
     ];
-    const baseline = [0.5, 0.6];
-    const beta1 = computeCLFbeta(a, baseline, 1);
-    const beta2 = computeCLFbeta(a, baseline, 2);
+    const beta1 = computeCLFbeta(a, 1);
+    const beta2 = computeCLFbeta(a, 2);
     expect(beta1).not.toBeCloseTo(beta2, 4);
   });
 
   it("returns 0 for empty matrix", () => {
-    expect(computeCLFbeta([], [])).toBe(0);
+    expect(computeCLFbeta([])).toBe(0);
   });
 });
 
@@ -264,7 +304,7 @@ describe("computeAllCLMetrics", () => {
     expect(result.forgetting).toBeCloseTo(computeForgetting(a), 10);
 
     // cl_f_beta matches standalone
-    expect(result.cl_f_beta).toBeCloseTo(computeCLFbeta(a, baseline), 10);
+    expect(result.cl_f_beta).toBeCloseTo(computeCLFbeta(a), 10);
   });
 
   it("handles perfect scenario (no forgetting, high performance)", () => {
