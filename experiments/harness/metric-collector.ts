@@ -18,6 +18,8 @@ export interface CollectInput {
   completion_rate: number;
   signals?: SignalData;
   sessionLog?: SessionLogData;
+  token_usage?: number;
+  attempt_count?: number;
 }
 
 export class MetricCollector {
@@ -32,6 +34,8 @@ export class MetricCollector {
       interrupt_count: input.signals?.interrupt_count ?? 0,
       corrective_instruction_count: input.signals?.corrective_instruction_count ?? 0,
       context_tokens_used: input.sessionLog?.context_tokens_used ?? 0,
+      token_usage: input.token_usage ?? 0,
+      attempt_count: input.attempt_count ?? 0,
       timestamp: new Date().toISOString(),
     };
   }

@@ -30,6 +30,13 @@ export const benchmarkMetricsSchema = z.object({
     .optional()
     .describe("CL-Fβ: harmonic mean of plasticity and stability"),
   cl_score: z.number().finite().optional().describe("CL-Score: composite continual learning score"),
+  token_usage: z.number().int().min(0).optional().describe("Total tokens consumed in the session"),
+  attempt_count: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Number of attempts to complete the task"),
 });
 
 export type BenchmarkMetrics = z.infer<typeof benchmarkMetricsSchema>;
@@ -98,6 +105,8 @@ export interface ConditionSummary {
   mean_completion_rate?: number;
   mean_cl_f_beta?: number;
   mean_cl_score?: number;
+  mean_token_usage?: number;
+  mean_attempt_count?: number;
 }
 
 export interface ComparisonTable {

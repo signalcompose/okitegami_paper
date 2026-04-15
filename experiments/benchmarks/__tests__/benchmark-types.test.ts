@@ -61,6 +61,26 @@ describe("benchmarkResultSchema", () => {
     };
     const parsed = benchmarkResultSchema.parse(minimal);
     expect(parsed.metrics.forward_transfer).toBeUndefined();
+    expect(parsed.metrics.token_usage).toBeUndefined();
+    expect(parsed.metrics.attempt_count).toBeUndefined();
+  });
+
+  it("accepts result with process metrics", () => {
+    const withProcess = {
+      ...validResult,
+      metrics: { ...validResult.metrics, token_usage: 15000, attempt_count: 3 },
+    };
+    const parsed = benchmarkResultSchema.parse(withProcess);
+    expect(parsed.metrics.token_usage).toBe(15000);
+    expect(parsed.metrics.attempt_count).toBe(3);
+  });
+
+  it("rejects negative token_usage", () => {
+    expect(() => benchmarkMetricsSchema.parse({ pass_at_1: 0.5, token_usage: -1 })).toThrow();
+  });
+
+  it("rejects negative attempt_count", () => {
+    expect(() => benchmarkMetricsSchema.parse({ pass_at_1: 0.5, attempt_count: -1 })).toThrow();
   });
 
   it("accepts result with per-task details", () => {
@@ -160,10 +180,24 @@ describe("aggregation", () => {
   it("includes optional metrics when present", () => {
     const results = [
       makeResult("acm", 0.7, {
-        metrics: { pass_at_1: 0.7, forward_transfer: 0.1, forgetting: 0.02, corrective_rate: 0.05 },
+        metrics: {
+          pass_at_1: 0.7,
+          forward_transfer: 0.1,
+          forgetting: 0.02,
+          corrective_rate: 0.05,
+          token_usage: 10000,
+          attempt_count: 2,
+        },
       }),
       makeResult("acm", 0.8, {
-        metrics: { pass_at_1: 0.8, forward_transfer: 0.2, forgetting: 0.03, corrective_rate: 0.1 },
+        metrics: {
+          pass_at_1: 0.8,
+          forward_transfer: 0.2,
+          forgetting: 0.03,
+          corrective_rate: 0.1,
+          token_usage: 14000,
+          attempt_count: 4,
+        },
       }),
     ];
 
@@ -172,12 +206,16 @@ describe("aggregation", () => {
     expect(acm.mean_forward_transfer).toBeCloseTo(0.15, 4);
     expect(acm.mean_forgetting).toBeCloseTo(0.025, 4);
     expect(acm.mean_corrective_rate).toBeCloseTo(0.075, 4);
+    expect(acm.mean_token_usage).toBeCloseTo(12000, 4);
+    expect(acm.mean_attempt_count).toBeCloseTo(3, 4);
   });
 
   it("leaves optional metrics undefined when not present", () => {
     const results = [makeResult("baseline", 0.5)];
     const summaries = aggregateByCondition(results);
     expect(summaries[0].mean_forward_transfer).toBeUndefined();
+    expect(summaries[0].mean_token_usage).toBeUndefined();
+    expect(summaries[0].mean_attempt_count).toBeUndefined();
   });
 
   it("averages only defined values when optional metrics are mixed", () => {
@@ -271,6 +309,8 @@ describe("formatMarkdownTable", () => {
     expect(md).toContain("acm");
     expect(md).toContain("0.500");
     expect(md).toContain("0.800");
+    expect(md).toContain("Tokens");
+    expect(md).toContain("Attempts");
   });
 });
 

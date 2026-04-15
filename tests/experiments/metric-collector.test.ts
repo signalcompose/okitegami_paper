@@ -20,6 +20,8 @@ describe("MetricCollector", () => {
         sessionLog: {
           context_tokens_used: 50000,
         },
+        token_usage: 12000,
+        attempt_count: 3,
       });
 
       expect(result.run_id).toBe("run-001");
@@ -31,6 +33,8 @@ describe("MetricCollector", () => {
       expect(result.interrupt_count).toBe(3);
       expect(result.corrective_instruction_count).toBe(1);
       expect(result.context_tokens_used).toBe(50000);
+      expect(result.token_usage).toBe(12000);
+      expect(result.attempt_count).toBe(3);
       expect(result.timestamp).toBeDefined();
     });
 
@@ -56,7 +60,7 @@ describe("MetricCollector", () => {
       expect(result.task_completion_rate).toBe(1.0);
     });
 
-    it("uses default values when signals are not provided", () => {
+    it("uses default values when signals and process metrics are not provided", () => {
       const result = collector.collect({
         run_id: "run-003",
         condition: "control",
@@ -69,6 +73,8 @@ describe("MetricCollector", () => {
       expect(result.interrupt_count).toBe(0);
       expect(result.corrective_instruction_count).toBe(0);
       expect(result.context_tokens_used).toBe(0);
+      expect(result.token_usage).toBe(0);
+      expect(result.attempt_count).toBe(0);
     });
 
     it("generates ISO timestamp", () => {

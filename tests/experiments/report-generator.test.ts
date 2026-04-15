@@ -13,6 +13,8 @@ function makeRunResult(overrides: Partial<RunResult> & { spec: RunSpec }): RunRe
     interrupt_count: 2,
     corrective_instruction_count: 1,
     context_tokens_used: 50000,
+    token_usage: 10000,
+    attempt_count: 2,
     timestamp: "2026-03-10T00:00:00.000Z",
   };
   return {
@@ -47,6 +49,8 @@ describe("ReportGenerator", () => {
             interrupt_count: 3,
             corrective_instruction_count: 2,
             context_tokens_used: 60000,
+            token_usage: 15000,
+            attempt_count: 4,
             timestamp: "2026-03-10T00:00:00.000Z",
           },
         }),
@@ -68,6 +72,8 @@ describe("ReportGenerator", () => {
             interrupt_count: 1,
             corrective_instruction_count: 0,
             context_tokens_used: 40000,
+            token_usage: 9000,
+            attempt_count: 2,
             timestamp: "2026-03-10T00:01:00.000Z",
           },
         }),
@@ -89,6 +95,8 @@ describe("ReportGenerator", () => {
             interrupt_count: 0,
             corrective_instruction_count: 0,
             context_tokens_used: 45000,
+            token_usage: 8000,
+            attempt_count: 1,
             timestamp: "2026-03-10T00:02:00.000Z",
           },
         }),
@@ -108,12 +116,16 @@ describe("ReportGenerator", () => {
       expect(controlAgg!.mean_completion_rate).toBeCloseTo(0.7, 5);
       expect(controlAgg!.run_count).toBe(2);
       expect(controlAgg!.mean_interrupt_count).toBeCloseTo(2, 5);
+      expect(controlAgg!.mean_token_usage).toBeCloseTo(12000, 5);
+      expect(controlAgg!.mean_attempt_count).toBeCloseTo(3, 5);
 
       // Check acm-sf aggregation
       const acmAgg = report.aggregated.find((a) => a.condition === "acm-sf");
       expect(acmAgg).toBeDefined();
       expect(acmAgg!.mean_completion_rate).toBeCloseTo(0.9, 5);
       expect(acmAgg!.run_count).toBe(1);
+      expect(acmAgg!.mean_token_usage).toBeCloseTo(8000, 5);
+      expect(acmAgg!.mean_attempt_count).toBeCloseTo(1, 5);
     });
 
     it("handles empty runs", () => {
@@ -145,6 +157,8 @@ describe("ReportGenerator", () => {
       expect(lines[0]).toContain("condition");
       expect(lines[0]).toContain("task");
       expect(lines[0]).toContain("task_completion_rate");
+      expect(lines[0]).toContain("token_usage");
+      expect(lines[0]).toContain("attempt_count");
 
       // Data line
       expect(lines[1]).toContain("r1");
