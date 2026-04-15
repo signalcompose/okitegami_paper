@@ -58,6 +58,33 @@ describe("input validation", () => {
     ];
     expect(() => computeAllCLMetrics(a, [0.5])).toThrow(RangeError);
   });
+
+  it("throws RangeError for non-square matrix in computeCLFbeta", () => {
+    const a = [
+      [0.8, 0.7, 0.6],
+      [0.9, 0.9],
+    ];
+    expect(() => computeCLFbeta(a)).toThrow(RangeError);
+  });
+
+  it("throws RangeError for matrix containing NaN", () => {
+    const a = [
+      [NaN, 0.7],
+      [0.7, 0.9],
+    ];
+    expect(() => computeForwardTransfer(a, [0.5, 0.6])).toThrow(RangeError);
+    expect(() => computeForgetting(a)).toThrow(RangeError);
+    expect(() => computeCLFbeta(a)).toThrow(RangeError);
+    expect(() => computeAllCLMetrics(a, [0.5, 0.6])).toThrow(RangeError);
+  });
+
+  it("throws RangeError for matrix containing Infinity", () => {
+    const a = [
+      [0.8, Infinity],
+      [0.7, 0.9],
+    ];
+    expect(() => computeForgetting(a)).toThrow(RangeError);
+  });
 });
 
 // --- computeForwardTransfer ---
@@ -106,13 +133,13 @@ describe("computeForwardTransfer", () => {
 });
 
 // --- computeForgetting ---
-// F = (1/(N-1)) * Σ_{j=0}^{N-2} (max_k a[k][j] - a[N-1][j])
-// Reads columns, excludes last eval task. N-1 denominator.
+// F = (1/(N-1)) * Σ_{j=0}^{N-2} max(0, max_{k=0}^{j} a[k][j] - a[N-1][j])
+// Reads columns, peak up to stage j. Excludes last eval task. N-1 denominator.
 
 describe("computeForgetting", () => {
   it("returns 0 when final performance matches peak (no degradation)", () => {
-    // Column 0 (task 0): [0.5, 0.6, 0.7] → max=0.7, final=0.7 → 0
-    // Column 1 (task 1): [0.0, 0.4, 0.5] → max=0.5, final=0.5 → 0
+    // Column 0 (task 0): max_{k=0}^{0}=0.5, final=0.7 → max(0, 0.5-0.7)=0
+    // Column 1 (task 1): max_{k=0}^{1}=max(0.0,0.4)=0.4, final=0.5 → max(0, 0.4-0.5)=0
     // Column 2 excluded (last eval task)
     const a = [
       [0.5, 0.0, 0.0],
@@ -123,8 +150,8 @@ describe("computeForgetting", () => {
   });
 
   it("returns positive value when final performance drops from peak", () => {
-    // Column 0 (task 0): [0.9, 0.8, 0.6] → max=0.9, final=0.6 → 0.3
-    // Column 1 (task 1): [0.0, 0.7, 0.7] → max=0.7, final=0.7 → 0.0
+    // Column 0 (task 0): max_{k=0}^{0}=0.9, final=0.6 → 0.3
+    // Column 1 (task 1): max_{k=0}^{1}=max(0.0,0.7)=0.7, final=0.7 → 0.0
     // Column 2 excluded (last eval task)
     // Mean = (0.3 + 0.0) / 2 = 0.15
     const a = [
@@ -145,12 +172,11 @@ describe("computeForgetting", () => {
   });
 
   it("returns 0 for N=1 (single training stage)", () => {
-    const a = [[0.9, 0.7, 0.6]];
-    expect(computeForgetting(a)).toBe(0);
+    expect(computeForgetting([[0.9]])).toBe(0);
   });
 
   it("handles constant performance across training stages", () => {
-    // Column 0: [0.5, 0.5] → max=0.5, final=0.5 → 0
+    // Column 0: max_{k=0}^{0}=0.5, final=0.5 → 0
     // Column 1 excluded
     const a = [
       [0.5, 0.0],
@@ -160,7 +186,7 @@ describe("computeForgetting", () => {
   });
 
   it("computes correctly with two tasks", () => {
-    // Column 0 (task 0): [0.9, 0.6] → max=0.9, final=0.6 → 0.3
+    // Column 0 (task 0): max_{k=0}^{0}=0.9, final=0.6 → 0.3
     // Column 1 excluded (last eval task)
     // Mean = 0.3 / 1 = 0.3
     const a = [
@@ -168,6 +194,15 @@ describe("computeForgetting", () => {
       [0.6, 0.8],
     ];
     expect(computeForgetting(a)).toBeCloseTo(0.3, 4);
+  });
+
+  it("forgetting is never negative (clamped at 0)", () => {
+    // Final row outperforms all prior rows on task 0
+    const a = [
+      [0.5, 0.0],
+      [0.7, 0.8],
+    ];
+    expect(computeForgetting(a)).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -181,7 +216,7 @@ describe("computeCLFbeta", () => {
     ];
     const result = computeCLFbeta(a);
     // Plasticity = (0.8+0.9)/2 = 0.85
-    // Forgetting: col 0: max(0.8,0.7)=0.8, final=0.7, f=0.1 → mean=0.1
+    // Forgetting: col 0: max_{k=0}^{0}=0.8, final=0.7, f=0.1 → mean=0.1
     // Stability = 1 - 0.1 = 0.9
     // Fβ(1) = 2*0.85*0.9 / (0.85+0.9) = 1.53/1.75 ≈ 0.8743
     expect(result).toBeCloseTo(0.8743, 3);
@@ -196,7 +231,7 @@ describe("computeCLFbeta", () => {
   });
 
   it("returns 0 when stability is 0 (complete forgetting)", () => {
-    // Column 0: [1.0, 0.0] → forgetting=1.0, stability=0
+    // Column 0: max_{k=0}^{0}=1.0, final=0.0 → forgetting=1.0, stability=0
     const a = [
       [1.0, 0.0],
       [0.0, 0.5],
@@ -227,6 +262,31 @@ describe("computeCLFbeta", () => {
   it("returns 0 for empty matrix", () => {
     expect(computeCLFbeta([])).toBe(0);
   });
+
+  it("cl_f_beta is always in [0, 1] for performance values in [0, 1]", () => {
+    const a1 = [
+      [0.9, 0.8],
+      [0.85, 0.95],
+    ];
+    expect(computeCLFbeta(a1)).toBeGreaterThanOrEqual(0);
+    expect(computeCLFbeta(a1)).toBeLessThanOrEqual(1);
+
+    const a2 = [
+      [1.0, 0.0],
+      [0.5, 0.9],
+    ];
+    expect(computeCLFbeta(a2)).toBeGreaterThanOrEqual(0);
+    expect(computeCLFbeta(a2)).toBeLessThanOrEqual(1);
+  });
+
+  it("handles beta=0 without division by zero", () => {
+    const a = [
+      [0.8, 0.7],
+      [0.7, 0.9],
+    ];
+    expect(() => computeCLFbeta(a, 0)).not.toThrow();
+    expect(Number.isFinite(computeCLFbeta(a, 0))).toBe(true);
+  });
 });
 
 // --- computeCLScore ---
@@ -245,7 +305,7 @@ describe("computeCLScore", () => {
 
     // ACC = mean of last row = (0.7 + 0.9) / 2 = 0.8
     // FWT = (a[0][1] - baseline[1]) / 1 = (0.7 - 0.6) / 1 = 0.1
-    // Forgetting: col 0 only: max(0.8,0.7)=0.8, final=0.7, f=0.1 → mean=0.1/1=0.1
+    // Forgetting: col 0 only: max_{k=0}^{0}=0.8, final=0.7, f=0.1 → mean=0.1/1=0.1
     // CL-Score = 0.8 + 0.1 - 0.1 = 0.8
     expect(score).toBeCloseTo(0.8, 4);
   });
@@ -303,12 +363,12 @@ describe("computeAllCLMetrics", () => {
     // forgetting matches standalone
     expect(result.forgetting).toBeCloseTo(computeForgetting(a), 10);
 
-    // cl_f_beta matches standalone
+    // cl_f_beta matches standalone (both use β=1)
     expect(result.cl_f_beta).toBeCloseTo(computeCLFbeta(a), 10);
   });
 
   it("handles perfect scenario (no forgetting, high performance)", () => {
-    // Column 0: [1.0, 1.0] → max=1.0, final=1.0 → 0 forgetting
+    // Column 0: max_{k=0}^{0}=1.0, final=1.0 → 0 forgetting
     // Column 1: excluded
     const a = [
       [1.0, 0.5],
@@ -337,9 +397,9 @@ describe("computeAllCLMetrics", () => {
     // Plasticity = mean diagonal = (0.9 + 0.8 + 0.8) / 3 ≈ 0.8333
     expect(result.plasticity).toBeCloseTo(0.8333, 3);
 
-    // Forgetting (cols 0,1 only, exclude col 2):
-    // col 0: max(0.9,0.7,0.6)=0.9, final=0.6, f=0.3
-    // col 1: max(0.3,0.8,0.7)=0.8, final=0.7, f=0.1
+    // Forgetting (cols 0,1 only, exclude col 2, max up to stage j):
+    // col 0: max_{k=0}^{0}=0.9, final=0.6, f=0.3
+    // col 1: max_{k=0}^{1}=max(0.3,0.8)=0.8, final=0.7, f=0.1
     // mean = (0.3 + 0.1) / 2 = 0.2
     expect(result.forgetting).toBeCloseTo(0.2, 4);
 
