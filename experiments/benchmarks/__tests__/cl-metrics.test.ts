@@ -85,6 +85,23 @@ describe("input validation", () => {
     ];
     expect(() => computeForgetting(a)).toThrow(RangeError);
   });
+
+  it("throws RangeError for baseline containing NaN", () => {
+    const a = [
+      [0.8, 0.7],
+      [0.7, 0.9],
+    ];
+    expect(() => computeForwardTransfer(a, [0.5, NaN])).toThrow(RangeError);
+    expect(() => computeAllCLMetrics(a, [NaN, 0.6])).toThrow(RangeError);
+  });
+
+  it("throws RangeError for non-square matrix in computeCLScore", () => {
+    const a = [
+      [0.8, 0.7, 0.6],
+      [0.9, 0.9],
+    ];
+    expect(() => computeCLScore(a, [0.5, 0.4, 0.3])).toThrow(RangeError);
+  });
 });
 
 // --- computeForwardTransfer ---
@@ -194,6 +211,21 @@ describe("computeForgetting", () => {
       [0.6, 0.8],
     ];
     expect(computeForgetting(a)).toBeCloseTo(0.3, 4);
+  });
+
+  it("excludes later training stages from peak (k<=j bound)", () => {
+    // a[2][0] = 0.95 is a later-stage spike for task 0 that must NOT count as peak
+    // peak for task 0: max_{k=0}^{0} = a[0][0] = 0.9
+    // peak for task 1: max_{k=0}^{1} = max(0.3, 0.8) = 0.8
+    // final[0] = 0.95 → max(0, 0.9 - 0.95) = 0
+    // final[1] = 0.7  → max(0, 0.8 - 0.7) = 0.1
+    // mean = (0 + 0.1) / 2 = 0.05
+    const a = [
+      [0.9, 0.3, 0.2],
+      [0.7, 0.8, 0.5],
+      [0.95, 0.7, 0.9],
+    ];
+    expect(computeForgetting(a)).toBeCloseTo(0.05, 4);
   });
 
   it("forgetting is never negative (clamped at 0)", () => {

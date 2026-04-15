@@ -50,6 +50,20 @@ function assertSquareMatrix(a: number[][], caller: string): void {
   }
 }
 
+/** Validate that baseline has sufficient length and all finite values. */
+function assertBaseline(baseline: number[], N: number, caller: string): void {
+  if (baseline.length < N) {
+    throw new RangeError(
+      `${caller}: baseline length ${baseline.length} must be >= matrix size ${N}`
+    );
+  }
+  for (let i = 0; i < N; i++) {
+    if (!Number.isFinite(baseline[i])) {
+      throw new RangeError(`${caller}: non-finite baseline value at [${i}]: ${baseline[i]}`);
+    }
+  }
+}
+
 /**
  * Forward Transfer: measures how past experience improves performance on new tasks.
  * FT = (1/(N-1)) * Σ_{i=0}^{N-2} (a[i][i+1] - baseline[i+1])
@@ -67,11 +81,7 @@ export function computeForwardTransfer(a: number[][], baseline: number[]): numbe
   const N = a.length;
   if (N <= 1) return 0;
 
-  if (baseline.length < N) {
-    throw new RangeError(
-      `computeForwardTransfer: baseline length ${baseline.length} must be >= matrix size ${N}`
-    );
-  }
+  assertBaseline(baseline, N, "computeForwardTransfer");
 
   let sum = 0;
   for (let i = 0; i < N - 1; i++) {
@@ -173,6 +183,7 @@ export function computeCLFbeta(a: number[][], beta: number = 1): number {
  */
 export function computeCLScore(a: number[][], baseline: number[]): number {
   if (a.length === 0) return 0;
+  assertSquareMatrix(a, "computeCLScore");
 
   const acc = computeACC(a);
   const fwt = computeForwardTransfer(a, baseline);
@@ -203,11 +214,7 @@ export function computeAllCLMetrics(a: number[][], baseline: number[]): CLMetric
 
   assertSquareMatrix(a, "computeAllCLMetrics");
   const N = a.length;
-  if (baseline.length < N) {
-    throw new RangeError(
-      `computeAllCLMetrics: baseline length ${baseline.length} must be >= matrix size ${N}`
-    );
-  }
+  assertBaseline(baseline, N, "computeAllCLMetrics");
 
   const forward_transfer = computeForwardTransfer(a, baseline);
   const forgetting = computeForgetting(a);
