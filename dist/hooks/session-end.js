@@ -107,13 +107,19 @@ export async function handleSessionEnd(stdin) {
                 }
             }
         }
+        // Session Segment Boundary (#115): compute last evaluation timestamp
+        // before Phase 1b so corrective details are scoped to current segment.
+        const lastEval = experienceStore.getLastEvaluatedAt(sessionId);
         // --- Phase 1b: Build corrective summary from signal store ---
         // When transcript analysis was skipped because PreCompact already stored
         // corrective signals for this session, populate correctiveDetails from
-        // the stored signals for the summary output.
+        // the stored signals. Use segment-scoped signals when lastEval is set
+        // so the feedback loop only considers current-segment correctives.
         if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
             try {
-                const storedSignals = signalStore.getBySession(sessionId);
+                const storedSignals = lastEval
+                    ? signalStore.getBySessionAfter(sessionId, lastEval)
+                    : signalStore.getBySession(sessionId);
                 for (const sig of storedSignals) {
                     if (sig.event_type === "corrective_instruction") {
                         const data = sig.data != null && typeof sig.data === "object"
@@ -138,9 +144,6 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // --- Phase 2: Experience generation (segment-aware) ---
-        // Session Segment Boundary (#115): use only signals recorded after the
-        // last evaluation to support `claude -c` session continuation.
-        const lastEval = experienceStore.getLastEvaluatedAt(sessionId);
         // Get segment-scoped session summary and signals
         const summary = lastEval
             ? collector.getSessionSummary(sessionId, { after: lastEval })
@@ -164,10 +167,10 @@ export async function handleSessionEnd(stdin) {
             promotion_threshold: config.promotion_threshold,
         });
         const entries = generator.generate({ session_id: sessionId, summary, signals });
-        // Record evaluation even if no entries generated (e.g. ambiguous segment).
-        // This advances the segment boundary so the same signals aren't re-evaluated.
-        experienceStore.recordEvaluation(sessionId, entries.length);
         if (entries.length === 0) {
+            // Record evaluation even when no entries generated (e.g. ambiguous segment).
+            // This advances the segment boundary so the same signals aren't re-evaluated.
+            experienceStore.recordEvaluation(sessionId, 0);
             ctx.logger.log("skip", "no_entries_generated", {
                 session_id: sessionId,
                 last_evaluated_at: lastEval,
@@ -225,6 +228,9 @@ export async function handleSessionEnd(stdin) {
             console.error(`[ACM] session-end: ${entries.length - persisted} of ${entries.length} ` +
                 `experience entries failed to persist for session "${sessionId}"`);
         }
+        // Record evaluation after persistence so a crash during persistence
+        // doesn't advance the segment boundary (signals remain eligible).
+        experienceStore.recordEvaluation(sessionId, persisted);
         ctx.logger.log("generation", "experiences_created", {
             session_id: sessionId,
             generated: entries.length,
