@@ -9,7 +9,7 @@ export function loadSweBenchTasks(path: string): SweBenchTask[] {
     throw new Error(`SWE-bench task file is empty: ${path}`);
   }
 
-  const raw = content.startsWith("[") ? JSON.parse(content) : parseJsonLines(content);
+  const raw = content.startsWith("[") ? parseJsonArray(content, path) : parseJsonLines(content);
   if (!Array.isArray(raw)) {
     throw new Error(`Expected an array of tasks in ${path}`);
   }
@@ -24,6 +24,15 @@ export function loadSweBenchTasks(path: string): SweBenchTask[] {
     }
     return result.data;
   });
+}
+
+function parseJsonArray(content: string, path: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Malformed JSON array in ${path}: ${msg}`);
+  }
 }
 
 function parseJsonLines(content: string): unknown[] {

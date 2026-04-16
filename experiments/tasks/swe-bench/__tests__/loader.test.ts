@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadSweBenchTasks, loadSubset, sweBenchTaskSchema } from "../loader.js";
 
-const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+const FIXTURES_DIR = join(import.meta.dirname ?? ".", "..", "fixtures");
 
 describe("sweBenchTaskSchema", () => {
   const valid = {
@@ -34,6 +34,11 @@ describe("sweBenchTaskSchema", () => {
     expect(parsed.PASS_TO_PASS).toEqual([]);
   });
 
+  it("accepts task with single FAIL_TO_PASS entry", () => {
+    const parsed = sweBenchTaskSchema.parse({ ...valid, FAIL_TO_PASS: ["test.x"] });
+    expect(parsed.FAIL_TO_PASS).toEqual(["test.x"]);
+  });
+
   it("rejects missing instance_id", () => {
     const { instance_id: _unused, ...rest } = valid;
     void _unused;
@@ -52,6 +57,10 @@ describe("sweBenchTaskSchema", () => {
 
   it("rejects empty patch", () => {
     expect(() => sweBenchTaskSchema.parse({ ...valid, patch: "" })).toThrow();
+  });
+
+  it("rejects empty FAIL_TO_PASS", () => {
+    expect(() => sweBenchTaskSchema.parse({ ...valid, FAIL_TO_PASS: [] })).toThrow();
   });
 });
 
@@ -101,6 +110,18 @@ describe("loadSweBenchTasks", () => {
       const p = join(testDir, "incomplete.jsonl");
       writeFileSync(p, JSON.stringify({ instance_id: "x" }) + "\n");
       expect(() => loadSweBenchTasks(p)).toThrow();
+    });
+
+    it("throws on empty JSON array", () => {
+      const p = join(testDir, "empty-array.json");
+      writeFileSync(p, "[]");
+      expect(() => loadSweBenchTasks(p)).toThrow(/no tasks/i);
+    });
+
+    it("throws on malformed JSON array", () => {
+      const p = join(testDir, "bad-array.json");
+      writeFileSync(p, "[{broken}]");
+      expect(() => loadSweBenchTasks(p)).toThrow(/malformed json array/i);
     });
 
     it("skips blank lines in JSONL", () => {
