@@ -1,7 +1,7 @@
 /**
  * Plugin structure validation tests — Issue #94
  *
- * Validates that plugin.json, hooks.json, and skill files
+ * Validates that plugin.json, hooks.json, and command files
  * conform to the expected Claude Code plugin format.
  */
 import { describe, it, expect } from "vitest";
@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname ?? ".", "..");
 const HOOKS_DIR = join(ROOT, "hooks");
-const SKILLS_DIR = join(ROOT, "skills");
+const COMMANDS_DIR = join(ROOT, "commands");
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf-8"));
@@ -25,8 +25,7 @@ describe("plugin.json", () => {
     expect(plugin.name).toBe("acm");
     expect(plugin.description).toBeTruthy();
     expect(plugin.mcpServers).toBeDefined();
-    expect(plugin.hooks).toBe("./hooks/hooks.json");
-    expect(plugin.skills).toBe("./skills");
+    // hooks and commands use auto-discovery (no explicit manifest keys needed)
   });
 
   it("has author with correct name", () => {
@@ -82,25 +81,23 @@ describe("hooks.json", () => {
   });
 });
 
-describe("skills", () => {
-  it("has report skill SKILL.md", () => {
-    const skillPath = join(SKILLS_DIR, "report", "SKILL.md");
-    expect(existsSync(skillPath)).toBe(true);
-    const content = readFileSync(skillPath, "utf-8");
+describe("commands", () => {
+  it("has report command", () => {
+    const cmdPath = join(COMMANDS_DIR, "report.md");
+    expect(existsSync(cmdPath)).toBe(true);
+    const content = readFileSync(cmdPath, "utf-8");
     // Frontmatter check
     expect(content).toMatch(/^---\n/);
-    expect(content).toMatch(/name:\s*report/);
     expect(content).toMatch(/description:/);
     // Should reference acm_report MCP tool
     expect(content).toContain("acm_report");
   });
 
-  it("has health skill SKILL.md", () => {
-    const skillPath = join(SKILLS_DIR, "health", "SKILL.md");
-    expect(existsSync(skillPath)).toBe(true);
-    const content = readFileSync(skillPath, "utf-8");
+  it("has health command", () => {
+    const cmdPath = join(COMMANDS_DIR, "health.md");
+    expect(existsSync(cmdPath)).toBe(true);
+    const content = readFileSync(cmdPath, "utf-8");
     expect(content).toMatch(/^---\n/);
-    expect(content).toMatch(/name:\s*health/);
     expect(content).toMatch(/description:/);
     // Should reference acm_health MCP tool
     expect(content).toContain("acm_health");
