@@ -92,9 +92,7 @@ export class SignalCollector {
 
   getSessionSummary(sessionId: string, options?: { after?: string }): SessionSummary {
     const after = options?.after;
-    const counts = after
-      ? this.store.countByTypeAfter(sessionId, after)
-      : this.store.countByType(sessionId);
+    const counts = this.store.countByType(sessionId, after);
     const totalSignals = Object.values(counts).reduce((a, b) => a + b, 0);
 
     return {
@@ -103,9 +101,7 @@ export class SignalCollector {
       counts,
       was_interrupted: counts.interrupt > 0,
       corrective_instruction_count: counts.corrective_instruction,
-      has_test_pass: after
-        ? this.store.hasTestPassAfter(sessionId, after)
-        : this.store.hasTestPass(sessionId),
+      has_test_pass: this.store.hasTestPass(sessionId, after),
     };
   }
 

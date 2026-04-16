@@ -77,56 +77,29 @@ export class SessionSignalStore {
     };
   }
 
-  getBySession(sessionId: string): SessionSignal[] {
-    const rows = this.getBySessionStmt.all<SignalRow>(sessionId);
-    return rows.map((row) => ({
-      id: row.id,
-      session_id: row.session_id,
-      event_type: row.event_type as EventType,
-      data: row.data ? this.parseData(row.data) : null,
-      timestamp: row.timestamp,
-    }));
+  getBySession(sessionId: string, after?: string): SessionSignal[] {
+    const rows = after
+      ? this.getBySessionAfterStmt.all<SignalRow>(sessionId, after)
+      : this.getBySessionStmt.all<SignalRow>(sessionId);
+    return this.mapRows(rows);
   }
 
+  /** @deprecated Use getBySession(sessionId, after) instead */
   getBySessionAfter(sessionId: string, afterTimestamp: string): SessionSignal[] {
-    const rows = this.getBySessionAfterStmt.all<SignalRow>(sessionId, afterTimestamp);
-    return rows.map((row) => ({
-      id: row.id,
-      session_id: row.session_id,
-      event_type: row.event_type as EventType,
-      data: row.data ? this.parseData(row.data) : null,
-      timestamp: row.timestamp,
-    }));
+    return this.getBySession(sessionId, afterTimestamp);
   }
 
-  countByType(sessionId: string): Record<EventType, number> {
-    const rows = this.countByTypeStmt.all(sessionId) as Array<{
-      event_type: string;
-      count: number;
-    }>;
+  countByType(sessionId: string, after?: string): Record<EventType, number> {
+    const rows = (
+      after ? this.countByTypeAfterStmt.all(sessionId, after) : this.countByTypeStmt.all(sessionId)
+    ) as Array<{ event_type: string; count: number }>;
 
-    const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0])) as Record<EventType, number>;
-
-    for (const row of rows) {
-      counts[row.event_type as EventType] = row.count;
-    }
-
-    return counts;
+    return this.buildCounts(rows);
   }
 
+  /** @deprecated Use countByType(sessionId, after) instead */
   countByTypeAfter(sessionId: string, afterTimestamp: string): Record<EventType, number> {
-    const rows = this.countByTypeAfterStmt.all(sessionId, afterTimestamp) as Array<{
-      event_type: string;
-      count: number;
-    }>;
-
-    const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0])) as Record<EventType, number>;
-
-    for (const row of rows) {
-      counts[row.event_type as EventType] = row.count;
-    }
-
-    return counts;
+    return this.countByType(sessionId, afterTimestamp);
   }
 
   countSpecificTypes(
@@ -145,14 +118,16 @@ export class SessionSignalStore {
     return counts;
   }
 
-  hasTestPass(sessionId: string): boolean {
-    const row = this.hasTestPassStmt.get(sessionId);
+  hasTestPass(sessionId: string, after?: string): boolean {
+    const row = after
+      ? this.hasTestPassAfterStmt.get(sessionId, after)
+      : this.hasTestPassStmt.get(sessionId);
     return row != null;
   }
 
+  /** @deprecated Use hasTestPass(sessionId, after) instead */
   hasTestPassAfter(sessionId: string, afterTimestamp: string): boolean {
-    const row = this.hasTestPassAfterStmt.get(sessionId, afterTimestamp);
-    return row != null;
+    return this.hasTestPass(sessionId, afterTimestamp);
   }
 
   hasSignalOfType(sessionId: string, eventType: EventType): boolean {
@@ -162,6 +137,26 @@ export class SessionSignalStore {
   clearSession(sessionId: string): number {
     const result = this.clearSessionStmt.run(sessionId);
     return result.changes;
+  }
+
+  private mapRows(rows: SignalRow[]): SessionSignal[] {
+    return rows.map((row) => ({
+      id: row.id,
+      session_id: row.session_id,
+      event_type: row.event_type as EventType,
+      data: row.data ? this.parseData(row.data) : null,
+      timestamp: row.timestamp,
+    }));
+  }
+
+  private buildCounts(
+    rows: Array<{ event_type: string; count: number }>
+  ): Record<EventType, number> {
+    const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0])) as Record<EventType, number>;
+    for (const row of rows) {
+      counts[row.event_type as EventType] = row.count;
+    }
+    return counts;
   }
 
   private parseData(raw: string): Record<string, unknown> {

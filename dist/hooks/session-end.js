@@ -108,19 +108,17 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // Session Segment Boundary (#115): compute last evaluation timestamp
-        // before Phase 1b so corrective details are scoped to current segment.
+        // and fetch segment-scoped signals once for reuse in Phase 1b and Phase 2.
         const lastEval = experienceStore.getLastEvaluatedAt(sessionId);
+        const summary = collector.getSessionSummary(sessionId, lastEval ? { after: lastEval } : undefined);
+        const signals = signalStore.getBySession(sessionId, lastEval ?? undefined);
         // --- Phase 1b: Build corrective summary from signal store ---
         // When transcript analysis was skipped because PreCompact already stored
         // corrective signals for this session, populate correctiveDetails from
-        // the stored signals. Use segment-scoped signals when lastEval is set
-        // so the feedback loop only considers current-segment correctives.
+        // the segment-scoped signals for the feedback loop.
         if (transcriptAnalysisSkipped && correctiveDetails.length === 0) {
             try {
-                const storedSignals = lastEval
-                    ? signalStore.getBySessionAfter(sessionId, lastEval)
-                    : signalStore.getBySession(sessionId);
-                for (const sig of storedSignals) {
+                for (const sig of signals) {
                     if (sig.event_type === "corrective_instruction") {
                         const data = sig.data != null && typeof sig.data === "object"
                             ? sig.data
@@ -144,10 +142,6 @@ export async function handleSessionEnd(stdin) {
             }
         }
         // --- Phase 2: Experience generation (segment-aware) ---
-        // Get segment-scoped session summary and signals
-        const summary = lastEval
-            ? collector.getSessionSummary(sessionId, { after: lastEval })
-            : collector.getSessionSummary(sessionId);
         if (summary.total_signals === 0) {
             // No new signals since last evaluation — don't advance marker so
             // next SessionEnd can retry if signals arrive later.
@@ -158,9 +152,6 @@ export async function handleSessionEnd(stdin) {
             emitSummary(correctiveDetails, 0, 0, config.verbosity);
             return;
         }
-        const signals = lastEval
-            ? signalStore.getBySessionAfter(sessionId, lastEval)
-            : signalStore.getBySession(sessionId);
         // Generate experience entries
         const generator = new ExperienceGenerator({
             capture_turns: config.capture_turns,

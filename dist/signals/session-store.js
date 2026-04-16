@@ -40,41 +40,25 @@ export class SessionSignalStore {
             timestamp,
         };
     }
-    getBySession(sessionId) {
-        const rows = this.getBySessionStmt.all(sessionId);
-        return rows.map((row) => ({
-            id: row.id,
-            session_id: row.session_id,
-            event_type: row.event_type,
-            data: row.data ? this.parseData(row.data) : null,
-            timestamp: row.timestamp,
-        }));
+    getBySession(sessionId, after) {
+        const rows = after
+            ? this.getBySessionAfterStmt.all(sessionId, after)
+            : this.getBySessionStmt.all(sessionId);
+        return this.mapRows(rows);
     }
+    /** @deprecated Use getBySession(sessionId, after) instead */
     getBySessionAfter(sessionId, afterTimestamp) {
-        const rows = this.getBySessionAfterStmt.all(sessionId, afterTimestamp);
-        return rows.map((row) => ({
-            id: row.id,
-            session_id: row.session_id,
-            event_type: row.event_type,
-            data: row.data ? this.parseData(row.data) : null,
-            timestamp: row.timestamp,
-        }));
+        return this.getBySession(sessionId, afterTimestamp);
     }
-    countByType(sessionId) {
-        const rows = this.countByTypeStmt.all(sessionId);
-        const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0]));
-        for (const row of rows) {
-            counts[row.event_type] = row.count;
-        }
-        return counts;
+    countByType(sessionId, after) {
+        const rows = (after
+            ? this.countByTypeAfterStmt.all(sessionId, after)
+            : this.countByTypeStmt.all(sessionId));
+        return this.buildCounts(rows);
     }
+    /** @deprecated Use countByType(sessionId, after) instead */
     countByTypeAfter(sessionId, afterTimestamp) {
-        const rows = this.countByTypeAfterStmt.all(sessionId, afterTimestamp);
-        const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0]));
-        for (const row of rows) {
-            counts[row.event_type] = row.count;
-        }
-        return counts;
+        return this.countByType(sessionId, afterTimestamp);
     }
     countSpecificTypes(sessionId, type1, type2) {
         const rows = this.countSpecificTypesStmt.all(sessionId, type1, type2);
@@ -84,13 +68,15 @@ export class SessionSignalStore {
         }
         return counts;
     }
-    hasTestPass(sessionId) {
-        const row = this.hasTestPassStmt.get(sessionId);
+    hasTestPass(sessionId, after) {
+        const row = after
+            ? this.hasTestPassAfterStmt.get(sessionId, after)
+            : this.hasTestPassStmt.get(sessionId);
         return row != null;
     }
+    /** @deprecated Use hasTestPass(sessionId, after) instead */
     hasTestPassAfter(sessionId, afterTimestamp) {
-        const row = this.hasTestPassAfterStmt.get(sessionId, afterTimestamp);
-        return row != null;
+        return this.hasTestPass(sessionId, afterTimestamp);
     }
     hasSignalOfType(sessionId, eventType) {
         return this.hasSignalOfTypeStmt.get(sessionId, eventType) !== undefined;
@@ -98,6 +84,22 @@ export class SessionSignalStore {
     clearSession(sessionId) {
         const result = this.clearSessionStmt.run(sessionId);
         return result.changes;
+    }
+    mapRows(rows) {
+        return rows.map((row) => ({
+            id: row.id,
+            session_id: row.session_id,
+            event_type: row.event_type,
+            data: row.data ? this.parseData(row.data) : null,
+            timestamp: row.timestamp,
+        }));
+    }
+    buildCounts(rows) {
+        const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0]));
+        for (const row of rows) {
+            counts[row.event_type] = row.count;
+        }
+        return counts;
     }
     parseData(raw) {
         try {
