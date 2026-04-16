@@ -1,7 +1,5 @@
 ---
-name: health
 description: Check ACM MCP server health status (version, timestamp).
-user-invocable: true
 ---
 
 # ACM Health Check

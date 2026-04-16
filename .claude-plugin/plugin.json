@@ -14,19 +14,25 @@
       "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/start-mcp.sh"]
     }
   },
-  "hooks": "./hooks/hooks.json",
-  "skills": "./skills",
   "userConfig": {
     "ollama_url": {
+      "title": "Ollama URL",
+      "type": "string",
       "description": "Ollama API URL for corrective instruction classification (default: http://localhost:11434)"
     },
     "ollama_model": {
+      "title": "Ollama Model",
+      "type": "string",
       "description": "Ollama model name for corrective classification (default: gemma2:2b)"
     },
     "verbosity": {
+      "title": "Verbosity",
+      "type": "string",
       "description": "ACM output detail level: quiet, normal, or verbose (default: normal)"
     },
     "max_experiences_per_project": {
+      "title": "Max Experiences Per Project",
+      "type": "number",
       "description": "Maximum experience entries per project before GC triggers (default: 500)"
     }
   }
