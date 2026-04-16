@@ -1,0 +1,12 @@
+[
+  {
+    "instance_id": "flask__flask-5000",
+    "repo": "pallets/flask",
+    "base_commit": "aaa111",
+    "problem_statement": "Missing Content-Type header",
+    "patch": "diff --git a/flask/app.py b/flask/app.py\n",
+    "test_patch": "diff --git a/tests/test_app.py b/tests/test_app.py\n",
+    "FAIL_TO_PASS": ["tests.test_app.test_content_type"],
+    "PASS_TO_PASS": ["tests.test_app.test_hello"]
+  }
+]

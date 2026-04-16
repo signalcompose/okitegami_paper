@@ -1,0 +1,60 @@
+import { readFileSync } from "node:fs";
+import { sweBenchTaskSchema, type SweBenchTask } from "./types.js";
+
+export { sweBenchTaskSchema, type SweBenchTask } from "./types.js";
+
+export function loadSweBenchTasks(path: string): SweBenchTask[] {
+  const content = readFileSync(path, "utf-8").trim();
+  if (content.length === 0) {
+    throw new Error(`SWE-bench task file is empty: ${path}`);
+  }
+
+  const raw = content.startsWith("[") ? parseJsonArray(content, path) : parseJsonLines(content);
+  if (!Array.isArray(raw)) {
+    throw new Error(`Expected an array of tasks in ${path}`);
+  }
+  if (raw.length === 0) {
+    throw new Error(`No tasks found in ${path}`);
+  }
+
+  return raw.map((entry, i) => {
+    const result = sweBenchTaskSchema.safeParse(entry);
+    if (!result.success) {
+      throw new Error(`Invalid SWE-bench task at index ${i} in ${path}: ${result.error.message}`);
+    }
+    return result.data;
+  });
+}
+
+function parseJsonArray(content: string, path: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Malformed JSON array in ${path}: ${msg}`);
+  }
+}
+
+function parseJsonLines(content: string): unknown[] {
+  return content.split("\n").flatMap((line, lineIndex) => {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return [];
+    try {
+      return [JSON.parse(trimmed)];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Malformed JSON at line ${lineIndex + 1}: ${msg}`);
+    }
+  });
+}
+
+export function loadSubset(tasks: SweBenchTask[], selector: number | string[]): SweBenchTask[] {
+  if (typeof selector === "number") {
+    if (selector <= 0) {
+      throw new Error(`Subset count must be positive: ${selector}`);
+    }
+    return tasks.slice(0, selector);
+  }
+  const ids = new Set(selector);
+  return tasks.filter((t) => ids.has(t.instance_id));
+}
