@@ -256,6 +256,17 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       );
     }
 
+    // If all entries failed to persist, do NOT advance the segment boundary.
+    // Signals remain eligible for re-evaluation on the next SessionEnd.
+    if (persisted === 0 && entries.length > 0) {
+      ctx.logger.log("error", "all_entries_failed_no_boundary_advance", {
+        session_id: sessionId,
+        entries_attempted: entries.length,
+      });
+      emitSummary(correctiveDetails, entries.length, 0, config.verbosity);
+      return;
+    }
+
     // Record evaluation after persistence so a crash during persistence
     // doesn't advance the segment boundary (signals remain eligible).
     experienceStore.recordEvaluation(sessionId, persisted);

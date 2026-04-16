@@ -51,9 +51,7 @@ export class SessionSignalStore {
         return this.getBySession(sessionId, afterTimestamp);
     }
     countByType(sessionId, after) {
-        const rows = (after
-            ? this.countByTypeAfterStmt.all(sessionId, after)
-            : this.countByTypeStmt.all(sessionId));
+        const rows = (after ? this.countByTypeAfterStmt.all(sessionId, after) : this.countByTypeStmt.all(sessionId));
         return this.buildCounts(rows);
     }
     /** @deprecated Use countByType(sessionId, after) instead */

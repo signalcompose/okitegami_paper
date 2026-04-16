@@ -174,9 +174,8 @@ describe("SessionSignalStore", () => {
     });
   });
 
-  describe("getBySessionAfter", () => {
+  describe("getBySession with after parameter", () => {
     it("returns only signals after the given timestamp", () => {
-      // Insert signals with known timestamps via raw SQL
       const ts1 = "2026-04-15T10:00:00.000Z";
       const ts2 = "2026-04-15T11:00:00.000Z";
       const ts3 = "2026-04-15T12:00:00.000Z";
@@ -192,10 +191,20 @@ describe("SessionSignalStore", () => {
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
       ).run("s1", "corrective_instruction", JSON.stringify({ prompt: "fix" }), ts3);
 
-      const after = store.getBySessionAfter("s1", boundary);
+      const after = store.getBySession("s1", boundary);
       expect(after).toHaveLength(2);
       expect(after[0].timestamp).toBe(ts2);
       expect(after[1].event_type).toBe("corrective_instruction");
+    });
+
+    it("excludes signals at exact boundary timestamp (strict >)", () => {
+      const boundary = "2026-04-15T10:00:00.000Z";
+      db.prepare(
+        "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
+      ).run("s1", "tool_success", null, boundary);
+
+      const after = store.getBySession("s1", boundary);
+      expect(after).toEqual([]);
     });
 
     it("returns empty array when no signals exist after timestamp", () => {
@@ -203,7 +212,7 @@ describe("SessionSignalStore", () => {
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
       ).run("s1", "tool_success", null, "2026-04-15T10:00:00.000Z");
 
-      const after = store.getBySessionAfter("s1", "2026-04-15T11:00:00.000Z");
+      const after = store.getBySession("s1", "2026-04-15T11:00:00.000Z");
       expect(after).toEqual([]);
     });
 
@@ -216,13 +225,13 @@ describe("SessionSignalStore", () => {
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
       ).run("s2", "tool_success", null, ts);
 
-      const after = store.getBySessionAfter("s1", "2026-04-15T11:00:00.000Z");
+      const after = store.getBySession("s1", "2026-04-15T11:00:00.000Z");
       expect(after).toHaveLength(1);
       expect(after[0].session_id).toBe("s1");
     });
   });
 
-  describe("countByTypeAfter", () => {
+  describe("countByType with after parameter", () => {
     it("counts only signals after the given timestamp", () => {
       db.prepare(
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
@@ -239,7 +248,7 @@ describe("SessionSignalStore", () => {
         "2026-04-15T13:00:00.000Z"
       );
 
-      const counts = store.countByTypeAfter("s1", "2026-04-15T11:00:00.000Z");
+      const counts = store.countByType("s1", "2026-04-15T11:00:00.000Z");
       expect(counts.tool_success).toBe(1);
       expect(counts.corrective_instruction).toBe(1);
       expect(counts.interrupt).toBe(0);
@@ -250,12 +259,12 @@ describe("SessionSignalStore", () => {
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
       ).run("s1", "tool_success", null, "2026-04-15T10:00:00.000Z");
 
-      const counts = store.countByTypeAfter("s1", "2026-04-15T11:00:00.000Z");
+      const counts = store.countByType("s1", "2026-04-15T11:00:00.000Z");
       expect(counts.tool_success).toBe(0);
     });
   });
 
-  describe("hasTestPassAfter", () => {
+  describe("hasTestPass with after parameter", () => {
     it("returns true when test_passed signal exists after timestamp", () => {
       db.prepare(
         "INSERT INTO session_signals (session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?)"
@@ -266,7 +275,7 @@ describe("SessionSignalStore", () => {
         "2026-04-15T12:00:00.000Z"
       );
 
-      expect(store.hasTestPassAfter("s1", "2026-04-15T11:00:00.000Z")).toBe(true);
+      expect(store.hasTestPass("s1", "2026-04-15T11:00:00.000Z")).toBe(true);
     });
 
     it("returns false when test_passed signal exists only before timestamp", () => {
@@ -279,7 +288,7 @@ describe("SessionSignalStore", () => {
         "2026-04-15T10:00:00.000Z"
       );
 
-      expect(store.hasTestPassAfter("s1", "2026-04-15T11:00:00.000Z")).toBe(false);
+      expect(store.hasTestPass("s1", "2026-04-15T11:00:00.000Z")).toBe(false);
     });
   });
 
