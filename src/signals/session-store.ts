@@ -18,10 +18,13 @@ interface SignalRow {
 export class SessionSignalStore {
   private insertStmt: Statement;
   private getBySessionStmt: Statement;
+  private getBySessionAfterStmt: Statement;
   private countByTypeStmt: Statement;
+  private countByTypeAfterStmt: Statement;
   private clearSessionStmt: Statement;
   private countSpecificTypesStmt: Statement;
   private hasTestPassStmt: Statement;
+  private hasTestPassAfterStmt: Statement;
   private hasSignalOfTypeStmt: Statement;
 
   constructor(private db: AdaptedDatabase) {
@@ -31,8 +34,14 @@ export class SessionSignalStore {
     this.getBySessionStmt = db.prepare(
       "SELECT id, session_id, event_type, data, timestamp FROM session_signals WHERE session_id = ? ORDER BY id"
     );
+    this.getBySessionAfterStmt = db.prepare(
+      "SELECT id, session_id, event_type, data, timestamp FROM session_signals WHERE session_id = ? AND timestamp > ? ORDER BY id"
+    );
     this.countByTypeStmt = db.prepare(
       "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? GROUP BY event_type"
+    );
+    this.countByTypeAfterStmt = db.prepare(
+      "SELECT event_type, COUNT(*) as count FROM session_signals WHERE session_id = ? AND timestamp > ? GROUP BY event_type"
     );
     this.clearSessionStmt = db.prepare("DELETE FROM session_signals WHERE session_id = ?");
     this.countSpecificTypesStmt = db.prepare(
@@ -40,6 +49,9 @@ export class SessionSignalStore {
     );
     this.hasTestPassStmt = db.prepare(
       "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = 'tool_success' AND json_extract(data, '$.test_passed') = 1 LIMIT 1"
+    );
+    this.hasTestPassAfterStmt = db.prepare(
+      "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = 'tool_success' AND json_extract(data, '$.test_passed') = 1 AND timestamp > ? LIMIT 1"
     );
     this.hasSignalOfTypeStmt = db.prepare(
       "SELECT 1 FROM session_signals WHERE session_id = ? AND event_type = ? LIMIT 1"
@@ -76,8 +88,34 @@ export class SessionSignalStore {
     }));
   }
 
+  getBySessionAfter(sessionId: string, afterTimestamp: string): SessionSignal[] {
+    const rows = this.getBySessionAfterStmt.all<SignalRow>(sessionId, afterTimestamp);
+    return rows.map((row) => ({
+      id: row.id,
+      session_id: row.session_id,
+      event_type: row.event_type as EventType,
+      data: row.data ? this.parseData(row.data) : null,
+      timestamp: row.timestamp,
+    }));
+  }
+
   countByType(sessionId: string): Record<EventType, number> {
     const rows = this.countByTypeStmt.all(sessionId) as Array<{
+      event_type: string;
+      count: number;
+    }>;
+
+    const counts = Object.fromEntries(EVENT_TYPES.map((t) => [t, 0])) as Record<EventType, number>;
+
+    for (const row of rows) {
+      counts[row.event_type as EventType] = row.count;
+    }
+
+    return counts;
+  }
+
+  countByTypeAfter(sessionId: string, afterTimestamp: string): Record<EventType, number> {
+    const rows = this.countByTypeAfterStmt.all(sessionId, afterTimestamp) as Array<{
       event_type: string;
       count: number;
     }>;
@@ -109,6 +147,11 @@ export class SessionSignalStore {
 
   hasTestPass(sessionId: string): boolean {
     const row = this.hasTestPassStmt.get(sessionId);
+    return row != null;
+  }
+
+  hasTestPassAfter(sessionId: string, afterTimestamp: string): boolean {
+    const row = this.hasTestPassAfterStmt.get(sessionId, afterTimestamp);
     return row != null;
   }
 

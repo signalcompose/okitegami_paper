@@ -26,12 +26,16 @@ export declare class ExperienceStore {
     private stmtCountActiveByProject;
     private stmtGetEvictionCandidates;
     private stmtGetActiveWithEmbeddingByProject;
+    private stmtGetLastEvaluatedAt;
+    private stmtRecordEvaluation;
     constructor(db: AdaptedDatabase, config: AcmConfig);
     getDb(): AdaptedDatabase;
     create(data: Omit<ExperienceEntry, "id">): ExperienceEntry | null;
     createWithEmbedding(data: Omit<ExperienceEntry, "id">, embedding: Float32Array): ExperienceEntry | null;
     getById(id: string): ExperienceEntry | null;
     hasEntriesForSession(sessionId: string): boolean;
+    getLastEvaluatedAt(sessionId: string): string | null;
+    recordEvaluation(sessionId: string, entriesGenerated: number): void;
     list(options?: {
         limit?: number;
     }): ExperienceEntry[];

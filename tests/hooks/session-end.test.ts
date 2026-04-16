@@ -297,4 +297,70 @@ describe("session-end hook", () => {
     expect(updated?.feedback_score).toBe(-1);
     ctx2!.cleanup();
   });
+
+  it("session segment: second SessionEnd evaluates only new signals", async () => {
+    setupEnv();
+    const sessionId = "seg-s1";
+
+    // --- Segment 1: corrective → failure ---
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "tool_success", { tool_name: "Bash" });
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Wrong approach",
+      reason: "test",
+    });
+    ctx1!.signalStore.addSignal(sessionId, "stop", {});
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    // Verify segment 1 produced failure
+    const ctx2 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries1 = ctx2!.experienceStore.list();
+    expect(entries1.filter((e) => e.type === "failure")).toHaveLength(1);
+    expect(entries1.filter((e) => e.type === "success")).toHaveLength(0);
+
+    // Verify evaluation was recorded
+    const lastEval = ctx2!.experienceStore.getLastEvaluatedAt(sessionId);
+    expect(lastEval).toBeTruthy();
+    ctx2!.cleanup();
+
+    // Small delay to ensure timestamp separation
+    await new Promise((r) => setTimeout(r, 15));
+
+    // --- Segment 2: clean signals → success ---
+    const ctx3 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx3!.signalStore.addSignal(sessionId, "tool_success", { tool_name: "Read" });
+    ctx3!.signalStore.addSignal(sessionId, "tool_success", { tool_name: "Bash" });
+    ctx3!.signalStore.addSignal(sessionId, "stop", {});
+    ctx3!.cleanup();
+
+    // Second SessionEnd for same session_id
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    // Verify segment 2 produced success
+    const ctx4 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries2 = ctx4!.experienceStore.list();
+    expect(entries2.filter((e) => e.type === "failure")).toHaveLength(1);
+    expect(entries2.filter((e) => e.type === "success")).toHaveLength(1);
+    ctx4!.cleanup();
+  });
+
+  it("session segment: ambiguous segment records evaluation marker", async () => {
+    setupEnv();
+    const sessionId = "seg-ambig";
+
+    // --- Segment 1: interrupted with no corrective → ambiguous ---
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "interrupt", { tool_name: "Bash", error: "SIGINT" });
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId }));
+
+    // No entries generated, but evaluation should be recorded
+    const ctx2 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    expect(ctx2!.experienceStore.list()).toHaveLength(0);
+    expect(ctx2!.experienceStore.getLastEvaluatedAt(sessionId)).toBeTruthy();
+    ctx2!.cleanup();
+  });
 });

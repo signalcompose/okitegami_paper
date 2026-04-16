@@ -45,6 +45,13 @@ CREATE INDEX IF NOT EXISTS idx_session_signals_session_id
 
 CREATE INDEX IF NOT EXISTS idx_session_signals_session_event
   ON session_signals(session_id, event_type);
+
+CREATE TABLE IF NOT EXISTS session_evaluations (
+  session_id TEXT NOT NULL,
+  evaluated_at TEXT NOT NULL,
+  entries_generated INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, evaluated_at)
+);
 `;
 
 function migrateDatabase(db: AdaptedDatabase): void {

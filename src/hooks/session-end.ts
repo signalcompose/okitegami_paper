@@ -158,28 +158,30 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
       }
     }
 
-    // --- Phase 2: Experience generation (existing flow) ---
-    if (experienceStore.hasEntriesForSession(sessionId)) {
-      console.error(
-        `[ACM] session-end: experience entries already exist for "${sessionId}", skipping generation`
-      );
-      ctx.logger.log("skip", "experience_generation_skipped", {
+    // --- Phase 2: Experience generation (segment-aware) ---
+    // Session Segment Boundary (#115): use only signals recorded after the
+    // last evaluation to support `claude -c` session continuation.
+    const lastEval = experienceStore.getLastEvaluatedAt(sessionId);
+
+    // Get segment-scoped session summary and signals
+    const summary = lastEval
+      ? collector.getSessionSummary(sessionId, { after: lastEval })
+      : collector.getSessionSummary(sessionId);
+
+    if (summary.total_signals === 0) {
+      // No new signals since last evaluation — don't advance marker so
+      // next SessionEnd can retry if signals arrive later.
+      ctx.logger.log("skip", "no_signals_recorded", {
         session_id: sessionId,
-        reason: "entries_already_exist",
+        last_evaluated_at: lastEval,
       });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }
 
-    // Get session summary and signals
-    const summary = collector.getSessionSummary(sessionId);
-    if (summary.total_signals === 0) {
-      ctx.logger.log("skip", "no_signals_recorded", { session_id: sessionId });
-      emitSummary(correctiveDetails, 0, 0, config.verbosity);
-      return;
-    }
-
-    const signals = signalStore.getBySession(sessionId);
+    const signals = lastEval
+      ? signalStore.getBySessionAfter(sessionId, lastEval)
+      : signalStore.getBySession(sessionId);
 
     // Generate experience entries
     const generator = new ExperienceGenerator({
@@ -188,8 +190,15 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     });
     const entries = generator.generate({ session_id: sessionId, summary, signals });
 
+    // Record evaluation even if no entries generated (e.g. ambiguous segment).
+    // This advances the segment boundary so the same signals aren't re-evaluated.
+    experienceStore.recordEvaluation(sessionId, entries.length);
+
     if (entries.length === 0) {
-      ctx.logger.log("skip", "no_entries_generated", { session_id: sessionId });
+      ctx.logger.log("skip", "no_entries_generated", {
+        session_id: sessionId,
+        last_evaluated_at: lastEval,
+      });
       emitSummary(correctiveDetails, 0, 0, config.verbosity);
       return;
     }

@@ -23,6 +23,8 @@ export class ExperienceStore {
     stmtCountActiveByProject;
     stmtGetEvictionCandidates;
     stmtGetActiveWithEmbeddingByProject;
+    stmtGetLastEvaluatedAt;
+    stmtRecordEvaluation;
     constructor(db, config) {
         this.config = config;
         this.db = db;
@@ -68,6 +70,8 @@ export class ExperienceStore {
        LIMIT ?`);
         this.stmtGetActiveWithEmbeddingByProject = this.db.prepare(`SELECT * FROM experiences
        WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`);
+        this.stmtGetLastEvaluatedAt = this.db.prepare("SELECT MAX(evaluated_at) as last FROM session_evaluations WHERE session_id = ?");
+        this.stmtRecordEvaluation = this.db.prepare("INSERT INTO session_evaluations (session_id, evaluated_at, entries_generated) VALUES (?, ?, ?)");
     }
     getDb() {
         return this.db;
@@ -86,6 +90,14 @@ export class ExperienceStore {
     }
     hasEntriesForSession(sessionId) {
         return this.stmtExistsForSession.get(sessionId) !== undefined;
+    }
+    getLastEvaluatedAt(sessionId) {
+        const row = this.stmtGetLastEvaluatedAt.get(sessionId);
+        return row?.last ?? null;
+    }
+    recordEvaluation(sessionId, entriesGenerated) {
+        const now = new Date().toISOString();
+        this.stmtRecordEvaluation.run(sessionId, now, entriesGenerated);
     }
     list(options) {
         const rows = this.stmtList.all(options?.limit ?? -1);

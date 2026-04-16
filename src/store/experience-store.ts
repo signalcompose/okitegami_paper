@@ -43,6 +43,8 @@ export class ExperienceStore {
   private stmtCountActiveByProject: Statement;
   private stmtGetEvictionCandidates: Statement;
   private stmtGetActiveWithEmbeddingByProject: Statement;
+  private stmtGetLastEvaluatedAt: Statement;
+  private stmtRecordEvaluation: Statement;
 
   constructor(db: AdaptedDatabase, config: AcmConfig) {
     this.config = config;
@@ -112,6 +114,12 @@ export class ExperienceStore {
       `SELECT * FROM experiences
        WHERE project = ? AND archived_at IS NULL AND embedding IS NOT NULL`
     );
+    this.stmtGetLastEvaluatedAt = this.db.prepare(
+      "SELECT MAX(evaluated_at) as last FROM session_evaluations WHERE session_id = ?"
+    );
+    this.stmtRecordEvaluation = this.db.prepare(
+      "INSERT INTO session_evaluations (session_id, evaluated_at, entries_generated) VALUES (?, ?, ?)"
+    );
   }
 
   getDb(): AdaptedDatabase {
@@ -138,6 +146,16 @@ export class ExperienceStore {
 
   hasEntriesForSession(sessionId: string): boolean {
     return this.stmtExistsForSession.get(sessionId) !== undefined;
+  }
+
+  getLastEvaluatedAt(sessionId: string): string | null {
+    const row = this.stmtGetLastEvaluatedAt.get(sessionId) as { last: string | null } | undefined;
+    return row?.last ?? null;
+  }
+
+  recordEvaluation(sessionId: string, entriesGenerated: number): void {
+    const now = new Date().toISOString();
+    this.stmtRecordEvaluation.run(sessionId, now, entriesGenerated);
   }
 
   list(options?: { limit?: number }): ExperienceEntry[] {

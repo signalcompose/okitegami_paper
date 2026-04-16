@@ -262,7 +262,9 @@ Past relevant experience:
 
 **Behavior**:
 
-**Event registration**: SessionEnd fires exactly once per session (Issue #90). Idempotency guards are retained as safety nets: Phase 1 skips if `corrective_instruction` signals already exist (e.g., PreCompact already preserved them). Phase 2 skips if experience entries already exist for the session.
+**Event registration**: SessionEnd fires exactly once per session (Issue #90). Idempotency guards are retained as safety nets: Phase 1 skips if `corrective_instruction` signals already exist (e.g., PreCompact already preserved them).
+
+**Session Segment Boundary** (Issue #115): When `claude -c` continues a session, the same `session_id` is reused across multiple invocations. Phase 2 uses a `session_evaluations` table to track the last evaluation timestamp per session. Only signals recorded after the last evaluation are used for experience generation. This allows each session segment to be independently evaluated — a segment with corrective instructions produces a failure, while a subsequent clean segment can produce a success. The evaluation marker is recorded even when no entries are generated (e.g., ambiguous outcome) to prevent re-evaluation of the same signals. When `total_signals === 0` for the segment, the marker is not advanced, allowing retry on next SessionEnd.
 
 **Phase 1 — Transcript-based corrective detection** (Issue #83):
 1. Read `transcript_path` from hook input
@@ -283,8 +285,8 @@ Past relevant experience:
 5. Record detected corrections as `corrective_instruction` signals via `signalStore.addSignal()`
    - Signal data includes: `prompt` (truncated), `reason`, `confidence`, `method` (llm|structural)
 
-**Phase 2 — Experience generation** (existing):
-6. Aggregate all signals collected during session (including newly added corrective signals)
+**Phase 2 — Experience generation** (segment-aware, Issue #115):
+6. Retrieve `lastEvaluatedAt` from `session_evaluations` table. Aggregate only signals recorded after this timestamp (or all signals if no prior evaluation exists)
 7. Determine session outcome:
    - If `corrective_instructions > 0`: generate failure entry (corrective-driven)
      - If also interrupted: use `interrupt_with_dialogue` signal type, add interrupt_context
@@ -295,7 +297,8 @@ Past relevant experience:
 9. Compute signal strength score per scoring table
 10. Generate embedding for each entry using `buildEmbeddingText(entry)` (shared with `acm_store_embedding` tool)
 11. Persist entries with embedding to experience DB via `createWithEmbedding()`
-12. Log to session log
+12. Record evaluation in `session_evaluations` (even if 0 entries generated)
+13. Log to session log
 
 **Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 
