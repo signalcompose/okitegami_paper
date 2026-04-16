@@ -27,7 +27,9 @@ export declare class SignalCollector {
     handleToolSuccess(sessionId: string, toolName: string, toolInput: Record<string, unknown>, exitCode?: number): void;
     handleToolFailure(sessionId: string, toolName: string, error: string): void;
     handleStop(sessionId: string, lastAssistantMessage?: string): void;
-    getSessionSummary(sessionId: string): SessionSummary;
+    getSessionSummary(sessionId: string, options?: {
+        after?: string;
+    }): SessionSummary;
     private isTestRunnerCommand;
 }
 //# sourceMappingURL=signal-collector.d.ts.map

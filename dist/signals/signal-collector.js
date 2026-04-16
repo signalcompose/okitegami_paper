@@ -62,8 +62,9 @@ export class SignalCollector {
             this.store.addSignal(sessionId, "stop", null);
         }
     }
-    getSessionSummary(sessionId) {
-        const counts = this.store.countByType(sessionId);
+    getSessionSummary(sessionId, options) {
+        const after = options?.after;
+        const counts = this.store.countByType(sessionId, after);
         const totalSignals = Object.values(counts).reduce((a, b) => a + b, 0);
         return {
             session_id: sessionId,
@@ -71,7 +72,7 @@ export class SignalCollector {
             counts,
             was_interrupted: counts.interrupt > 0,
             corrective_instruction_count: counts.corrective_instruction,
-            has_test_pass: this.store.hasTestPass(sessionId),
+            has_test_pass: this.store.hasTestPass(sessionId, after),
         };
     }
     isTestRunnerCommand(toolName, toolInput) {

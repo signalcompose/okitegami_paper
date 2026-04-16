@@ -21,6 +21,11 @@ export interface HookContext {
     logger: JsonlLogger;
     cleanup: () => void;
 }
+/**
+ * Apply CLAUDE_PLUGIN_OPTION_* environment variable overrides to config.
+ * These are set by the Claude Code plugin userConfig system.
+ */
+export declare function applyPluginOptionOverrides(config: AcmConfig): void;
 export declare function bootstrapHook(stdin: string): Promise<HookContext | null>;
 /**
  * Validate that a required string field exists in hook input.

@@ -332,4 +332,39 @@ describe("ExperienceStore", () => {
       strictStore.close();
     });
   });
+
+  describe("session evaluation tracking", () => {
+    it("getLastEvaluatedAt returns null for unevaluated session", () => {
+      expect(store.getLastEvaluatedAt("new-session")).toBeNull();
+    });
+
+    it("recordEvaluation and getLastEvaluatedAt round-trip", () => {
+      store.recordEvaluation("s1", 2);
+
+      const last = store.getLastEvaluatedAt("s1");
+      expect(last).toBeTruthy();
+      expect(new Date(last!).getTime()).toBeGreaterThan(0);
+    });
+
+    it("getLastEvaluatedAt returns most recent evaluation", async () => {
+      store.recordEvaluation("s1", 1);
+      const first = store.getLastEvaluatedAt("s1")!;
+
+      // Small delay to ensure different timestamps
+      await new Promise((r) => setTimeout(r, 10));
+      store.recordEvaluation("s1", 0);
+      const second = store.getLastEvaluatedAt("s1")!;
+
+      expect(second > first).toBe(true);
+    });
+
+    it("tracks evaluations per session independently", () => {
+      store.recordEvaluation("s1", 1);
+      store.recordEvaluation("s2", 0);
+
+      expect(store.getLastEvaluatedAt("s1")).toBeTruthy();
+      expect(store.getLastEvaluatedAt("s2")).toBeTruthy();
+      expect(store.getLastEvaluatedAt("s3")).toBeNull();
+    });
+  });
 });
