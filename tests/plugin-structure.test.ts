@@ -25,7 +25,10 @@ describe("plugin.json", () => {
     expect(plugin.name).toBe("acm");
     expect(plugin.description).toBeTruthy();
     expect(plugin.mcpServers).toBeDefined();
-    expect(plugin.hooks).toBe("./hooks/hooks.json");
+    // `hooks` field is intentionally omitted — Claude Code auto-discovers
+    // the standard hooks/hooks.json path; declaring it caused a
+    // "Duplicate hooks file detected" load error.
+    expect(plugin.hooks).toBeUndefined();
     expect(plugin.skills).toBe("./skills");
   });
 
