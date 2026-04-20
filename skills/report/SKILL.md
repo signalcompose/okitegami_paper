@@ -1,7 +1,6 @@
 ---
 name: report
 description: Generate a cross-project ACM analysis report showing usage statistics and injection-to-outcome episodes.
-user-invocable: true
 ---
 
 # ACM Report
