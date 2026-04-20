@@ -302,6 +302,13 @@ Past relevant experience:
 
 **Embedding generation rationale**: Entries without embeddings are excluded from semantic retrieval (`getAllWithEmbedding()` filters by `embedding IS NOT NULL`). Generating embeddings at session-end ensures entries are immediately retrievable in subsequent sessions. Note: `session-start` and `session-end` run as separate processes, so the model is loaded independently in each. The `@xenova/transformers` model files are cached on disk after first download, but WASM initialization occurs per process.
 
+**Fast-exit mode** (Issue #118): When `input.reason === "prompt_input_exit"` (i.e. Claude Code `/exit`), the shutdown path does not honor the hook timeout and cancels long-running work after ~1.5 s. In this mode:
+
+- **Phase 1 (Ollama transcript classification) is skipped** — PreCompact is expected to have preserved corrective signals; Phase 1b still reads them from the signal store for the feedback loop
+- **Embedder WASM initialization is skipped** — entries are persisted via the existing fallback path without embedding and can be backfilled later via the `acm_store_embedding` MCP tool
+- Phase 1b / 2 signal aggregation, experience entry generation and persistence, and Phase 3 feedback loop are executed as usual
+- For other reasons (`clear`, `logout`, `other`, or missing) the full pipeline runs unchanged
+
 ### 3.7 PreCompact Hook
 
 **Purpose**: Preserve corrective signals before context compaction truncates the transcript (Issue #90).

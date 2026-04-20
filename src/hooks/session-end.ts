@@ -53,9 +53,31 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     sessionId = requireInputString(input, "session_id", "SessionEnd");
     const correctiveDetails: NonNullable<SessionEndSummary["corrective_details"]> = [];
 
+    // Fast-exit path (Issue #118): Claude Code's `:prompt_input_exit` shutdown
+    // doesn't honor hook timeout, so skip heavy work (Ollama classification,
+    // Embedder WASM init) and rely on the existing embedding-less persist path.
+    const rawReason = input.reason;
+    const reason = typeof rawReason === "string" ? rawReason : undefined;
+    if (rawReason !== undefined && reason === undefined) {
+      ctx.logger.log("error", "fast_exit_reason_unexpected_type", {
+        session_id: sessionId,
+        reason_type: typeof rawReason,
+      });
+    }
+    const fastExit = reason === "prompt_input_exit";
+    if (fastExit) {
+      ctx.logger.log("skip", "fast_exit_path_active", {
+        session_id: sessionId,
+        reason,
+        skipped: ["ollama_classification", "embedder_init"],
+      });
+    }
+
     // --- Phase 1: Transcript-based corrective instruction detection ---
     let transcriptAnalysisSkipped = false;
-    if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
+    if (fastExit) {
+      transcriptAnalysisSkipped = true;
+    } else if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
       console.error(
         `[ACM] session-end: corrective signals already exist for "${sessionId}", skipping transcript analysis`
       );
@@ -203,20 +225,22 @@ export async function handleSessionEnd(stdin: string): Promise<void> {
     // backfilled later via acm_store_embedding. This preserves experience data
     // even when the ML model is unavailable (e.g. first-run model download timeout).
     let embedderReady = false;
-    try {
-      const { Embedder } = await import("../retrieval/embedder.js");
-      embedder = new Embedder();
-      await embedder.initialize();
-      embedderReady = true;
-    } catch (err) {
-      console.error(
-        `[ACM] session-end: Embedder initialization failed, storing entries without embedding: ` +
-          `${err instanceof Error ? err.message : String(err)}`
-      );
-      ctx.logger.log("error", "embedder_init_failed", {
-        session_id: sessionId,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    if (!fastExit) {
+      try {
+        const { Embedder } = await import("../retrieval/embedder.js");
+        embedder = new Embedder();
+        await embedder.initialize();
+        embedderReady = true;
+      } catch (err) {
+        console.error(
+          `[ACM] session-end: Embedder initialization failed, storing entries without embedding: ` +
+            `${err instanceof Error ? err.message : String(err)}`
+        );
+        ctx.logger.log("error", "embedder_init_failed", {
+          session_id: sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // Persist each entry with project name (and embedding if available)
