@@ -346,6 +346,32 @@ describe("session-end hook", () => {
     ctx4!.cleanup();
   });
 
+  it("fast-exit (reason=prompt_input_exit) skips embedder init and persists entries without embedding", async () => {
+    setupEnv();
+    const sessionId = "end-fast-exit";
+
+    await handlePostToolUse(
+      JSON.stringify({
+        session_id: sessionId,
+        tool_name: "Bash",
+        tool_input: { command: "npx vitest run" },
+        result: "Tests passed",
+        exit_code: 0,
+      })
+    );
+    await handleStop(JSON.stringify({ session_id: sessionId }));
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId, reason: "prompt_input_exit" }));
+
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries = ctx!.experienceStore.list();
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+
+    const entriesWithEmbedding = ctx!.experienceStore.getAllWithEmbedding();
+    expect(entriesWithEmbedding).toHaveLength(0);
+    ctx!.cleanup();
+  });
+
   it("session segment: ambiguous segment records evaluation marker", async () => {
     setupEnv();
     const sessionId = "seg-ambig";
