@@ -372,6 +372,63 @@ describe("session-end hook", () => {
     ctx!.cleanup();
   });
 
+  it("fast-exit with pre-stored corrective signals still produces a failure entry", async () => {
+    setupEnv();
+    const sessionId = "end-fast-exit-corrective";
+
+    // Simulate PreCompact/acm_record_signal having already stored a corrective signal
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Wrong approach",
+      reason: "incorrect",
+      method: "llm",
+      confidence: 0.9,
+    });
+    ctx1!.signalStore.addSignal(sessionId, "stop", {});
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId, reason: "prompt_input_exit" }));
+
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const entries = ctx!.experienceStore.list();
+    const failures = entries.filter((e) => e.type === "failure");
+    expect(failures.length).toBeGreaterThanOrEqual(1);
+    // Confirm embedding was skipped as well
+    expect(ctx!.experienceStore.getAllWithEmbedding()).toHaveLength(0);
+    ctx!.cleanup();
+  });
+
+  it("fast-exit with no signals at all generates no entries", async () => {
+    setupEnv();
+    const sessionId = "end-fast-exit-empty";
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId, reason: "prompt_input_exit" }));
+
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    expect(ctx!.experienceStore.list()).toHaveLength(0);
+    ctx!.cleanup();
+  });
+
+  it("fast-exit respects success_only mode (failure entries filtered by listByMode)", async () => {
+    setupEnv("success_only");
+    const sessionId = "end-fast-exit-success-only";
+
+    const ctx1 = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    ctx1!.signalStore.addSignal(sessionId, "corrective_instruction", {
+      prompt: "Wrong",
+      reason: "incorrect",
+    });
+    ctx1!.signalStore.addSignal(sessionId, "stop", {});
+    ctx1!.cleanup();
+
+    await handleSessionEnd(JSON.stringify({ session_id: sessionId, reason: "prompt_input_exit" }));
+
+    const ctx = await bootstrapHook(JSON.stringify({ session_id: sessionId }));
+    const filtered = ctx!.experienceStore.listByMode();
+    expect(filtered.filter((e) => e.type === "failure")).toHaveLength(0);
+    ctx!.cleanup();
+  });
+
   it("session segment: ambiguous segment records evaluation marker", async () => {
     setupEnv();
     const sessionId = "seg-ambig";

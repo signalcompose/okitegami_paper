@@ -42,7 +42,14 @@ export async function handleSessionEnd(stdin) {
         // Fast-exit path (Issue #118): Claude Code's `:prompt_input_exit` shutdown
         // doesn't honor hook timeout, so skip heavy work (Ollama classification,
         // Embedder WASM init) and rely on the existing embedding-less persist path.
-        const reason = typeof input.reason === "string" ? input.reason : undefined;
+        const rawReason = input.reason;
+        const reason = typeof rawReason === "string" ? rawReason : undefined;
+        if (rawReason !== undefined && reason === undefined) {
+            ctx.logger.log("error", "fast_exit_reason_unexpected_type", {
+                session_id: sessionId,
+                reason_type: typeof rawReason,
+            });
+        }
         const fastExit = reason === "prompt_input_exit";
         if (fastExit) {
             ctx.logger.log("skip", "fast_exit_path_active", {
