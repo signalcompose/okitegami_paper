@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname ?? ".", "..");
 const HOOKS_DIR = join(ROOT, "hooks");
-const SKILLS_DIR = join(ROOT, "skills");
+const COMMANDS_DIR = join(ROOT, "commands");
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf-8"));
@@ -25,11 +25,12 @@ describe("plugin.json", () => {
     expect(plugin.name).toBe("acm");
     expect(plugin.description).toBeTruthy();
     expect(plugin.mcpServers).toBeDefined();
-    // `hooks` field is intentionally omitted — Claude Code auto-discovers
-    // the standard hooks/hooks.json path; declaring it caused a
-    // "Duplicate hooks file detected" load error.
+    // `hooks` and `skills` / `commands` fields are intentionally omitted —
+    // Claude Code auto-discovers the standard paths; declaring `hooks`
+    // caused a "Duplicate hooks file detected" load error.
     expect(plugin.hooks).toBeUndefined();
-    expect(plugin.skills).toBe("./skills");
+    expect(plugin.skills).toBeUndefined();
+    expect(plugin.commands).toBeUndefined();
   });
 
   it("has author with correct name", () => {
@@ -85,11 +86,11 @@ describe("hooks.json", () => {
   });
 });
 
-describe("skills", () => {
-  it("has report skill SKILL.md", () => {
-    const skillPath = join(SKILLS_DIR, "report", "SKILL.md");
-    expect(existsSync(skillPath)).toBe(true);
-    const content = readFileSync(skillPath, "utf-8");
+describe("commands", () => {
+  it("has report.md command", () => {
+    const cmdPath = join(COMMANDS_DIR, "report.md");
+    expect(existsSync(cmdPath)).toBe(true);
+    const content = readFileSync(cmdPath, "utf-8");
     // Frontmatter check
     expect(content).toMatch(/^---\n/);
     expect(content).toMatch(/name:\s*report/);
@@ -98,10 +99,10 @@ describe("skills", () => {
     expect(content).toContain("acm_report");
   });
 
-  it("has health skill SKILL.md", () => {
-    const skillPath = join(SKILLS_DIR, "health", "SKILL.md");
-    expect(existsSync(skillPath)).toBe(true);
-    const content = readFileSync(skillPath, "utf-8");
+  it("has health.md command", () => {
+    const cmdPath = join(COMMANDS_DIR, "health.md");
+    expect(existsSync(cmdPath)).toBe(true);
+    const content = readFileSync(cmdPath, "utf-8");
     expect(content).toMatch(/^---\n/);
     expect(content).toMatch(/name:\s*health/);
     expect(content).toMatch(/description:/);
