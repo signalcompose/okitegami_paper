@@ -91,9 +91,11 @@ describe("commands", () => {
     const cmdPath = join(COMMANDS_DIR, "report.md");
     expect(existsSync(cmdPath)).toBe(true);
     const content = readFileSync(cmdPath, "utf-8");
-    // Frontmatter check
+    // Frontmatter check — intentionally omits `name:` so Claude Code derives
+    // it from the filename and applies the plugin namespace prefix (`/acm:report`).
+    // See docs/research/commands-vs-skills-2026-04-20.md.
     expect(content).toMatch(/^---\n/);
-    expect(content).toMatch(/name:\s*report/);
+    expect(content).not.toMatch(/^name:/m);
     expect(content).toMatch(/description:/);
     // Should reference acm_report MCP tool
     expect(content).toContain("acm_report");
@@ -104,7 +106,7 @@ describe("commands", () => {
     expect(existsSync(cmdPath)).toBe(true);
     const content = readFileSync(cmdPath, "utf-8");
     expect(content).toMatch(/^---\n/);
-    expect(content).toMatch(/name:\s*health/);
+    expect(content).not.toMatch(/^name:/m);
     expect(content).toMatch(/description:/);
     // Should reference acm_health MCP tool
     expect(content).toContain("acm_health");
