@@ -579,7 +579,20 @@ export class ExperienceStore {
       };
       if (row.project) entry.project = row.project as string;
       if (row.corrective_bodies) {
-        entry.corrective_bodies = JSON.parse(row.corrective_bodies as string) as string[];
+        try {
+          const parsed = JSON.parse(row.corrective_bodies as string);
+          if (Array.isArray(parsed)) {
+            entry.corrective_bodies = parsed as string[];
+          } else {
+            console.warn(
+              `[ACM] corrective_bodies is not an array for entry id="${id}", skipping field`
+            );
+          }
+        } catch (err) {
+          console.warn(
+            `[ACM] Failed to parse corrective_bodies for entry id="${id}": ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
       }
       if (row.last_retrieved_at) entry.last_retrieved_at = row.last_retrieved_at as string;
       if (row.retrieval_count != null) entry.retrieval_count = row.retrieval_count as number;

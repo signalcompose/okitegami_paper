@@ -75,10 +75,25 @@ function migrateDatabase(db: AdaptedDatabase): void {
     { name: "archived_at", definition: "TEXT" },
     { name: "corrective_bodies", definition: "TEXT" },
   ];
-  for (const col of gcColumns) {
-    if (!columnNames.has(col.name)) {
-      db.exec(`ALTER TABLE experiences ADD COLUMN ${col.name} ${col.definition}`);
+  db.exec("BEGIN");
+  try {
+    for (const col of gcColumns) {
+      if (!columnNames.has(col.name)) {
+        db.exec(`ALTER TABLE experiences ADD COLUMN ${col.name} ${col.definition}`);
+      }
     }
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error(
+        `[ACM] migrateDatabase: ROLLBACK failed during gcColumns migration. ` +
+          `Original: ${err instanceof Error ? err.message : String(err)}. ` +
+          `ROLLBACK: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`
+      );
+    }
+    throw err;
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_archived ON experiences(archived_at)");
 

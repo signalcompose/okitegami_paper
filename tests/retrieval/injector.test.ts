@@ -146,6 +146,25 @@ describe("formatInjection", () => {
     expect(matches.length).toBeLessThanOrEqual(3);
   });
 
+  it("respects budget when entries have inlined corrective bodies (#128)", () => {
+    const bigBodies = Array.from({ length: 3 }, () => "X".repeat(200));
+    const results: RetrievalResult[] = [];
+    for (let i = 0; i < 20; i++) {
+      results.push(
+        makeResult({
+          type: "failure",
+          signal_type: "corrective_instruction",
+          trigger: "T".repeat(50),
+          outcome: "O".repeat(50),
+          corrective_bodies: bigBodies,
+          score: 1.2 - i * 0.01,
+        })
+      );
+    }
+    const text = formatInjection(results);
+    expect(text.length).toBeLessThanOrEqual(2000);
+  });
+
   it("truncates to 500 token budget (approx 2000 chars)", () => {
     const longResults: RetrievalResult[] = [];
     for (let i = 0; i < 20; i++) {
