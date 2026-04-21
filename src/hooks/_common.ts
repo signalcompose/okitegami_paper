@@ -68,6 +68,33 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
       );
     }
   }
+
+  const bodyThreshold =
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD?.trim();
+  if (bodyThreshold) {
+    const n = Number(bodyThreshold);
+    if (Number.isFinite(n) && n >= 0 && n <= 5) {
+      config.inject_corrective_bodies_score_threshold = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD: invalid value "${bodyThreshold}". ` +
+          `Expected number in [0, 5]. Using default ${config.inject_corrective_bodies_score_threshold}.`
+      );
+    }
+  }
+
+  const bodyMax = process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX?.trim();
+  if (bodyMax) {
+    const n = Number(bodyMax);
+    if (Number.isInteger(n) && n >= 1 && n <= 10) {
+      config.inject_corrective_bodies_max = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX: invalid value "${bodyMax}". ` +
+          `Expected integer in [1, 10]. Using default ${config.inject_corrective_bodies_max}.`
+      );
+    }
+  }
 }
 
 export async function bootstrapHook(stdin: string): Promise<HookContext | null> {

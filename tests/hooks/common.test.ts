@@ -206,6 +206,8 @@ describe("applyPluginOptionOverrides", () => {
     delete process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_MODEL;
     delete process.env.CLAUDE_PLUGIN_OPTION_VERBOSITY;
     delete process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
+    delete process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD;
+    delete process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX;
   });
 
   it("overrides ollama_url from env", () => {
@@ -295,6 +297,40 @@ describe("applyPluginOptionOverrides", () => {
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.ollama_model).toBeUndefined();
+  });
+
+  it("overrides inject_corrective_bodies_score_threshold from env (#130)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = "0.2";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.inject_corrective_bodies_score_threshold).toBe(0.2);
+  });
+
+  it("warns and ignores out-of-range threshold (#130)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = "10";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.inject_corrective_bodies_score_threshold).toBe(0.6);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("overrides inject_corrective_bodies_max from env (#130)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX = "5";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.inject_corrective_bodies_max).toBe(5);
+  });
+
+  it("warns and ignores non-integer max bodies (#130)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX = "2.5";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.inject_corrective_bodies_max).toBe(3);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
   });
 
   it("does not override when env vars are not set", () => {

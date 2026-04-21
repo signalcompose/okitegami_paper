@@ -8,13 +8,20 @@ import type { RetrievalResult } from "./types.js";
 const HEADER = "[ACM Context]\nPast relevant experience:";
 const TOKEN_BUDGET_CHARS = 2000; // ~500 tokens at 4 chars/token
 
-// High-strength entries get their corrective instruction bodies inlined.
-// See docs/SPECIFICATION.md Section 3.1. Threshold is on `score` (includes retrieval boost),
-// not raw signal_strength. Policy surface deferred to #130.
-export const INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = 0.6;
-export const MAX_INLINED_BODIES_PER_ENTRY = 3;
+export interface InjectionPolicy {
+  correctiveBodiesScoreThreshold: number;
+  maxInlinedBodiesPerEntry: number;
+}
 
-export function formatInjection(results: RetrievalResult[]): string {
+export const DEFAULT_INJECTION_POLICY: InjectionPolicy = {
+  correctiveBodiesScoreThreshold: 0.6,
+  maxInlinedBodiesPerEntry: 3,
+};
+
+export function formatInjection(
+  results: RetrievalResult[],
+  policy: InjectionPolicy = DEFAULT_INJECTION_POLICY
+): string {
   if (results.length === 0) return "";
 
   const lines: string[] = [HEADER];
@@ -32,12 +39,10 @@ export function formatInjection(results: RetrievalResult[]): string {
         ? `- FAILURE: ${entry.trigger} → ${entry.outcome}, user feedback: "${feedback}" (strength: ${scoreStr})`
         : `- FAILURE: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
 
-      const bodies = entry.corrective_bodies;
-      const shouldInline =
-        bodies && bodies.length > 0 && score >= INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD;
-
-      if (shouldInline) {
-        const bodyLines = bodies.slice(0, MAX_INLINED_BODIES_PER_ENTRY).map((b) => `    • "${b}"`);
+      if (bodiesInlinedFor(entry, score, policy)) {
+        const bodyLines = entry
+          .corrective_bodies!.slice(0, policy.maxInlinedBodiesPerEntry)
+          .map((b) => `    • "${b}"`);
         block = [header, ...bodyLines].join("\n");
       } else {
         block = header;
@@ -54,4 +59,14 @@ export function formatInjection(results: RetrievalResult[]): string {
   if (lines.length === 1) return "";
 
   return lines.join("\n");
+}
+
+export function bodiesInlinedFor(
+  entry: RetrievalResult["entry"],
+  score: number,
+  policy: InjectionPolicy
+): boolean {
+  if (entry.type !== "failure") return false;
+  if (!entry.corrective_bodies || entry.corrective_bodies.length === 0) return false;
+  return score >= policy.correctiveBodiesScoreThreshold;
 }

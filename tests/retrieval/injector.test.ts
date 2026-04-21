@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatInjection } from "../../src/retrieval/injector.js";
+import { formatInjection, bodiesInlinedFor } from "../../src/retrieval/injector.js";
 import type { RetrievalResult } from "../../src/retrieval/types.js";
 import type { ExperienceEntry } from "../../src/store/types.js";
 
@@ -144,6 +144,68 @@ describe("formatInjection", () => {
     ]);
     const matches = result.match(/• "body-\d+"/g) ?? [];
     expect(matches.length).toBeLessThanOrEqual(3);
+  });
+
+  it("honors injected policy threshold override (#130)", () => {
+    const result = formatInjection(
+      [
+        makeResult({
+          type: "failure",
+          signal_type: "corrective_instruction",
+          signal_strength: 0.5,
+          corrective_bodies: ["low-score body"],
+          score: 0.3,
+        }),
+      ],
+      { correctiveBodiesScoreThreshold: 0.2, maxInlinedBodiesPerEntry: 3 }
+    );
+    expect(result).toContain('"low-score body"');
+  });
+
+  it("honors injected policy max override (#130)", () => {
+    const bodies = ["a", "b", "c", "d", "e"];
+    const result = formatInjection(
+      [
+        makeResult({
+          type: "failure",
+          signal_type: "corrective_instruction",
+          signal_strength: 0.9,
+          corrective_bodies: bodies,
+          score: 1.5,
+        }),
+      ],
+      { correctiveBodiesScoreThreshold: 0.6, maxInlinedBodiesPerEntry: 1 }
+    );
+    const matches = result.match(/•/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
+  it("bodiesInlinedFor returns true only when threshold met and bodies exist (#130)", () => {
+    const failureWithBodies = makeResult({
+      type: "failure",
+      signal_type: "corrective_instruction",
+      corrective_bodies: ["x"],
+      score: 1.0,
+    });
+    const failureWithoutBodies = makeResult({
+      type: "failure",
+      signal_type: "corrective_instruction",
+      score: 1.0,
+    });
+    const successResult = makeResult({ score: 1.0 });
+    const policy = { correctiveBodiesScoreThreshold: 0.6, maxInlinedBodiesPerEntry: 3 };
+
+    expect(bodiesInlinedFor(failureWithBodies.entry, failureWithBodies.score, policy)).toBe(true);
+    expect(bodiesInlinedFor(failureWithoutBodies.entry, failureWithoutBodies.score, policy)).toBe(
+      false
+    );
+    expect(bodiesInlinedFor(successResult.entry, successResult.score, policy)).toBe(false);
+    expect(
+      bodiesInlinedFor(failureWithBodies.entry, failureWithBodies.score, {
+        ...policy,
+        correctiveBodiesScoreThreshold: 2.0,
+      })
+    ).toBe(false);
   });
 
   it("respects budget when entries have inlined corrective bodies (#128)", () => {

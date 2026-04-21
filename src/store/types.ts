@@ -120,6 +120,8 @@ export interface AcmConfig {
   ollama_model?: string; // Ollama model for corrective classification (default: gemma2:2b)
   max_experiences_per_project: number; // GC capacity limit per project (default: 500)
   recency_half_life_days: number; // Half-life for recency decay in days (default: 30)
+  inject_corrective_bodies_score_threshold: number; // Min retrieval score for inlining corrective bodies (default: 0.6)
+  inject_corrective_bodies_max: number; // Max corrective bodies shown per FAILURE entry (default: 3)
 }
 
 export const DEFAULT_CONFIG: AcmConfig = {
@@ -131,4 +133,6 @@ export const DEFAULT_CONFIG: AcmConfig = {
   verbosity: "normal",
   max_experiences_per_project: 500,
   recency_half_life_days: 30,
+  inject_corrective_bodies_score_threshold: 0.6,
+  inject_corrective_bodies_max: 3,
 };
