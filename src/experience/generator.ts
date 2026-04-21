@@ -68,7 +68,9 @@ export class ExperienceGenerator {
       const signalType = summary.was_interrupted
         ? "interrupt_with_dialogue"
         : "corrective_instruction";
-      const correctiveBodies = this.buildCorrectiveBodies(idx);
+      const correctiveBodies = summary.was_interrupted
+        ? undefined
+        : this.buildCorrectiveBodies(idx);
       results.push({
         type: "failure",
         trigger: this.buildTrigger(idx, context),
@@ -213,7 +215,9 @@ export class ExperienceGenerator {
     for (const c of corrections.slice(0, MAX_CORRECTIVE_BODIES_PER_ENTRY)) {
       const p = c.data?.prompt;
       if (typeof p === "string" && p.trim()) {
-        bodies.push(p.slice(0, MAX_CORRECTIVE_BODY_CHARS));
+        // Collapse newlines: raw user text is inlined into LLM context, and multi-line
+        // bodies could be mistaken for structural context by a credulous reader.
+        bodies.push(p.slice(0, MAX_CORRECTIVE_BODY_CHARS).replace(/\s*\n\s*/g, " "));
       }
     }
     return bodies.length > 0 ? bodies : undefined;
