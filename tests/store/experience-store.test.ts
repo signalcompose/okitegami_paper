@@ -31,6 +31,28 @@ describe("ExperienceStore", () => {
       expect(retrieved?.retrieval_keys).toEqual(["auth", "null-token", "bug-fix"]);
     });
 
+    it("round-trips corrective_bodies for failure entries (#128)", () => {
+      const bodies = ["first instruction", "second instruction"];
+      const entry = store.create(
+        makeEntry({
+          type: "failure",
+          signal_type: "corrective_instruction",
+          signal_strength: 0.8,
+          corrective_bodies: bodies,
+        })
+      );
+      expect(entry).not.toBeNull();
+
+      const retrieved = store.getById(entry!.id);
+      expect(retrieved?.corrective_bodies).toEqual(bodies);
+    });
+
+    it("omits corrective_bodies when absent (#128)", () => {
+      const entry = store.create(makeEntry());
+      const retrieved = store.getById(entry!.id);
+      expect(retrieved?.corrective_bodies).toBeUndefined();
+    });
+
     it("stores interrupt_context for failure entries", () => {
       const entry = store.create(
         makeEntry({

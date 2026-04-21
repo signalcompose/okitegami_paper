@@ -205,7 +205,11 @@ Layer 3: JSONL files      → Operational logs / debugging (this section)
 Past relevant experience:
 - SUCCESS: {trigger} → {outcome} (strength: {score})
 - FAILURE: {trigger} → {outcome}, user feedback: "{dialogue_summary}" (strength: {score})
+    • "{corrective body 1}"
+    • "{corrective body 2}"
 ```
+
+**Corrective body inlining (#128)**: For `FAILURE` entries with `corrective_bodies` populated, raw corrective instruction texts are inlined under the entry when `score ≥ INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD` (default `0.6`). Up to `MAX_INLINED_BODIES_PER_ENTRY` (default `3`) bodies are shown. This surfaces the verbatim user feedback so the LLM can act on specifics rather than a summary count. Inlined bodies are informational context, not imperative rules. Policy exposure via `userConfig` is deferred to #130.
 
 ### 3.2 PostToolUseFailure Hook
 
@@ -291,6 +295,7 @@ Past relevant experience:
    - If `corrective_instructions > 0`: generate failure entry (corrective-driven)
      - If also interrupted: use `interrupt_with_dialogue` signal type, add interrupt_context
      - If not interrupted: use `corrective_instruction` signal type
+     - Populate `corrective_bodies` with up to 5 raw corrective prompts (each truncated to 200 chars) for later body inlining at injection (Section 3.1, #128)
    - If `interrupted && corrective_instructions == 0`: ambiguous — no entry generated
    - If `!interrupted && corrective_instructions == 0`: generate success entry
 8. Generate retrieval keys from session content (keyword extraction)

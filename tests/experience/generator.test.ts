@@ -276,6 +276,74 @@ describe("ExperienceGenerator", () => {
       expect(result[0].action).toContain("Edit");
     });
 
+    it("populates corrective_bodies with truncated raw prompts (#128)", () => {
+      const longPrompt = "X".repeat(500);
+      const summary = makeSummary({
+        corrective_instruction_count: 6,
+        counts: { ...makeSummary().counts, corrective_instruction: 6 },
+        total_signals: 6,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("corrective_instruction", { prompt: "first", pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: "second", pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: longPrompt, pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: "fourth", pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: "fifth", pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: "sixth (dropped)", pattern: "p" }),
+      ];
+
+      const result = generator.generate({ session_id: "s", summary, signals });
+      const failure = result.find((e) => e.type === "failure");
+      expect(failure?.corrective_bodies).toBeDefined();
+      expect(failure!.corrective_bodies!.length).toBeLessThanOrEqual(5);
+      expect(failure!.corrective_bodies![0]).toBe("first");
+      // Truncated body does not exceed max chars
+      expect(failure!.corrective_bodies!.every((b) => b.length <= 200)).toBe(true);
+      // Sixth dropped
+      expect(failure!.corrective_bodies).not.toContain("sixth (dropped)");
+    });
+
+    it("does NOT populate corrective_bodies when was_interrupted=true (#128)", () => {
+      const summary = makeSummary({
+        was_interrupted: true,
+        corrective_instruction_count: 2,
+        counts: {
+          ...makeSummary().counts,
+          interrupt: 1,
+          post_interrupt_turn: 1,
+          corrective_instruction: 2,
+        },
+        total_signals: 4,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("interrupt", { tool_name: "Bash", error: "x" }),
+        makeSignal("post_interrupt_turn", { prompt: "stop" }),
+        makeSignal("corrective_instruction", { prompt: "fix this", pattern: "p" }),
+        makeSignal("corrective_instruction", { prompt: "not that", pattern: "p" }),
+      ];
+      const result = generator.generate({ session_id: "s", summary, signals });
+      const failure = result.find((e) => e.type === "failure");
+      expect(failure?.corrective_bodies).toBeUndefined();
+    });
+
+    it("collapses newlines in corrective body text (#128)", () => {
+      const summary = makeSummary({
+        corrective_instruction_count: 1,
+        counts: { ...makeSummary().counts, corrective_instruction: 1 },
+        total_signals: 1,
+      });
+      const signals: SessionSignal[] = [
+        makeSignal("corrective_instruction", {
+          prompt: "first line\n  second line\nthird",
+          pattern: "p",
+        }),
+      ];
+      const result = generator.generate({ session_id: "s", summary, signals });
+      const failure = result.find((e) => e.type === "failure");
+      expect(failure?.corrective_bodies?.[0]).toBe("first line second line third");
+      expect(failure?.corrective_bodies?.[0]).not.toContain("\n");
+    });
+
     it("populates interrupt_context for interrupt + corrective failure", () => {
       const summary = makeSummary({
         was_interrupted: true,

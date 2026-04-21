@@ -8,6 +8,12 @@ import type { RetrievalResult } from "./types.js";
 const HEADER = "[ACM Context]\nPast relevant experience:";
 const TOKEN_BUDGET_CHARS = 2000; // ~500 tokens at 4 chars/token
 
+// High-strength entries get their corrective instruction bodies inlined.
+// See docs/SPECIFICATION.md Section 3.1. Threshold is on `score` (includes retrieval boost),
+// not raw signal_strength. Policy surface deferred to #130.
+export const INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = 0.6;
+export const MAX_INLINED_BODIES_PER_ENTRY = 3;
+
 export function formatInjection(results: RetrievalResult[]): string {
   if (results.length === 0) return "";
 
@@ -16,22 +22,31 @@ export function formatInjection(results: RetrievalResult[]): string {
 
   for (const { entry, score } of results) {
     const scoreStr = score.toFixed(2);
-    let line: string;
+    let block: string;
 
     if (entry.type === "success") {
-      line = `- SUCCESS: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
+      block = `- SUCCESS: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
     } else {
       const feedback = entry.interrupt_context?.dialogue_summary;
-      if (feedback) {
-        line = `- FAILURE: ${entry.trigger} → ${entry.outcome}, user feedback: "${feedback}" (strength: ${scoreStr})`;
+      const header = feedback
+        ? `- FAILURE: ${entry.trigger} → ${entry.outcome}, user feedback: "${feedback}" (strength: ${scoreStr})`
+        : `- FAILURE: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
+
+      const bodies = entry.corrective_bodies;
+      const shouldInline =
+        bodies && bodies.length > 0 && score >= INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD;
+
+      if (shouldInline) {
+        const bodyLines = bodies.slice(0, MAX_INLINED_BODIES_PER_ENTRY).map((b) => `    • "${b}"`);
+        block = [header, ...bodyLines].join("\n");
       } else {
-        line = `- FAILURE: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
+        block = header;
       }
     }
 
-    const blockLen = line.length + 1;
+    const blockLen = block.length + 1;
     if (totalChars + blockLen > TOKEN_BUDGET_CHARS) break;
-    lines.push(line);
+    lines.push(block);
     totalChars += blockLen;
   }
 

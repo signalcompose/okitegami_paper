@@ -11,6 +11,9 @@ import type { EventType, SessionSignal } from "../signals/types.js";
 import { computeFailureStrength, computeSuccessStrength } from "./scoring.js";
 import { extractRetrievalKeys } from "./keywords.js";
 
+const MAX_CORRECTIVE_BODIES_PER_ENTRY = 5;
+const MAX_CORRECTIVE_BODY_CHARS = 200;
+
 export interface GenerationInput {
   session_id: string;
   summary: SessionSummary;
@@ -65,6 +68,9 @@ export class ExperienceGenerator {
       const signalType = summary.was_interrupted
         ? "interrupt_with_dialogue"
         : "corrective_instruction";
+      const correctiveBodies = summary.was_interrupted
+        ? undefined
+        : this.buildCorrectiveBodies(idx);
       results.push({
         type: "failure",
         trigger: this.buildTrigger(idx, context),
@@ -76,6 +82,7 @@ export class ExperienceGenerator {
         session_id,
         timestamp,
         ...(summary.was_interrupted ? { interrupt_context: this.buildInterruptContext(idx) } : {}),
+        ...(correctiveBodies ? { corrective_bodies: correctiveBodies } : {}),
       });
     }
 
@@ -199,6 +206,21 @@ export class ExperienceGenerator {
     return idx.hasTestPass
       ? "Task completed with passing tests"
       : "Task completed without test verification";
+  }
+
+  private buildCorrectiveBodies(idx: SignalIndex): string[] | undefined {
+    const corrections = idx.byType.get("corrective_instruction") ?? [];
+    if (corrections.length === 0) return undefined;
+    const bodies: string[] = [];
+    for (const c of corrections.slice(0, MAX_CORRECTIVE_BODIES_PER_ENTRY)) {
+      const p = c.data?.prompt;
+      if (typeof p === "string" && p.trim()) {
+        // Collapse newlines: raw user text is inlined into LLM context, and multi-line
+        // bodies could be mistaken for structural context by a credulous reader.
+        bodies.push(p.slice(0, MAX_CORRECTIVE_BODY_CHARS).replace(/\s*\n\s*/g, " "));
+      }
+    }
+    return bodies.length > 0 ? bodies : undefined;
   }
 
   private buildInterruptContext(idx: SignalIndex): ExperienceEntry["interrupt_context"] {

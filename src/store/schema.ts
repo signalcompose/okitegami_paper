@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS experiences (
   retrieval_count INTEGER NOT NULL DEFAULT 0,
   feedback_score INTEGER NOT NULL DEFAULT 0,
   pinned INTEGER NOT NULL DEFAULT 0,
-  archived_at TEXT
+  archived_at TEXT,
+  corrective_bodies TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_experiences_type
@@ -72,11 +73,27 @@ function migrateDatabase(db: AdaptedDatabase): void {
     { name: "feedback_score", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "pinned", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "archived_at", definition: "TEXT" },
+    { name: "corrective_bodies", definition: "TEXT" },
   ];
-  for (const col of gcColumns) {
-    if (!columnNames.has(col.name)) {
-      db.exec(`ALTER TABLE experiences ADD COLUMN ${col.name} ${col.definition}`);
+  db.exec("BEGIN");
+  try {
+    for (const col of gcColumns) {
+      if (!columnNames.has(col.name)) {
+        db.exec(`ALTER TABLE experiences ADD COLUMN ${col.name} ${col.definition}`);
+      }
     }
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error(
+        `[ACM] migrateDatabase: ROLLBACK failed during gcColumns migration. ` +
+          `Original: ${err instanceof Error ? err.message : String(err)}. ` +
+          `ROLLBACK: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`
+      );
+    }
+    throw err;
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_experiences_archived ON experiences(archived_at)");
 
@@ -93,7 +110,7 @@ function migrateDatabase(db: AdaptedDatabase): void {
         `INSERT INTO experiences SELECT id, type, trigger_text, action_text, outcome_text,
           retrieval_keys, signal_strength, signal_type, session_id, timestamp,
           interrupt_context, embedding, project, last_retrieved_at, retrieval_count,
-          feedback_score, pinned, archived_at
+          feedback_score, pinned, archived_at, corrective_bodies
         FROM experiences_old`
       );
       db.exec("DROP TABLE experiences_old");
