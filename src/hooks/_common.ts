@@ -71,7 +71,9 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
 
   const bodyThreshold =
     process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD?.trim();
-  if (bodyThreshold) {
+  // "0" must pass this guard since a zero threshold is a legitimate value
+  // meaning "always inline bodies for failure entries with bodies present".
+  if (bodyThreshold !== undefined && bodyThreshold !== "") {
     const n = Number(bodyThreshold);
     if (Number.isFinite(n) && n >= 0 && n <= 5) {
       config.inject_corrective_bodies_score_threshold = n;

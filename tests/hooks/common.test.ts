@@ -306,6 +306,13 @@ describe("applyPluginOptionOverrides", () => {
     expect(config.inject_corrective_bodies_score_threshold).toBe(0.2);
   });
 
+  it("accepts threshold 0 (always inline) as a valid override (#130)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = "0";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.inject_corrective_bodies_score_threshold).toBe(0);
+  });
+
   it("warns and ignores out-of-range threshold (#130)", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD = "10";
