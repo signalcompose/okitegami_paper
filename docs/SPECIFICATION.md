@@ -209,7 +209,9 @@ Past relevant experience:
     • "{corrective body 2}"
 ```
 
-**Corrective body inlining (#128)**: For `FAILURE` entries with `corrective_bodies` populated, raw corrective instruction texts are inlined under the entry when `score ≥ INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD` (default `0.6`). Up to `MAX_INLINED_BODIES_PER_ENTRY` (default `3`) bodies are shown. This surfaces the verbatim user feedback so the LLM can act on specifics rather than a summary count. Inlined bodies are informational context, not imperative rules. Policy exposure via `userConfig` is deferred to #130.
+**Corrective body inlining (#128, #130)**: For `FAILURE` entries with `corrective_bodies` populated, raw corrective instruction texts are inlined under the entry when `score ≥ inject_corrective_bodies_score_threshold` (default `0.6`). Up to `inject_corrective_bodies_max` bodies (default `3`) are shown. Both thresholds are exposed as `userConfig` entries (`CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD` / `_MAX`). Inlined bodies are informational context, not imperative rules.
+
+**Injection rationale log (#130)**: Each `injection` event recorded in `session_signals` includes an `entry_rationale` array with `{ id, score, bodies_inlined }` per selected entry. This allows observers to reconstruct *why* each entry was selected (score) and whether its corrective body was shown, without re-running retrieval.
 
 ### 3.2 PostToolUseFailure Hook
 

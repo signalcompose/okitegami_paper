@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { bootstrapHook, requireInputString, runAsHookScript, type HookContext } from "./_common.js";
 import { Retriever } from "../retrieval/retriever.js";
-import { formatInjection } from "../retrieval/injector.js";
+import { bodiesInlinedFor, formatInjection, type InjectionPolicy } from "../retrieval/injector.js";
 import { formatInjectionMessage } from "./verbosity-formatter.js";
 import type { RetrievalResult } from "../retrieval/types.js";
 
@@ -81,16 +81,28 @@ export function retrieveAndInject(
 ): RetrieveAndInjectResult {
   const retriever = new Retriever(ctx.experienceStore, ctx.config.recency_half_life_days);
   const results = retriever.retrieve(queryEmbedding, ctx.config.top_k);
-  const injectionText = formatInjection(results);
+  const policy: InjectionPolicy = {
+    correctiveBodiesScoreThreshold: ctx.config.inject_corrective_bodies_score_threshold,
+    maxInlinedBodiesPerEntry: ctx.config.inject_corrective_bodies_max,
+  };
+  const injectionText = formatInjection(results, policy);
 
   // Record injection log — best-effort, must not abort injection delivery
   if (results.length > 0) {
+    // Compute rationale outside try so payload-construction errors surface as their own
+    // stack, not masked as "addSignal failed"
+    const entryRationale = results.map((r) => ({
+      id: r.entry.id,
+      score: Number(r.score.toFixed(3)),
+      bodies_inlined: bodiesInlinedFor(r.entry, r.score, policy),
+    }));
     try {
       ctx.signalStore.addSignal(sessionId, "injection", {
         injected_ids: results.map((r) => r.entry.id),
         injected_count: results.length,
         query_text: queryText,
         project: ctx.projectName,
+        entry_rationale: entryRationale,
       });
     } catch (err) {
       console.error(

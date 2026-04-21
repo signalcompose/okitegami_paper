@@ -42,7 +42,14 @@ describe("plugin.json", () => {
     const userConfig = plugin.userConfig as Record<string, unknown>;
     expect(userConfig).toBeDefined();
 
-    const expectedKeys = ["ollama_url", "ollama_model", "verbosity", "max_experiences_per_project"];
+    const expectedKeys = [
+      "ollama_url",
+      "ollama_model",
+      "verbosity",
+      "max_experiences_per_project",
+      "inject_corrective_bodies_score_threshold",
+      "inject_corrective_bodies_max",
+    ];
     for (const key of expectedKeys) {
       expect(userConfig[key]).toBeDefined();
       const entry = userConfig[key] as Record<string, unknown>;

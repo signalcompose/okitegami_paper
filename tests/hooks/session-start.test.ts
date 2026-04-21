@@ -238,6 +238,16 @@ describe("session-start hook: retrieveAndInject", () => {
     });
     expect((injectionSignals[0].data as Record<string, unknown>).injected_ids).toHaveLength(1);
 
+    const rationale = (injectionSignals[0].data as Record<string, unknown>)
+      .entry_rationale as Array<{ id: string; score: number; bodies_inlined: boolean }>;
+    expect(rationale).toHaveLength(1);
+    expect(typeof rationale[0].id).toBe("string");
+    expect(typeof rationale[0].score).toBe("number");
+    expect(typeof rationale[0].bodies_inlined).toBe("boolean");
+    // score is rounded to 3 decimals
+    const decimals = rationale[0].score.toString().split(".")[1]?.length ?? 0;
+    expect(decimals).toBeLessThanOrEqual(3);
+
     ctx!.cleanup();
   });
 

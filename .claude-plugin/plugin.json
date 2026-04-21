@@ -34,6 +34,16 @@
       "type": "number",
       "title": "Max Experiences Per Project",
       "description": "Maximum experience entries per project before GC triggers (default: 500)"
+    },
+    "inject_corrective_bodies_score_threshold": {
+      "type": "number",
+      "title": "Corrective Body Inline Score Threshold",
+      "description": "Minimum retrieval score for inlining raw corrective instruction bodies into the FAILURE entry in session injection (default: 0.6; valid range 0.0–5.0 since the score includes retrieval boost and can exceed 1.0). Lower values surface more instructions; higher values restrict to top-ranked entries."
+    },
+    "inject_corrective_bodies_max": {
+      "type": "number",
+      "title": "Max Inlined Bodies Per Entry",
+      "description": "Maximum number of raw corrective instructions shown inline under each FAILURE entry (default: 3)."
     }
   }
 }
