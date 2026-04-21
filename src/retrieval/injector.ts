@@ -3,6 +3,7 @@
  * Formats retrieval results into compact context injection text.
  * Budget: ~500 tokens ≈ 2000 characters.
  */
+import { DEFAULT_CONFIG } from "../store/types.js";
 import type { RetrievalResult } from "./types.js";
 
 const HEADER = "[ACM Context]\nPast relevant experience:";
@@ -14,8 +15,8 @@ export interface InjectionPolicy {
 }
 
 export const DEFAULT_INJECTION_POLICY: InjectionPolicy = {
-  correctiveBodiesScoreThreshold: 0.6,
-  maxInlinedBodiesPerEntry: 3,
+  correctiveBodiesScoreThreshold: DEFAULT_CONFIG.inject_corrective_bodies_score_threshold,
+  maxInlinedBodiesPerEntry: DEFAULT_CONFIG.inject_corrective_bodies_max,
 };
 
 export function formatInjection(
@@ -39,9 +40,10 @@ export function formatInjection(
         ? `- FAILURE: ${entry.trigger} → ${entry.outcome}, user feedback: "${feedback}" (strength: ${scoreStr})`
         : `- FAILURE: ${entry.trigger} → ${entry.outcome} (strength: ${scoreStr})`;
 
-      if (bodiesInlinedFor(entry, score, policy)) {
-        const bodyLines = entry
-          .corrective_bodies!.slice(0, policy.maxInlinedBodiesPerEntry)
+      const bodies = entry.corrective_bodies;
+      if (bodies && bodiesInlinedFor(entry, score, policy)) {
+        const bodyLines = bodies
+          .slice(0, policy.maxInlinedBodiesPerEntry)
           .map((b) => `    • "${b}"`);
         block = [header, ...bodyLines].join("\n");
       } else {
@@ -61,6 +63,11 @@ export function formatInjection(
   return lines.join("\n");
 }
 
+/**
+ * Whether a single entry's corrective bodies should be inlined in injection.
+ * Returns true only for FAILURE entries with populated corrective_bodies
+ * whose retrieval score meets the policy threshold.
+ */
 export function bodiesInlinedFor(
   entry: RetrievalResult["entry"],
   score: number,

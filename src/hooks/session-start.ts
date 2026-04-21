@@ -89,17 +89,20 @@ export function retrieveAndInject(
 
   // Record injection log — best-effort, must not abort injection delivery
   if (results.length > 0) {
+    // Compute rationale outside try so payload-construction errors surface as their own
+    // stack, not masked as "addSignal failed"
+    const entryRationale = results.map((r) => ({
+      id: r.entry.id,
+      score: Number(r.score.toFixed(3)),
+      bodies_inlined: bodiesInlinedFor(r.entry, r.score, policy),
+    }));
     try {
       ctx.signalStore.addSignal(sessionId, "injection", {
         injected_ids: results.map((r) => r.entry.id),
         injected_count: results.length,
         query_text: queryText,
         project: ctx.projectName,
-        entry_rationale: results.map((r) => ({
-          id: r.entry.id,
-          score: Number(r.score.toFixed(3)),
-          bodies_inlined: bodiesInlinedFor(r.entry, r.score, policy),
-        })),
+        entry_rationale: entryRationale,
       });
     } catch (err) {
       console.error(

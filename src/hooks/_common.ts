@@ -86,7 +86,7 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
   }
 
   const bodyMax = process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX?.trim();
-  if (bodyMax) {
+  if (bodyMax !== undefined && bodyMax !== "") {
     const n = Number(bodyMax);
     if (Number.isInteger(n) && n >= 1 && n <= 10) {
       config.inject_corrective_bodies_max = n;
