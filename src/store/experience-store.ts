@@ -54,8 +54,8 @@ export class ExperienceStore {
       `INSERT INTO experiences
        (id, type, trigger_text, action_text, outcome_text,
         retrieval_keys, signal_strength, signal_type,
-        session_id, timestamp, interrupt_context, embedding, project)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        session_id, timestamp, interrupt_context, embedding, project, corrective_bodies)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     this.stmtGetById = this.db.prepare("SELECT * FROM experiences WHERE id = ?");
     this.stmtList = this.db.prepare("SELECT * FROM experiences ORDER BY timestamp DESC LIMIT ?");
@@ -425,7 +425,10 @@ export class ExperienceStore {
       entry.timestamp,
       entry.interrupt_context ? JSON.stringify(entry.interrupt_context) : null,
       embeddingBlob,
-      entry.project ?? null
+      entry.project ?? null,
+      entry.corrective_bodies && entry.corrective_bodies.length > 0
+        ? JSON.stringify(entry.corrective_bodies)
+        : null
     );
 
     return entry;
@@ -575,6 +578,9 @@ export class ExperienceStore {
           : undefined,
       };
       if (row.project) entry.project = row.project as string;
+      if (row.corrective_bodies) {
+        entry.corrective_bodies = JSON.parse(row.corrective_bodies as string) as string[];
+      }
       if (row.last_retrieved_at) entry.last_retrieved_at = row.last_retrieved_at as string;
       if (row.retrieval_count != null) entry.retrieval_count = row.retrieval_count as number;
       if (row.feedback_score != null) entry.feedback_score = row.feedback_score as number;

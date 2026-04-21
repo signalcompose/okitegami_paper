@@ -37,6 +37,7 @@ export interface ExperienceEntry {
   timestamp: string; // ISO 8601
   project?: string; // Project name (derived from cwd basename)
   interrupt_context?: InterruptContext; // Failure-specific
+  corrective_bodies?: string[]; // Raw corrective instruction texts (truncated, capped count). Populated for corrective-driven failures.
 
   // GC / recency tracking fields (SPECIFICATION Section 4.4)
   last_retrieved_at?: string; // ISO 8601, updated on retrieval
