@@ -190,6 +190,7 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
   }
 
   let persisted = 0;
+  let embeddedCount = 0;
   try {
     for (const entryData of entries) {
       try {
@@ -201,6 +202,7 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
             { ...entryData, project: projectName },
             embedding
           );
+          if (saved) embeddedCount++;
         } else {
           saved = experienceStore.create({ ...entryData, project: projectName });
         }
@@ -214,7 +216,7 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
             const retrySaved = experienceStore.create({ ...entryData, project: projectName });
             if (retrySaved) {
               persisted++;
-              logger.log("skip", "pre_compact_entry_embedding_less_retry", {
+              logger.log("generation", "pre_compact_entry_embedding_less_retry", {
                 session_id: sessionId,
                 entry_type: entryData.type,
                 initial_error: entryErr instanceof Error ? entryErr.message : String(entryErr),
@@ -227,6 +229,12 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
                 `in session "${sessionId}": ` +
                 `${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
             );
+            logger.log("error", "pre_compact_entry_retry_failed", {
+              session_id: sessionId,
+              entry_type: entryData.type,
+              initial_error: entryErr instanceof Error ? entryErr.message : String(entryErr),
+              retry_error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+            });
           }
         }
         console.error(
@@ -264,9 +272,11 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
+  let boundaryAdvanced = true;
   try {
     experienceStore.recordEvaluation(sessionId, persisted);
   } catch (err) {
+    boundaryAdvanced = false;
     console.error(
       `[ACM] pre-compact: boundary advance failed for session "${sessionId}", ` +
         `${persisted} entries may duplicate on next invocation: ` +
@@ -282,8 +292,9 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     session_id: sessionId,
     generated: entries.length,
     persisted,
+    embedded_count: embeddedCount,
     types: entries.map((e) => e.type),
-    embedded: embedderReady,
+    boundary_advanced: boundaryAdvanced,
   });
 }
 

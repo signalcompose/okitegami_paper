@@ -377,6 +377,59 @@ describe("PreCompact hook", () => {
     }
   );
 
+  it(
+    "handles recordEvaluation throwing without crashing the hook (#134)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-record-fail", "corrective_instruction", {
+            prompt: `corrective body ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      const storeMod = await import("../../src/store/experience-store.js");
+      const recordSpy = vi
+        .spyOn(storeMod.ExperienceStore.prototype, "recordEvaluation")
+        .mockImplementation(() => {
+          throw new Error("simulated recordEvaluation failure");
+        });
+
+      const transcriptPath = writeTranscript(TMP_DIR, [userLine("x"), assistantLine("ok")]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-record-fail",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      // Should not throw — the hook catches the recordEvaluation error and logs it
+      await expect(handlePreCompact(stdin)).resolves.toBeUndefined();
+      errSpy.mockRestore();
+      recordSpy.mockRestore();
+
+      // Entries were persisted (spy only mocked recordEvaluation)
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-record-fail");
+        expect(entries.length).toBeGreaterThan(0);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv(TMP_DIR);
     const transcriptPath = writeTranscript(TMP_DIR, [
