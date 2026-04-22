@@ -193,8 +193,17 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     if (embedder) embedder.dispose();
   }
 
-  // If all entries failed to persist, don't advance the segment boundary so
-  // signals remain eligible for the next SessionEnd / PreCompact attempt.
+  if (persisted < entries.length) {
+    console.error(
+      `[ACM] pre-compact: ${entries.length - persisted} of ${entries.length} ` +
+        `experience entries failed to persist for session "${sessionId}"`
+    );
+  }
+
+  // Leaving the segment boundary un-advanced lets the next SessionEnd / PreCompact
+  // invocation re-process the same signals (idempotent recovery). This only applies
+  // when EVERY entry failed; partial success still advances, so individual failed
+  // entries are dropped rather than duplicated on retry.
   if (persisted === 0 && entries.length > 0) {
     logger.log("error", "pre_compact_all_entries_failed_no_boundary_advance", {
       session_id: sessionId,

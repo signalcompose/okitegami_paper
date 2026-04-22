@@ -215,7 +215,119 @@ describe("PreCompact hook", () => {
         // Second call finds no new signals (Phase 1 skip) and no new signals after
         // last_evaluated_at (Phase 2 skip), so no extra entry is created.
         const failures = entries.filter((e) => e.type === "failure");
-        expect(failures.length).toBeLessThanOrEqual(1);
+        expect(failures.length).toBe(1);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it(
+    "Phase 2 runs independently when Phase 1 is skipped due to pre-existing signals (#134)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      // Pre-seed corrective signals so Phase 1 will skip
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-phase2-only", "corrective_instruction", {
+            prompt: `preseeded corrective ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      const transcriptPath = writeTranscript(TMP_DIR, [
+        userLine("Stub"),
+        assistantLine("ok"),
+        userLine("Stop"),
+      ]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-phase2-only",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-phase2-only");
+        const failure = entries.find((e) => e.type === "failure");
+        expect(failure).toBeDefined();
+        expect(failure!.corrective_bodies?.length ?? 0).toBeGreaterThan(0);
+        expect(expStore.getLastEvaluatedAt("pre-compact-phase2-only")).toBeTruthy();
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it(
+    "does not advance boundary when every entry fails to persist (#134)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      // Pre-seed signals
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-persist-fail", "corrective_instruction", {
+            prompt: `fail-test corrective ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      // Make every insertEntry throw by mocking createWithEmbedding + create
+      const storeMod = await import("../../src/store/experience-store.js");
+      const createSpy = vi
+        .spyOn(storeMod.ExperienceStore.prototype, "createWithEmbedding")
+        .mockImplementation(() => {
+          throw new Error("simulated persist failure");
+        });
+      const createPlainSpy = vi
+        .spyOn(storeMod.ExperienceStore.prototype, "create")
+        .mockImplementation(() => {
+          throw new Error("simulated persist failure");
+        });
+
+      const transcriptPath = writeTranscript(TMP_DIR, [
+        userLine("Stub"),
+        assistantLine("ok"),
+        userLine("Stop"),
+      ]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-persist-fail",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      await handlePreCompact(stdin);
+      errSpy.mockRestore();
+      createSpy.mockRestore();
+      createPlainSpy.mockRestore();
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        // Boundary was NOT advanced — signals stay eligible for retry
+        expect(expStore.getLastEvaluatedAt("pre-compact-persist-fail")).toBeNull();
       } finally {
         db.close();
       }
