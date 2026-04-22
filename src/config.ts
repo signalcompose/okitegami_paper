@@ -14,6 +14,8 @@ const KNOWN_CONFIG_KEYS = new Set<string>([
   "ollama_model",
   "max_experiences_per_project",
   "recency_half_life_days",
+  "inject_corrective_bodies_score_threshold",
+  "inject_corrective_bodies_max",
 ]);
 
 export function expandTilde(filePath: string): string {

@@ -2,7 +2,8 @@
  * Tests for PreCompact hook — corrective signal preservation (Issue #90)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { handlePreCompact } from "../../src/hooks/pre-compact.js";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
@@ -424,6 +425,64 @@ describe("PreCompact hook", () => {
         const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
         const entries = expStore.list().filter((e) => e.session_id === "pre-compact-record-fail");
         expect(entries.length).toBeGreaterThan(0);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it(
+    "records evaluation boundary even when generator yields no entries (#134)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      // High promotion_threshold forces ExperienceGenerator to yield []
+      // despite having signals — tests the entries.length===0 boundary advance.
+      process.env.ACM_CONFIG_PATH = join(TMP_DIR, "high-threshold-config.json");
+      writeFileSync(
+        process.env.ACM_CONFIG_PATH,
+        JSON.stringify({
+          db_path: dbPath,
+          promotion_threshold: 0.99,
+          mode: "full",
+          top_k: 5,
+          capture_turns: 5,
+          verbosity: "normal",
+          max_experiences_per_project: 500,
+          recency_half_life_days: 30,
+          inject_corrective_bodies_score_threshold: 0.6,
+          inject_corrective_bodies_max: 3,
+        })
+      );
+
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        store.addSignal("pre-compact-zero-entries", "corrective_instruction", {
+          prompt: "single weak signal",
+          reason: "test",
+          confidence: 0.1,
+          method: "llm",
+          source: "pre_compact",
+        });
+      } finally {
+        db0.close();
+      }
+
+      const transcriptPath = writeTranscript(TMP_DIR, [userLine("x"), assistantLine("ok")]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-zero-entries",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        // Boundary DID advance (no entries generated, but evaluation recorded)
+        expect(expStore.getLastEvaluatedAt("pre-compact-zero-entries")).toBeTruthy();
       } finally {
         db.close();
       }
