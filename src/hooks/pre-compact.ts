@@ -22,7 +22,20 @@ import type { Embedder as EmbedderType } from "../retrieval/embedder.js";
 async function runPhase1(ctx: HookContext, sessionId: string): Promise<void> {
   const { input, config, signalStore } = ctx;
 
-  if (signalStore.hasSignalOfType(sessionId, "corrective_instruction")) {
+  // DB / FS reads are wrapped so a storage or file-format error in Phase 1
+  // doesn't crash the hook before Phase 2 can run on prior signals.
+  let alreadyHasSignals: boolean;
+  try {
+    alreadyHasSignals = signalStore.hasSignalOfType(sessionId, "corrective_instruction");
+  } catch (err) {
+    ctx.logger.log("error", "pre_compact_signal_check_failed", {
+      session_id: sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  if (alreadyHasSignals) {
     ctx.logger.log("skip", "pre_compact_phase1_skipped", {
       session_id: sessionId,
       reason: "corrective_signals_already_exist",
@@ -39,7 +52,22 @@ async function runPhase1(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
-  const parsed = parseTranscript(transcriptPath);
+  let parsed;
+  try {
+    parsed = parseTranscript(transcriptPath);
+  } catch (err) {
+    console.error(
+      `[ACM] pre-compact: parseTranscript failed for "${transcriptPath}": ` +
+        `${err instanceof Error ? err.message : String(err)}`
+    );
+    ctx.logger.log("error", "pre_compact_transcript_parse_failed", {
+      session_id: sessionId,
+      transcript_path: transcriptPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
   if (parsed.turns.length <= 1) {
     ctx.logger.log("skip", "pre_compact_phase1_skipped", {
       session_id: sessionId,
