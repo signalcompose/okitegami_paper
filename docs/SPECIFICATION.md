@@ -323,12 +323,21 @@ Past relevant experience:
 **Input**: `{ session_id, transcript_path, cwd, hook_event_name }`
 
 **Behavior**:
+
+**Phase 1 — Signal preservation (Issue #90)**:
 1. Skip if corrective signals already exist for this session (idempotent)
 2. Parse transcript and classify corrections (same logic as SessionEnd Phase 1)
 3. Store corrective signals with `source: "pre_compact"` marker
 4. Log preservation results
 
-**Rationale**: In long sessions, context compaction may truncate the transcript before SessionEnd runs. PreCompact ensures corrective signals are captured from the full transcript. SessionEnd then skips Phase 1 if PreCompact already preserved signals, and proceeds directly to Phase 2 (experience generation).
+**Phase 2 — Experience generation (Issue #134)**:
+5. Compute `lastEvaluatedAt` from `session_evaluations` (same segment boundary mechanism as SessionEnd, #115)
+6. Aggregate only signals recorded after `lastEvaluatedAt`
+7. Run `ExperienceGenerator` → `createWithEmbedding` (with Embedder fallback to embedding-less persist)
+8. Record evaluation in `session_evaluations` so subsequent SessionEnd / PreCompact invocations do not re-process the same signals
+9. Failure entries populate `corrective_bodies` (Section 3.6, #128)
+
+**Rationale**: In long-running sessions `/exit` rarely fires, so SessionEnd doesn't produce experience entries and retrieval starves. PreCompact is a natural mid-session boundary that already inspects the transcript; generating entries here surfaces corrective experience in `/acm:report` and subsequent session-start retrievals without waiting for a terminal event. The `session_evaluations` boundary ensures SessionEnd (when it eventually fires) only processes signals recorded *after* the last PreCompact evaluation, so entries are not duplicated.
 
 ### 3.8 Hook-Free Experience Generation (Experiment Runner)
 

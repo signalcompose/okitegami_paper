@@ -6,6 +6,8 @@ import { mkdirSync, rmSync } from "node:fs";
 import { handlePreCompact } from "../../src/hooks/pre-compact.js";
 import { initializeDatabase } from "../../src/store/schema.js";
 import { SessionSignalStore } from "../../src/signals/session-store.js";
+import { ExperienceStore } from "../../src/store/experience-store.js";
+import { DEFAULT_CONFIG } from "../../src/store/types.js";
 import {
   userLine,
   interruptLine,
@@ -137,6 +139,88 @@ describe("PreCompact hook", () => {
       db.close();
     }
   });
+
+  it(
+    "generates experience entry with corrective_bodies at PreCompact (#134)",
+    { timeout: 20000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      const transcriptPath = writeTranscript(TMP_DIR, [
+        userLine("Implement feature X"),
+        assistantLine("Working on it..."),
+        interruptLine(),
+        userLine("No, that's wrong. Use a different approach please"),
+        assistantLine("OK, using a different approach"),
+        userLine("Still wrong. Use TypeScript generics for the signature."),
+        assistantLine("Understood, applying generics."),
+        userLine("Actually, rewrite the whole function from scratch."),
+        assistantLine("Rewriting."),
+      ]);
+
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-entry-s1",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-entry-s1");
+        expect(entries.length).toBeGreaterThan(0);
+        const failure = entries.find((e) => e.type === "failure");
+        expect(failure).toBeDefined();
+        expect(failure!.corrective_bodies).toBeDefined();
+        expect(failure!.corrective_bodies!.length).toBeGreaterThan(0);
+
+        // session_evaluations marker was recorded so SessionEnd won't re-process
+        const lastEval = expStore.getLastEvaluatedAt("pre-compact-entry-s1");
+        expect(lastEval).toBeTruthy();
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it(
+    "advances segment boundary so subsequent PreCompact does not duplicate entries (#134)",
+    { timeout: 20000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      const transcriptPath = writeTranscript(TMP_DIR, [
+        userLine("Do X"),
+        assistantLine("ok"),
+        interruptLine(),
+        userLine("No that's wrong, do Y instead"),
+        assistantLine("ok Y"),
+        userLine("Still wrong, do Z"),
+        assistantLine("ok Z"),
+      ]);
+
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-entry-s2",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+      await handlePreCompact(stdin);
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-entry-s2");
+        // Second call finds no new signals (Phase 1 skip) and no new signals after
+        // last_evaluated_at (Phase 2 skip), so no extra entry is created.
+        const failures = entries.filter((e) => e.type === "failure");
+        expect(failures.length).toBeLessThanOrEqual(1);
+      } finally {
+        db.close();
+      }
+    }
+  );
 
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv(TMP_DIR);
