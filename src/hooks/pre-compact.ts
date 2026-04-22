@@ -140,11 +140,25 @@ async function runPhase1(ctx: HookContext, sessionId: string): Promise<void> {
 async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
   const { config, signalStore, experienceStore, collector, projectName, logger } = ctx;
 
-  const lastEval = experienceStore.getLastEvaluatedAt(sessionId);
-  const summary = collector.getSessionSummary(
-    sessionId,
-    lastEval ? { after: lastEval } : undefined
-  );
+  // Phase 2 store reads: DB failures should log and return, not crash the hook.
+  let lastEval: string | null;
+  let summary: ReturnType<typeof collector.getSessionSummary>;
+  let signals: ReturnType<typeof signalStore.getBySession>;
+  try {
+    lastEval = experienceStore.getLastEvaluatedAt(sessionId);
+    summary = collector.getSessionSummary(sessionId, lastEval ? { after: lastEval } : undefined);
+  } catch (err) {
+    console.error(
+      `[ACM] pre-compact: Phase 2 store read (summary) failed for session "${sessionId}": ` +
+        `${err instanceof Error ? err.message : String(err)}`
+    );
+    logger.log("error", "pre_compact_phase2_store_read_failed", {
+      session_id: sessionId,
+      stage: "summary",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
 
   if (summary.total_signals === 0) {
     logger.log("skip", "pre_compact_phase2_no_signals", {
@@ -154,7 +168,20 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
-  const signals = signalStore.getBySession(sessionId, lastEval ?? undefined);
+  try {
+    signals = signalStore.getBySession(sessionId, lastEval ?? undefined);
+  } catch (err) {
+    console.error(
+      `[ACM] pre-compact: Phase 2 store read (signals) failed for session "${sessionId}": ` +
+        `${err instanceof Error ? err.message : String(err)}`
+    );
+    logger.log("error", "pre_compact_phase2_store_read_failed", {
+      session_id: sessionId,
+      stage: "signals",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
 
   const generator = new ExperienceGenerator({
     capture_turns: config.capture_turns,
@@ -163,7 +190,19 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
   const entries = generator.generate({ session_id: sessionId, summary, signals });
 
   if (entries.length === 0) {
-    experienceStore.recordEvaluation(sessionId, 0);
+    try {
+      experienceStore.recordEvaluation(sessionId, 0);
+    } catch (err) {
+      console.error(
+        `[ACM] pre-compact: recordEvaluation(0) failed for session "${sessionId}": ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      logger.log("error", "pre_compact_record_evaluation_failed", {
+        session_id: sessionId,
+        persisted: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
     logger.log("skip", "pre_compact_phase2_no_entries", {
       session_id: sessionId,
       last_evaluated_at: lastEval,
@@ -193,11 +232,22 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
   let embeddedCount = 0;
   try {
     for (const entryData of entries) {
+      let embedFailed = false;
+      let embedErr: unknown = null;
+      let embedding: Float32Array | null = null;
+      if (embedderReady && embedder) {
+        try {
+          const text = buildEmbeddingText(entryData);
+          embedding = await embedder.embed(text);
+        } catch (e) {
+          embedFailed = true;
+          embedErr = e;
+        }
+      }
+
       try {
         let saved;
-        if (embedderReady && embedder) {
-          const text = buildEmbeddingText(entryData);
-          const embedding = await embedder.embed(text);
+        if (embedding) {
           saved = experienceStore.createWithEmbedding(
             { ...entryData, project: projectName },
             embedding
@@ -207,35 +257,23 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
           saved = experienceStore.create({ ...entryData, project: projectName });
         }
         if (saved) persisted++;
+        if (embedFailed) {
+          // embed() threw but DB persist (fallback) succeeded; treat as embedding-less fallback
+          if (embedderReady) embedderReady = false;
+          logger.log("generation", "pre_compact_entry_embedding_less_retry", {
+            session_id: sessionId,
+            entry_type: entryData.type,
+            initial_error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+          });
+        }
       } catch (entryErr) {
-        // On embed failure: disable embedder for subsequent entries AND retry
-        // this entry with embedding-less persist so it isn't silently dropped.
-        if (embedderReady) {
+        // Sub-cases:
+        //   (a) embed succeeded, createWithEmbedding failed — DB issue, not embed.
+        //       Do NOT disable embedder; retry would hit the same DB error.
+        //   (b) embed failed, fallback create() also failed — both paths broken.
+        //       Disable embedder for remaining entries; no more retries for this one.
+        if (embedFailed && embedderReady) {
           embedderReady = false;
-          try {
-            const retrySaved = experienceStore.create({ ...entryData, project: projectName });
-            if (retrySaved) {
-              persisted++;
-              logger.log("generation", "pre_compact_entry_embedding_less_retry", {
-                session_id: sessionId,
-                entry_type: entryData.type,
-                initial_error: entryErr instanceof Error ? entryErr.message : String(entryErr),
-              });
-              continue;
-            }
-          } catch (retryErr) {
-            console.error(
-              `[ACM] pre-compact: embedding-less retry also failed for entry (type="${entryData.type}") ` +
-                `in session "${sessionId}": ` +
-                `${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
-            );
-            logger.log("error", "pre_compact_entry_retry_failed", {
-              session_id: sessionId,
-              entry_type: entryData.type,
-              initial_error: entryErr instanceof Error ? entryErr.message : String(entryErr),
-              retry_error: retryErr instanceof Error ? retryErr.message : String(retryErr),
-            });
-          }
         }
         console.error(
           `[ACM] pre-compact: failed to persist entry (type="${entryData.type}") ` +
