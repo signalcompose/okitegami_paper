@@ -145,7 +145,6 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     sessionId,
     lastEval ? { after: lastEval } : undefined
   );
-  const signals = signalStore.getBySession(sessionId, lastEval ?? undefined);
 
   if (summary.total_signals === 0) {
     logger.log("skip", "pre_compact_phase2_no_signals", {
@@ -154,6 +153,8 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     });
     return;
   }
+
+  const signals = signalStore.getBySession(sessionId, lastEval ?? undefined);
 
   const generator = new ExperienceGenerator({
     capture_turns: config.capture_turns,
@@ -205,6 +206,10 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
         }
         if (saved) persisted++;
       } catch (entryErr) {
+        // Persistent embed failure (not just this entry) collapses the rest of
+        // the loop into embedding-less persist so we don't lose all remaining
+        // entries to the same broken model.
+        if (embedderReady) embedderReady = false;
         console.error(
           `[ACM] pre-compact: failed to persist entry (type="${entryData.type}") ` +
             `for session "${sessionId}": ` +
