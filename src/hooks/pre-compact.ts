@@ -206,10 +206,29 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
         }
         if (saved) persisted++;
       } catch (entryErr) {
-        // Persistent embed failure (not just this entry) collapses the rest of
-        // the loop into embedding-less persist so we don't lose all remaining
-        // entries to the same broken model.
-        if (embedderReady) embedderReady = false;
+        // On embed failure: disable embedder for subsequent entries AND retry
+        // this entry with embedding-less persist so it isn't silently dropped.
+        if (embedderReady) {
+          embedderReady = false;
+          try {
+            const retrySaved = experienceStore.create({ ...entryData, project: projectName });
+            if (retrySaved) {
+              persisted++;
+              logger.log("skip", "pre_compact_entry_embedding_less_retry", {
+                session_id: sessionId,
+                entry_type: entryData.type,
+                initial_error: entryErr instanceof Error ? entryErr.message : String(entryErr),
+              });
+              continue;
+            }
+          } catch (retryErr) {
+            console.error(
+              `[ACM] pre-compact: embedding-less retry also failed for entry (type="${entryData.type}") ` +
+                `in session "${sessionId}": ` +
+                `${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
+            );
+          }
+        }
         console.error(
           `[ACM] pre-compact: failed to persist entry (type="${entryData.type}") ` +
             `for session "${sessionId}": ` +
@@ -245,7 +264,20 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
-  experienceStore.recordEvaluation(sessionId, persisted);
+  try {
+    experienceStore.recordEvaluation(sessionId, persisted);
+  } catch (err) {
+    console.error(
+      `[ACM] pre-compact: boundary advance failed for session "${sessionId}", ` +
+        `${persisted} entries may duplicate on next invocation: ` +
+        `${err instanceof Error ? err.message : String(err)}`
+    );
+    logger.log("error", "pre_compact_record_evaluation_failed", {
+      session_id: sessionId,
+      persisted,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   logger.log("generation", "pre_compact_experiences_created", {
     session_id: sessionId,
     generated: entries.length,

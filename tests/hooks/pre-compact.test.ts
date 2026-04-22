@@ -325,6 +325,58 @@ describe("PreCompact hook", () => {
     }
   );
 
+  it(
+    "falls back to embedding-less persist when embedder throws mid-loop (#134)",
+    { timeout: 20000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-embed-fail", "corrective_instruction", {
+            prompt: `corrective body ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      const embedderMod = await import("../../src/retrieval/embedder.js");
+      const embedSpy = vi
+        .spyOn(embedderMod.Embedder.prototype, "embed")
+        .mockRejectedValue(new Error("simulated embed failure"));
+
+      const transcriptPath = writeTranscript(TMP_DIR, [userLine("x"), assistantLine("ok")]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-embed-fail",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      await handlePreCompact(stdin);
+      errSpy.mockRestore();
+      embedSpy.mockRestore();
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-embed-fail");
+        // embed failed on first entry → embedderReady toggled off → remaining
+        // entries persist without embedding, so boundary advances.
+        expect(entries.length).toBeGreaterThan(0);
+        expect(expStore.getLastEvaluatedAt("pre-compact-embed-fail")).toBeTruthy();
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv(TMP_DIR);
     const transcriptPath = writeTranscript(TMP_DIR, [
