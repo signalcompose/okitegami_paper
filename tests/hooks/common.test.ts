@@ -361,7 +361,7 @@ describe("applyPluginOptionOverrides", () => {
     process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS = "500000";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
-    expect(config.embedder_init_timeout_ms).toBe(10_000);
+    expect(config.embedder_init_timeout_ms).toBe(30_000);
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
     spy.mockRestore();
   });
@@ -378,7 +378,7 @@ describe("applyPluginOptionOverrides", () => {
     process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS = "abc";
     const config = makeConfig();
     applyPluginOptionOverrides(config);
-    expect(config.pre_compact_budget_ms).toBe(20_000);
+    expect(config.pre_compact_budget_ms).toBe(30_000);
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
     spy.mockRestore();
   });

@@ -48,12 +48,12 @@
     "embedder_init_timeout_ms": {
       "type": "number",
       "title": "Embedder Init Timeout (ms)",
-      "description": "Timeout for @xenova/transformers model load in PreCompact / SessionEnd hooks (default: 10000; valid range 0–120000; 0 disables timeout). On timeout, entries are persisted without embedding."
+      "description": "Timeout for @xenova/transformers model load in PreCompact / SessionEnd hooks (default: 30000; valid range 0–120000; 0 disables timeout). Default 30s covers first-run model download on slow networks while still preventing indefinite hangs. On timeout, entries are persisted without embedding."
     },
     "pre_compact_budget_ms": {
       "type": "number",
       "title": "PreCompact Phase 2 Budget (ms)",
-      "description": "Maximum time PreCompact Phase 2 spends generating experience entries (default: 20000; valid range 0–300000; 0 disables the budget). When exceeded, remaining entries are skipped for the next invocation."
+      "description": "Maximum time PreCompact Phase 2 spends generating experience entries (default: 30000; valid range 0–300000; 0 disables the budget). When exceeded, remaining entries are skipped for the next invocation."
     }
   }
 }
