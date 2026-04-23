@@ -208,6 +208,8 @@ describe("applyPluginOptionOverrides", () => {
     delete process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT;
     delete process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD;
     delete process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX;
+    delete process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS;
+    delete process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS;
   });
 
   it("overrides ollama_url from env", () => {
@@ -336,6 +338,47 @@ describe("applyPluginOptionOverrides", () => {
     const config = makeConfig();
     applyPluginOptionOverrides(config);
     expect(config.inject_corrective_bodies_max).toBe(3);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("overrides embedder_init_timeout_ms from env (#138)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS = "5000";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.embedder_init_timeout_ms).toBe(5000);
+  });
+
+  it("accepts embedder_init_timeout_ms=0 (unlimited) (#138)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS = "0";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.embedder_init_timeout_ms).toBe(0);
+  });
+
+  it("warns and ignores out-of-range embedder_init_timeout_ms (#138)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS = "500000";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.embedder_init_timeout_ms).toBe(10_000);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
+    spy.mockRestore();
+  });
+
+  it("overrides pre_compact_budget_ms from env (#138)", () => {
+    process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS = "45000";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.pre_compact_budget_ms).toBe(45_000);
+  });
+
+  it("warns and ignores non-integer pre_compact_budget_ms (#138)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS = "abc";
+    const config = makeConfig();
+    applyPluginOptionOverrides(config);
+    expect(config.pre_compact_budget_ms).toBe(20_000);
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("invalid value"));
     spy.mockRestore();
   });

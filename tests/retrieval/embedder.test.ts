@@ -79,4 +79,12 @@ describe("Embedder", () => {
     expect(result.length).toBe(384);
     fresh.dispose();
   });
+
+  it("rejects with timeout error when initialize exceeds timeoutMs (#138)", async () => {
+    const fresh = new Embedder();
+    // 1ms timeout will fire before @xenova/transformers model load completes
+    await expect(fresh.initialize(1)).rejects.toThrow(/timeout after 1ms/);
+    expect(fresh.initialized).toBe(false);
+    fresh.dispose();
+  });
 });

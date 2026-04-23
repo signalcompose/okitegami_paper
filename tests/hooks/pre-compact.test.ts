@@ -489,6 +489,56 @@ describe("PreCompact hook", () => {
     }
   );
 
+  it(
+    "Phase 2 stops processing entries when budget is exceeded (#138)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      // 1ms budget guarantees the loop breaks on the very first iteration
+      process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS = "1";
+
+      // Pre-seed signals so Phase 1 skips and Phase 2 has entries to generate
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-budget", "corrective_instruction", {
+            prompt: `corrective ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      const transcriptPath = writeTranscript(TMP_DIR, [userLine("x"), assistantLine("ok")]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-budget",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+
+      delete process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS;
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-budget");
+        // Budget-exceeded break before processing any entry → persisted=0 →
+        // boundary NOT advanced (existing no-advance path when zero persisted)
+        expect(entries.length).toBe(0);
+        expect(expStore.getLastEvaluatedAt("pre-compact-budget")).toBeNull();
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv(TMP_DIR);
     const transcriptPath = writeTranscript(TMP_DIR, [

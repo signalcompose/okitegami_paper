@@ -122,6 +122,8 @@ export interface AcmConfig {
   recency_half_life_days: number; // Half-life for recency decay in days (default: 30)
   inject_corrective_bodies_score_threshold: number; // Min retrieval score for inlining corrective bodies (default: 0.6)
   inject_corrective_bodies_max: number; // Max corrective bodies shown per FAILURE entry (default: 3)
+  embedder_init_timeout_ms: number; // Embedder.initialize() timeout, 0 = unlimited (default: 10000)
+  pre_compact_budget_ms: number; // PreCompact Phase 2 overall budget, 0 = unlimited (default: 20000)
 }
 
 export const DEFAULT_CONFIG: AcmConfig = {
@@ -135,4 +137,6 @@ export const DEFAULT_CONFIG: AcmConfig = {
   recency_half_life_days: 30,
   inject_corrective_bodies_score_threshold: 0.6,
   inject_corrective_bodies_max: 3,
+  embedder_init_timeout_ms: 10_000,
+  pre_compact_budget_ms: 20_000,
 };

@@ -85,6 +85,32 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
     }
   }
 
+  const embedderInitTimeout = process.env.CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS?.trim();
+  if (embedderInitTimeout !== undefined && embedderInitTimeout !== "") {
+    const n = Number(embedderInitTimeout);
+    if (Number.isInteger(n) && n >= 0 && n <= 120_000) {
+      config.embedder_init_timeout_ms = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS: invalid value "${embedderInitTimeout}". ` +
+          `Expected integer in [0, 120000]. Using default ${config.embedder_init_timeout_ms}.`
+      );
+    }
+  }
+
+  const preCompactBudget = process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS?.trim();
+  if (preCompactBudget !== undefined && preCompactBudget !== "") {
+    const n = Number(preCompactBudget);
+    if (Number.isInteger(n) && n >= 0 && n <= 300_000) {
+      config.pre_compact_budget_ms = n;
+    } else {
+      console.error(
+        `[ACM] CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS: invalid value "${preCompactBudget}". ` +
+          `Expected integer in [0, 300000]. Using default ${config.pre_compact_budget_ms}.`
+      );
+    }
+  }
+
   const bodyMax = process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX?.trim();
   if (bodyMax !== undefined && bodyMax !== "") {
     const n = Number(bodyMax);

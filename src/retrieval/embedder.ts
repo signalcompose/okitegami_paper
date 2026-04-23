@@ -13,13 +13,28 @@ export class Embedder {
   private _initialized = false;
   private initPromise: Promise<void> | null = null;
 
-  async initialize(): Promise<void> {
+  async initialize(timeoutMs?: number): Promise<void> {
     if (this._initialized) return;
     if (!this.initPromise) {
       this.initPromise = (async () => {
         try {
           const { pipeline } = await import("@xenova/transformers");
-          this.pipeline = await pipeline("feature-extraction", MODEL_NAME);
+          const loadPromise = pipeline("feature-extraction", MODEL_NAME);
+          // @xenova/transformers does not support AbortController; on timeout the
+          // underlying load continues in the background but this process will be
+          // short-lived (hooks spawn-per-invocation) so the impact is limited.
+          this.pipeline =
+            timeoutMs && timeoutMs > 0
+              ? await Promise.race([
+                  loadPromise,
+                  new Promise<never>((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error(`Embedder.initialize: timeout after ${timeoutMs}ms`)),
+                      timeoutMs
+                    )
+                  ),
+                ])
+              : await loadPromise;
           this._initialized = true;
         } catch (err) {
           this.initPromise = null;

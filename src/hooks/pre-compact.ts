@@ -210,12 +210,15 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
+  const phase2Start = Date.now();
+  const budgetMs = config.pre_compact_budget_ms;
+
   let embedder: EmbedderType | undefined;
   let embedderReady = false;
   try {
     const { Embedder } = await import("../retrieval/embedder.js");
     embedder = new Embedder();
-    await embedder.initialize();
+    await embedder.initialize(config.embedder_init_timeout_ms);
     embedderReady = true;
   } catch (err) {
     console.error(
@@ -230,8 +233,20 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
 
   let persisted = 0;
   let embeddedCount = 0;
+  let budgetExceeded = false;
   try {
-    for (const entryData of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      if (budgetMs > 0 && Date.now() - phase2Start > budgetMs) {
+        budgetExceeded = true;
+        logger.log("skip", "pre_compact_phase2_budget_exceeded", {
+          session_id: sessionId,
+          budget_ms: budgetMs,
+          processed: i,
+          remaining: entries.length - i,
+        });
+        break;
+      }
+      const entryData = entries[i];
       let embedFailed = false;
       let embedErr: unknown = null;
       let embedding: Float32Array | null = null;
@@ -333,6 +348,7 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     embedded_count: embeddedCount,
     types: entries.map((e) => e.type),
     boundary_advanced: boundaryAdvanced,
+    budget_exceeded: budgetExceeded,
   });
 }
 
