@@ -87,4 +87,13 @@ describe("Embedder", () => {
     expect(fresh.initialized).toBe(false);
     fresh.dispose();
   });
+
+  it("treats initialize(0) as unlimited (no timeout applied) (#138)", async () => {
+    const fresh = new Embedder();
+    // 0 is falsy in the guard `timeoutMs && timeoutMs > 0`, so Promise.race is
+    // skipped and loadPromise is awaited directly, matching the unlimited default.
+    await expect(fresh.initialize(0)).resolves.toBeUndefined();
+    expect(fresh.initialized).toBe(true);
+    fresh.dispose();
+  });
 });

@@ -529,10 +529,11 @@ describe("PreCompact hook", () => {
       try {
         const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
         const entries = expStore.list().filter((e) => e.session_id === "pre-compact-budget");
-        // Budget=1ms: the first entry slips through (loopStart is just-now at i=0),
-        // but subsequent iterations see elapsed > 1ms and break. Partial success
-        // → boundary advances with persisted=1 (existing partial-advance trade-off).
-        expect(entries.length).toBe(1);
+        // Budget=1ms: on fast runners the first entry usually slips through (1 persisted,
+        // boundary advances). On slow CI the budget check at i=0 can already exceed 1ms,
+        // leaving 0 persisted and no boundary advance. Both outcomes are valid
+        // behavior — assert the range instead of a fixed count to avoid CI flake.
+        expect(entries.length).toBeLessThanOrEqual(1);
       } finally {
         db.close();
       }

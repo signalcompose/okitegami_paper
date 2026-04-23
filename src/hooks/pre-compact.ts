@@ -323,6 +323,19 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     logger.log("error", "pre_compact_all_entries_failed_no_boundary_advance", {
       session_id: sessionId,
       entries_attempted: entries.length,
+      budget_exceeded: budgetExceeded,
+    });
+    // Spec Section 3.7 requires the generation summary event to include
+    // budget_exceeded; emit it here too so log aggregators find a consistent
+    // record shape regardless of the persisted===0 early-return.
+    logger.log("generation", "pre_compact_experiences_created", {
+      session_id: sessionId,
+      generated: entries.length,
+      persisted,
+      embedded_count: embeddedCount,
+      types: entries.map((e) => e.type),
+      boundary_advanced: false,
+      budget_exceeded: budgetExceeded,
     });
     return;
   }

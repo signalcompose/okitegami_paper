@@ -20,9 +20,14 @@ export class Embedder {
         try {
           const { pipeline } = await import("@xenova/transformers");
           const loadPromise = pipeline("feature-extraction", MODEL_NAME);
-          // @xenova/transformers does not support AbortController; on timeout the
-          // underlying load continues in the background but this process will be
-          // short-lived (hooks spawn-per-invocation) so the impact is limited.
+          // Suppress unhandled rejection if we abandon loadPromise to the timeout path.
+          // @xenova/transformers has no AbortController; the load keeps running in the
+          // background and would otherwise surface as UnhandledPromiseRejectionWarning
+          // (Node 18+ can terminate the process on those). Hook processes are short-lived
+          // so the orphaned load is bounded.
+          loadPromise.catch(() => {
+            /* ignored: race loser or post-timeout failure */
+          });
           this.pipeline =
             timeoutMs && timeoutMs > 0
               ? await Promise.race([
