@@ -210,12 +210,14 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
+  const budgetMs = config.pre_compact_budget_ms;
+
   let embedder: EmbedderType | undefined;
   let embedderReady = false;
   try {
     const { Embedder } = await import("../retrieval/embedder.js");
     embedder = new Embedder();
-    await embedder.initialize();
+    await embedder.initialize(config.embedder_init_timeout_ms);
     embedderReady = true;
   } catch (err) {
     console.error(
@@ -228,10 +230,25 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     });
   }
 
+  // budget applies to the entry loop only — embedder init has its own timeout
+  // (embedder_init_timeout_ms), so counting init time here would double-budget.
+  const loopStart = Date.now();
   let persisted = 0;
   let embeddedCount = 0;
+  let budgetExceeded = false;
   try {
-    for (const entryData of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      if (budgetMs > 0 && Date.now() - loopStart > budgetMs) {
+        budgetExceeded = true;
+        logger.log("skip", "pre_compact_phase2_budget_exceeded", {
+          session_id: sessionId,
+          budget_ms: budgetMs,
+          processed: i,
+          remaining: entries.length - i,
+        });
+        break;
+      }
+      const entryData = entries[i];
       let embedFailed = false;
       let embedErr: unknown = null;
       let embedding: Float32Array | null = null;
@@ -306,6 +323,19 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     logger.log("error", "pre_compact_all_entries_failed_no_boundary_advance", {
       session_id: sessionId,
       entries_attempted: entries.length,
+      budget_exceeded: budgetExceeded,
+    });
+    // Spec Section 3.7 requires the generation summary event to include
+    // budget_exceeded; emit it here too so log aggregators find a consistent
+    // record shape regardless of the persisted===0 early-return.
+    logger.log("generation", "pre_compact_experiences_created", {
+      session_id: sessionId,
+      generated: entries.length,
+      persisted,
+      embedded_count: embeddedCount,
+      types: entries.map((e) => e.type),
+      boundary_advanced: false,
+      budget_exceeded: budgetExceeded,
     });
     return;
   }
@@ -333,6 +363,7 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     embedded_count: embeddedCount,
     types: entries.map((e) => e.type),
     boundary_advanced: boundaryAdvanced,
+    budget_exceeded: budgetExceeded,
   });
 }
 

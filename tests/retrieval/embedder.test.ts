@@ -79,4 +79,21 @@ describe("Embedder", () => {
     expect(result.length).toBe(384);
     fresh.dispose();
   });
+
+  it("rejects with timeout error when initialize exceeds timeoutMs (#138)", async () => {
+    const fresh = new Embedder();
+    // 1ms timeout will fire before @xenova/transformers model load completes
+    await expect(fresh.initialize(1)).rejects.toThrow(/timeout after 1ms/);
+    expect(fresh.initialized).toBe(false);
+    fresh.dispose();
+  });
+
+  it("treats initialize(0) as unlimited (no timeout applied) (#138)", async () => {
+    const fresh = new Embedder();
+    // 0 is falsy in the guard `timeoutMs && timeoutMs > 0`, so Promise.race is
+    // skipped and loadPromise is awaited directly, matching the unlimited default.
+    await expect(fresh.initialize(0)).resolves.toBeUndefined();
+    expect(fresh.initialized).toBe(true);
+    fresh.dispose();
+  });
 });

@@ -489,6 +489,57 @@ describe("PreCompact hook", () => {
     }
   );
 
+  it(
+    "Phase 2 stops processing entries when budget is exceeded (#138)",
+    { timeout: 15000 },
+    async () => {
+      const dbPath = setupEnv(TMP_DIR);
+      // 1ms budget guarantees the loop breaks on the very first iteration
+      process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS = "1";
+
+      // Pre-seed signals so Phase 1 skips and Phase 2 has entries to generate
+      const db0 = await initializeDatabase(dbPath);
+      try {
+        const store = new SessionSignalStore(db0);
+        for (let i = 0; i < 3; i++) {
+          store.addSignal("pre-compact-budget", "corrective_instruction", {
+            prompt: `corrective ${i}`,
+            reason: "test",
+            confidence: 0.9,
+            method: "llm",
+            source: "pre_compact",
+          });
+        }
+      } finally {
+        db0.close();
+      }
+
+      const transcriptPath = writeTranscript(TMP_DIR, [userLine("x"), assistantLine("ok")]);
+      const stdin = JSON.stringify({
+        session_id: "pre-compact-budget",
+        transcript_path: transcriptPath,
+        cwd: TMP_DIR,
+      });
+
+      await handlePreCompact(stdin);
+
+      delete process.env.CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS;
+
+      const db = await initializeDatabase(dbPath);
+      try {
+        const expStore = new ExperienceStore(db, DEFAULT_CONFIG);
+        const entries = expStore.list().filter((e) => e.session_id === "pre-compact-budget");
+        // Budget=1ms: on fast runners the first entry usually slips through (1 persisted,
+        // boundary advances). On slow CI the budget check at i=0 can already exceed 1ms,
+        // leaving 0 persisted and no boundary advance. Both outcomes are valid
+        // behavior — assert the range instead of a fixed count to avoid CI flake.
+        expect(entries.length).toBeLessThanOrEqual(1);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it("continues gracefully when transcript analysis fails", async () => {
     setupEnv(TMP_DIR);
     const transcriptPath = writeTranscript(TMP_DIR, [

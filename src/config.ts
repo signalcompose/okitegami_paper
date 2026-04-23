@@ -16,6 +16,8 @@ const KNOWN_CONFIG_KEYS = new Set<string>([
   "recency_half_life_days",
   "inject_corrective_bodies_score_threshold",
   "inject_corrective_bodies_max",
+  "embedder_init_timeout_ms",
+  "pre_compact_budget_ms",
 ]);
 
 export function expandTilde(filePath: string): string {

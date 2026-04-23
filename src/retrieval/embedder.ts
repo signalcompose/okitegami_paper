@@ -13,13 +13,33 @@ export class Embedder {
   private _initialized = false;
   private initPromise: Promise<void> | null = null;
 
-  async initialize(): Promise<void> {
+  async initialize(timeoutMs?: number): Promise<void> {
     if (this._initialized) return;
     if (!this.initPromise) {
       this.initPromise = (async () => {
         try {
           const { pipeline } = await import("@xenova/transformers");
-          this.pipeline = await pipeline("feature-extraction", MODEL_NAME);
+          const loadPromise = pipeline("feature-extraction", MODEL_NAME);
+          // Suppress unhandled rejection if we abandon loadPromise to the timeout path.
+          // @xenova/transformers has no AbortController; the load keeps running in the
+          // background and would otherwise surface as UnhandledPromiseRejectionWarning
+          // (Node 18+ can terminate the process on those). Hook processes are short-lived
+          // so the orphaned load is bounded.
+          loadPromise.catch(() => {
+            /* ignored: race loser or post-timeout failure */
+          });
+          this.pipeline =
+            timeoutMs && timeoutMs > 0
+              ? await Promise.race([
+                  loadPromise,
+                  new Promise<never>((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error(`Embedder.initialize: timeout after ${timeoutMs}ms`)),
+                      timeoutMs
+                    )
+                  ),
+                ])
+              : await loadPromise;
           this._initialized = true;
         } catch (err) {
           this.initPromise = null;

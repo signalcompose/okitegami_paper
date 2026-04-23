@@ -49,6 +49,8 @@ describe("plugin.json", () => {
       "max_experiences_per_project",
       "inject_corrective_bodies_score_threshold",
       "inject_corrective_bodies_max",
+      "embedder_init_timeout_ms",
+      "pre_compact_budget_ms",
     ];
     for (const key of expectedKeys) {
       expect(userConfig[key]).toBeDefined();

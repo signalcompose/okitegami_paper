@@ -33,6 +33,26 @@ export interface HookContext {
  * Apply CLAUDE_PLUGIN_OPTION_* environment variable overrides to config.
  * These are set by the Claude Code plugin userConfig system.
  */
+function applyIntEnvOverride(
+  envKey: string,
+  min: number,
+  max: number,
+  apply: (n: number) => void,
+  currentDefault: number
+): void {
+  const raw = process.env[envKey]?.trim();
+  if (raw === undefined || raw === "") return;
+  const n = Number(raw);
+  if (Number.isInteger(n) && n >= min && n <= max) {
+    apply(n);
+  } else {
+    console.error(
+      `[ACM] ${envKey}: invalid value "${raw}". ` +
+        `Expected integer in [${min}, ${max}]. Using default ${currentDefault}.`
+    );
+  }
+}
+
 export function applyPluginOptionOverrides(config: AcmConfig): void {
   const ollamaUrl = process.env.CLAUDE_PLUGIN_OPTION_OLLAMA_URL?.trim();
   if (ollamaUrl) {
@@ -56,18 +76,15 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
     }
   }
 
-  const maxExp = process.env.CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT?.trim();
-  if (maxExp) {
-    const n = Number(maxExp);
-    if (Number.isInteger(n) && n >= 10) {
+  applyIntEnvOverride(
+    "CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT",
+    10,
+    Number.MAX_SAFE_INTEGER,
+    (n) => {
       config.max_experiences_per_project = n;
-    } else {
-      console.error(
-        `[ACM] CLAUDE_PLUGIN_OPTION_MAX_EXPERIENCES_PER_PROJECT: invalid value "${maxExp}". ` +
-          `Expected integer >= 10. Using default ${config.max_experiences_per_project}.`
-      );
-    }
-  }
+    },
+    config.max_experiences_per_project
+  );
 
   const bodyThreshold =
     process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_SCORE_THRESHOLD?.trim();
@@ -85,18 +102,35 @@ export function applyPluginOptionOverrides(config: AcmConfig): void {
     }
   }
 
-  const bodyMax = process.env.CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX?.trim();
-  if (bodyMax !== undefined && bodyMax !== "") {
-    const n = Number(bodyMax);
-    if (Number.isInteger(n) && n >= 1 && n <= 10) {
+  applyIntEnvOverride(
+    "CLAUDE_PLUGIN_OPTION_EMBEDDER_INIT_TIMEOUT_MS",
+    0,
+    120_000,
+    (n) => {
+      config.embedder_init_timeout_ms = n;
+    },
+    config.embedder_init_timeout_ms
+  );
+
+  applyIntEnvOverride(
+    "CLAUDE_PLUGIN_OPTION_PRE_COMPACT_BUDGET_MS",
+    0,
+    300_000,
+    (n) => {
+      config.pre_compact_budget_ms = n;
+    },
+    config.pre_compact_budget_ms
+  );
+
+  applyIntEnvOverride(
+    "CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX",
+    1,
+    10,
+    (n) => {
       config.inject_corrective_bodies_max = n;
-    } else {
-      console.error(
-        `[ACM] CLAUDE_PLUGIN_OPTION_INJECT_CORRECTIVE_BODIES_MAX: invalid value "${bodyMax}". ` +
-          `Expected integer in [1, 10]. Using default ${config.inject_corrective_bodies_max}.`
-      );
-    }
-  }
+    },
+    config.inject_corrective_bodies_max
+  );
 }
 
 export async function bootstrapHook(stdin: string): Promise<HookContext | null> {
