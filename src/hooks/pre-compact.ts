@@ -210,7 +210,6 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     return;
   }
 
-  const phase2Start = Date.now();
   const budgetMs = config.pre_compact_budget_ms;
 
   let embedder: EmbedderType | undefined;
@@ -231,12 +230,15 @@ async function runPhase2(ctx: HookContext, sessionId: string): Promise<void> {
     });
   }
 
+  // budget applies to the entry loop only — embedder init has its own timeout
+  // (embedder_init_timeout_ms), so counting init time here would double-budget.
+  const loopStart = Date.now();
   let persisted = 0;
   let embeddedCount = 0;
   let budgetExceeded = false;
   try {
     for (let i = 0; i < entries.length; i++) {
-      if (budgetMs > 0 && Date.now() - phase2Start > budgetMs) {
+      if (budgetMs > 0 && Date.now() - loopStart > budgetMs) {
         budgetExceeded = true;
         logger.log("skip", "pre_compact_phase2_budget_exceeded", {
           session_id: sessionId,
